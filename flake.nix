@@ -12,18 +12,18 @@
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
-        raylib_patched =
-          pkgs.raylib.overrideAttrs (oldAttrs: rec {
-              patches = oldAttrs.patches ++ [ ./raylib.patch ];
-          });
+        raylib_patched = pkgs.raylib.overrideAttrs (oldAttrs: rec {
+          patches = oldAttrs.patches ++ [./raylib.patch];
+        });
         aetas_magus = pkgs.gcc14Stdenv.mkDerivation {
           pname = "Aetas Magus";
           version = "0.1.0";
           src = ./.;
-          buildInputs = with pkgs; [
-            raylib
-            cmake
-          ];
+          buildInputs = with pkgs;
+            [
+              cmake
+            ]
+            ++ [raylib_patched];
           buildPhase = ''
             make aetas_magus
           '';
@@ -40,10 +40,9 @@
         };
         devShell = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
-            raylib
             cmake
             gcc14
-          ];
+          ] ++ [raylib_patched];
         };
       }
     );
