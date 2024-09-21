@@ -8,6 +8,9 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <numbers>
+#include <array>
+#include <utility>
 
 #include <raylib.h>
 #include <raymath.h>
@@ -15,23 +18,43 @@
 
 #define TICKS 20
 
+bool is_key_pressed(const std::vector<std::pair<int, bool>>& pressed_keys, bool plus_handled, int key) {
+    for (const auto& [k, handled] : pressed_keys) {
+        if (!plus_handled && handled) return false;
+        if (key == k) return true;
+    }
+
+    return false;
+}
+
 // very generic names, TODO: maybe come up with better ones
 enum struct Rarity {
-    Common,
+    Common = 0,
     Uncommon,
     Rare,
     Epic,
     Legendary,
+    Size
+};
+
+static const std::string rarity_frame_path = "./assets/spell-icons/frames";
+static const std::array<std::string, static_cast<std::size_t>(Rarity::Size)> rarity_frames = {
+    "common.png", // Common
+    "uncommon.png", // Uncommon
+    "rare.png", // Rare
+    "epic.png", // Epic
+    "legendary.png", // Legendary
 };
 
 using Spell = struct Spell {
     enum Name {
-        Fire_Wall,
+        Fire_Wall = 0,
         Falling_Icicle,
         Lightning_Strike,
         Frost_Nova,
         Void_Implosion,
         Mana_Detonation,
+        NameSize, // keep last
     };
 
     enum Type {
@@ -44,46 +67,78 @@ using Spell = struct Spell {
         DarkMagic,
     };
 
-    static const std::unordered_map<Name, std::unordered_set<Type>> type_map;
+    using Types = std::unordered_set<Type>;
+
+    static const std::array<Types, NameSize> type_map;
+    // in ticks, doesn't change with rarity
+    static const std::array<int, NameSize> cooldown_map;
     static const std::string icon_path;
-    static const std::unordered_map<Name, std::string> icon_map; // just file name, path is assumed at ./assets/spell-icons/
-    static const std::unordered_map<Rarity, float> rarity_multiplier;
+    // just file name, path is `Spell::icon_path`
+    static const std::array<std::string, NameSize> icon_map;
+    static const std::array<float, static_cast<std::size_t>(Rarity::Size)> rarity_multiplier;
 
     Name name;
     Rarity rarity;
     uint16_t lvl;
     // exp collected since level up
     uint32_t exp;
+    // in ticks
+    int curr_cooldown;
 
     Spell(Name name, Rarity rarity, uint16_t lvl)
-        : name(name), rarity(rarity), lvl(lvl), exp(0) {};
+        : name(name), rarity(rarity), lvl(lvl), exp(0), curr_cooldown(0) {};
+
+    const Types& get_type() const {
+        return Spell::type_map[name];
+    };
+
+    int get_cooldown() const {
+        return Spell::cooldown_map[name];
+    }
+
+    const std::string& get_icon() const {
+        return Spell::icon_map[name];
+    }
+
+    float get_rarity_multiplier() const {
+        return Spell::rarity_multiplier[static_cast<std::size_t>(rarity)];
+    }
 };
 
-const std::unordered_map<Spell::Name, std::unordered_set<Spell::Type>> Spell::type_map = {
-    { Spell::Fire_Wall, { Spell::AOE, Spell::AtMouse, Spell::Fire } },
-    { Spell::Falling_Icicle, { Spell::AtMouse, Spell::Ice } },
-    { Spell::Lightning_Strike, { Spell::AtMouse, Spell::Lightning } },
-    { Spell::Frost_Nova, { Spell::AOE,  Spell::AtMouse, Spell::Ice } },
-    { Spell::Void_Implosion, { Spell::AOE, Spell::AtMouse, Spell::DarkMagic } },
-    { Spell::Mana_Detonation, { Spell::AOE, Spell::AtPlayer, Spell::DarkMagic } },
+const std::array<Spell::Types, Spell::NameSize> Spell::type_map = {
+    std::unordered_set({ Spell::AOE, Spell::AtMouse, Spell::Fire }), // Fire Wall
+    std::unordered_set({ Spell::AtMouse, Spell::Ice }), // Falling Icicle
+    std::unordered_set({ Spell::AtMouse, Spell::Lightning }), // Lightning Strike
+    std::unordered_set({ Spell::AOE,  Spell::AtMouse, Spell::Ice }), // Frost Nova
+    std::unordered_set({ Spell::AOE, Spell::AtMouse, Spell::DarkMagic }), // Void Implosion
+    std::unordered_set({ Spell::AOE, Spell::AtPlayer, Spell::DarkMagic }), // Mana Detonation
+};
+
+const std::array<int, Spell::NameSize> Spell::cooldown_map = {
+    10, // Fire Wall
+    10, // Falling Icicle
+    15, // Lightning Strike
+    20, // Frost Nova
+    40, // Void Implosion
+    40, // Mana Detonation
 };
 
 const std::string Spell::icon_path = "./assets/spell-icons";
-const std::unordered_map<Spell::Name, std::string> Spell::icon_map = {
-    { Spell::Fire_Wall, "fire-wall.png" },
-    { Spell::Falling_Icicle, "falling-icicle.png" },
-    { Spell::Lightning_Strike, "lightning-strike.png" },
-    { Spell::Frost_Nova, "frost-nova.png" },
-    { Spell::Void_Implosion, "void-implosion.png" },
-    { Spell::Mana_Detonation, "mana-detonation.png" },
+const std::array<std::string, Spell::NameSize> Spell::icon_map = {
+    "fire-wall.png", // Fire Wall
+    "falling-icicle.png", // Falling Icicle
+    "lightning-strike.png", // Lightning Strike
+    "frost-nova.png", // Frost Nova
+    "void-implosion.png", // Void Implosion
+    "mana-detonation.png", // Mana Detonation
 };
 
-const std::unordered_map<Rarity, float> Spell::rarity_multiplier = {
-    { Rarity::Common, 1.0f },
-    { Rarity::Uncommon, 1.1f },
-    { Rarity::Rare, 1.3f },
-    { Rarity::Epic, 1.6f },
-    { Rarity::Legendary, 2.0f },
+const std::array<float, static_cast<std::size_t>(Rarity::Size)> Spell::rarity_multiplier = {
+    1.0f, // Common
+    1.1f, // Uncommon
+    1.3f, // Rare
+    1.6f, // Epic
+    2.0f, // Legendary
 };
 
 using SpellBook = std::vector<Spell>;
@@ -94,13 +149,6 @@ using Player = struct Player {
     Model model;
     Camera3D camera;
     bool mouse_in_reach = false;
-    SpellBook spellbook = {};
-
-    uint32_t add_spell(Spell spell) {
-        spellbook.push_back(spell);
-
-        return spellbook.size() - 1;
-    }
 };
 
 using PlayerStats = struct PlayerStats {
@@ -108,47 +156,94 @@ using PlayerStats = struct PlayerStats {
     uint32_t health;
     uint32_t max_mana;
     uint32_t mana;
-    // realistically only like 10 max spells
+    uint16_t lvl;
+    // exp collected since level up
+    uint32_t exp;
+    uint32_t exp_to_next_lvl;
+    // 10 max spells
     uint8_t max_spells;
     // uint32_t::max means no spell is equipped
     // otherwise index of spell in spellbook
     std::vector<uint32_t> equipped_spells;
+    SpellBook spellbook = {};
 
     PlayerStats(uint32_t max_health, uint32_t max_mana, uint8_t max_spells)
-        : max_health(max_health), max_mana(max_mana), health(max_health), mana(max_mana), max_spells(max_spells), equipped_spells(max_spells, UINT32_MAX) {};
+        : max_health(max_health), max_mana(max_mana), health(max_health), mana(max_mana), lvl(0), exp(0), exp_to_next_lvl(100), max_spells(max_spells), equipped_spells(10, UINT32_MAX) {};
+
+    static uint32_t exp_to_lvl(uint16_t lvl) {
+        return 100 * std::pow(lvl, 2);
+    }
+
+    void add_exp(uint32_t e) {
+        exp += e;
+        if (exp >= exp_to_next_lvl) {
+            lvl++;
+            exp -= exp_to_next_lvl;
+            exp_to_next_lvl = PlayerStats::exp_to_lvl(lvl + 1);
+        }
+    }
+
+    std::optional<std::reference_wrapper<const Spell>> get_equipped_spell(int idx) const {
+        if (idx >= 10 || idx >= max_spells || equipped_spells[idx] == UINT32_MAX) return {};
+
+        return spellbook[equipped_spells[idx]];
+    }
+
+    uint32_t add_spell_to_spellbook(Spell spell) {
+        spellbook.push_back(spell);
+
+        return spellbook.size() - 1;
+    }
 
     // -2 - slot out of range
     // -1 - spell isn't inside the spellbook
     // 0 - ok
-    int equip_spell(const SpellBook& spellbook, uint32_t spellbook_idx, uint8_t slot_id) {
-        if (spellbook.size() >= spellbook_idx) return -1;
-        if (max_spells >= slot_id) return -2;
+    int equip_spell(uint32_t spellbook_idx, uint8_t slot_id) {
+        if (spellbook.size() <= spellbook_idx) return -1;
+        if (max_spells <= slot_id) return -2;
 
         equipped_spells[slot_id] = spellbook_idx;
 
         return 0;
     };
+
+    void tick_cooldown() {
+        for (int i = 0; i < 10 && i < max_spells; i++) {
+            if (equipped_spells[i] == UINT32_MAX) continue;
+
+            Spell& spell = spellbook[equipped_spells[i]];
+
+            if (spell.curr_cooldown == 0) continue;
+            spell.curr_cooldown--;
+        }
+    }
+
+    void cast_equipped(int idx) {
+        if (idx >= 10 || idx >= max_spells || equipped_spells[idx] == UINT32_MAX) return;
+
+        Spell& spell = spellbook[equipped_spells[idx]];
+        spell.curr_cooldown = spell.get_cooldown();
+    }
 };
-
-Texture2D make_texture(Vector2 img_size, Color img_color, std::function<void(Image)> on_image) {
-    Image img = GenImageColor(img_size.x, img_size.y, img_color);
-    on_image(img);
-    Texture2D texture = LoadTextureFromImage(img);
-    GenTextureMipmaps(&texture);
-    SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
-    UnloadImage(img);
-
-    return texture;
-}
 
 class Textures {
   public:
     enum GeneralId {
-        // Circle,
+        EmptySpellSlot,
+        LockedSlot,
     };
 
-    Textures() : general_map({}), spell_map({}) {
+    enum RenderId {
+        Target,
+        CircleUI,
+        SpellBarUI,
+    };
+
+    Textures(Vector2 screen) : general_map({}), spell_map({}), render_map({}), spell_frame_map({}) {
+        add_general_textures();
         add_spell_textures();
+        add_render_textures(screen);
+        add_spell_frames();
     };
     Textures(const Textures&) = delete;
 
@@ -170,17 +265,62 @@ class Textures {
         return spell_map[name];
     }
 
+    RenderTexture2D operator [](RenderId id) {
+        return render_map[id];
+    }
+
+    Texture2D operator [](Rarity id) {
+        return spell_frame_map[id];
+    }
+
+    void update_target_size(Vector2 screen) {
+        UnloadRenderTexture(render_map[Textures::Target]);
+        render_map[Textures::Target] = LoadRenderTexture(screen.x, screen.y);
+    }
+
   private:
     std::unordered_map<GeneralId, Texture2D> general_map;
     std::unordered_map<Spell::Name, Texture2D> spell_map;
+    std::unordered_map<RenderId, RenderTexture2D> render_map;
+    std::unordered_map<Rarity, Texture2D> spell_frame_map;
+
+    void add_general_textures() {
+        Image img = LoadImage("./assets/spell-icons/empty-slot.png");
+        general_map[EmptySpellSlot] = LoadTextureFromImage(img);
+        SetTextureFilter(general_map[EmptySpellSlot], TEXTURE_FILTER_TRILINEAR);
+        UnloadImage(img);
+
+        Image img2 = LoadImage("./assets/spell-icons/locked-slot.png");
+        general_map[LockedSlot] = LoadTextureFromImage(img2);
+        SetTextureFilter(general_map[LockedSlot], TEXTURE_FILTER_TRILINEAR);
+        UnloadImage(img2);
+    }
 
     void add_spell_textures() {
-        for (const auto& [k, path] : Spell::icon_map) {
-            Image img = LoadImage((Spell::icon_path + "/" + path).c_str());
-            spell_map[k] = LoadTextureFromImage(img);
+        for (int name_i = 0; name_i < Spell::NameSize; name_i++) {
+            auto name = static_cast<Spell::Name>(name_i);
+            Image img = LoadImage((Spell::icon_path + "/" + Spell::icon_map[name_i]).c_str());
+            spell_map[name] = LoadTextureFromImage(img);
+            SetTextureFilter(spell_map[name], TEXTURE_FILTER_TRILINEAR);
             UnloadImage(img);
         }
     };
+
+    void add_render_textures(Vector2 screen) {
+        render_map[Textures::Target] = LoadRenderTexture(screen.x, screen.y);
+        render_map[CircleUI] = LoadRenderTexture(1023, 1023); // odd to have a center pixel
+        render_map[SpellBarUI] = LoadRenderTexture(512, 128);
+    }
+
+    void add_spell_frames() {
+        for (int rarity_i = 0; rarity_i < static_cast<int>(Rarity::Size); rarity_i++) {
+            auto rarity = static_cast<Rarity>(rarity_i);
+            Image img = LoadImage((rarity_frame_path + "/" + rarity_frames[rarity_i]).c_str());
+            spell_frame_map[rarity] = LoadTextureFromImage(img);
+            SetTextureFilter(spell_frame_map[rarity], TEXTURE_FILTER_TRILINEAR);
+            UnloadImage(img);
+        }
+    }
 };
 
 Vector2 mouse_xz_in_world(Ray mouse) {
@@ -195,50 +335,106 @@ void draw_circle_texture(Texture2D texture, Vector2 center, float radius, Color 
     DrawTextureEx(texture, (Vector2){ center.x - radius, center.y - radius }, 0.0f, 0.001f * radius, color);
 }
 
+// Will draw ui to the corresponding RenderTextures
 void draw_ui(Textures& textures, const PlayerStats& player_stats, const Vector2& screen) {
-    // HP & mana
     static const uint32_t padding = 10;
-    uint32_t start_x = screen.x * 7/8;
-    uint32_t outer_radius = (screen.x - start_x)/2;
-    Vector2 center = (Vector2){ (float)(start_x + outer_radius - padding), screen.y - outer_radius - padding };
+    static const uint32_t outer_radius = 1023/2;
+    static const Vector2 center = (Vector2){ (float)outer_radius, (float)outer_radius };
 
-    // draw_circle_texture(textures[Textures::Circle], center, outer_radius + padding/3.0f, BLACK);
-    // draw_circle_texture(textures[Textures::Circle], center, outer_radius, WHITE);
-    DrawCircleV(center, outer_radius + padding/3.0f, BLACK);
-    DrawCircleV(center, outer_radius, WHITE);
+    BeginTextureMode(textures[Textures::CircleUI]);
+        ClearBackground(BLANK);
 
-    // 0 - 360 range, player_stats.max_mana != 0
-    float angle = 360 * player_stats.mana/player_stats.max_mana;
-    DrawCircleSector(center, outer_radius, -90.0f, angle - 90.0f, 512, BLUE);
+        DrawCircleV(center, outer_radius, BLACK);
 
-    // draw_circle_texture(textures[Textures::Circle], center, outer_radius - 7.0f/3.0f*padding, BLACK);
-    // draw_circle_texture(textures[Textures::Circle], center, outer_radius - 8.0f/3.0f*padding, RED);
-    DrawCircleV(center, outer_radius - 7.0f/3.0f*padding, BLACK);
-    DrawCircleV(center, outer_radius - 8.0f/3.0f*padding, RED);
+        // EXP
+        float angle = 360 * player_stats.exp/player_stats.exp_to_next_lvl;
+        DrawCircleV(center, outer_radius - 2*padding, WHITE);
+        DrawCircleSector(center, outer_radius - 2*padding, -90.0f, angle - 90.0f, 512, GREEN);
 
-    auto mana_text = TextFormat("%d/%d", player_stats.mana, player_stats.max_mana);
-    DrawText(mana_text, center.x - MeasureText(mana_text, 20)/2, center.y - outer_radius + 5.0f/3.0f*padding - 10, 20, BLACK);
+        // HEALTH & MANA
+        // https://www.desmos.com/calculator/ltqvnvrd3p
+        DrawCircleSector(center, outer_radius - 6*padding, 90.0f, 270.0f, 512, RED);
+        DrawCircleSector(center, outer_radius - 6*padding, -90.0f, 90.0f, 512, BLUE);
 
-    auto health_text = TextFormat("%d/%d", player_stats.health, player_stats.max_health);
-    DrawText(health_text, center.x - MeasureText(health_text, 30)/2, center.y - 15, 30, WHITE);
+        float health_s = (float)player_stats.health/(float)player_stats.max_health;
+        float mana_s   = (float)player_stats.mana/(float)player_stats.max_mana;
+        float health_b = (1 + std::sin(std::numbers::pi_v<double>*health_s - std::numbers::pi_v<double>/2.0f))/2.0f;
+        float mana_b   = (1 + std::sin(std::numbers::pi_v<double>*mana_s - std::numbers::pi_v<double>/2.0f))/2.0f;
+        int health_height = 2*(outer_radius - 6*padding) * (1 - health_b);
+        int mana_height   = 2*(outer_radius - 6*padding) * (1 - mana_b);
 
+        // TODO: clean up this shit
+        static const float segments = 100.0f;
+        for (int i = 0; i < segments; i++) {
+            float health_x = (outer_radius - 6.0f*padding) - (i + 1.0f)*health_height/segments;
+            float mana_x = (outer_radius - 6.0f*padding) - (i + 1.0f)*mana_height/segments;
+            if (health_x < 0.0f) health_x = (outer_radius - 6.0f*padding) - i*health_height/segments;
+            if (mana_x < 0.0f) mana_x = (outer_radius - 6.0f*padding) - i*mana_height/segments;
+            float health_width = std::sqrt((outer_radius - 6.0f*padding)*(outer_radius - 6.0f*padding) - health_x*health_x);
+            float mana_width = std::sqrt((outer_radius - 6.0f*padding)*(outer_radius - 6.0f*padding) - mana_x*mana_x);
 
-    // Spells
-    int width = screen.x * 2.0f/5.0f;
-    int height = screen.y/20.0f;
-    Rectangle spells_rec = (Rectangle){ screen.x/2 - width/2, screen.y - height, width, height };
-    DrawRectangleRounded({ spells_rec.x, spells_rec.y, spells_rec.width, 2*spells_rec.height }, 0.5f, 512, BLACK);
-    DrawRectangleRounded({ spells_rec.x + padding/3.0f, spells_rec.y + padding/3.0f, spells_rec.width - padding*2.0f/3.0f, 2*spells_rec.height }, 0.45f, 512, WHITE);
+            DrawRectangle(center.x - health_width, 6.0f*padding + (health_height/segments) * i, health_width, health_height/segments + 1, WHITE);
+            DrawRectangle(center.x, 6.0f*padding + (mana_height/segments) * i, mana_width, mana_height/segments + 1, WHITE);
+        }
+
+        DrawRing(center, outer_radius - 6.2f*padding, outer_radius - 5*padding, 0.0f, 360.0f, 512, BLACK);
+        DrawLineEx((Vector2){ center.x, 0.0f }, (Vector2){ center.y, 1022.0f - 6*padding }, 10.0f, BLACK);
+    EndTextureMode();
+
+    // Spell Bar
+    BeginTextureMode(textures[Textures::SpellBarUI]);
+        ClearBackground(BLANK);
+
+        DrawRectangle(0, 0, 512, 128, RED);
+
+        const int spell_dim = 128/2; // 2x5 spells
+
+        for (int i = 0; i < 10; i++) {
+            int row = i/5;
+            int col = i - 5*row;
+
+            if (i >= player_stats.max_spells) {
+                DrawTexturePro(textures[Textures::LockedSlot],
+                               (Rectangle){ 1.0f, 0.0f, (float)textures[Textures::LockedSlot].width, (float)textures[Textures::LockedSlot].height },
+                               (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim },
+                               Vector2Zero(), 0.0f, WHITE);
+                continue;
+            }
+
+            if (auto spell_opt = player_stats.get_equipped_spell(i); spell_opt) {
+                const Spell& spell = *spell_opt;
+
+                // TODO: rn ignoring the fact that the frame draws over the spell icon
+                Texture2D spell_tex = textures[spell.name];
+                DrawTexturePro(spell_tex,
+                               (Rectangle){ 0.0f, 0.0f, (float)spell_tex.width, (float)spell_tex.height },
+                               (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim },
+                               Vector2Zero(), 0.0f, WHITE);
+
+                BeginBlendMode(BLEND_ADDITIVE);
+                    float cooldown_height = spell_dim * spell.curr_cooldown/spell.get_cooldown();
+                    DrawRectangle(col*spell_dim, spell_dim*row + (spell_dim - cooldown_height), spell_dim, cooldown_height, { 130, 130, 130, 128 });
+                EndBlendMode();
+
+                Texture2D frame = textures[spell.rarity];
+                DrawTexturePro(frame,
+                               (Rectangle){ 0.0f, 0.0f, (float)frame.width, (float)frame.height },
+                               (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim },
+                               Vector2Zero(), 0.0f, WHITE);
+            } else {
+                DrawTexturePro(textures[Textures::EmptySpellSlot],
+                               (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::EmptySpellSlot].width, (float)textures[Textures::EmptySpellSlot].height },
+                               (Rectangle){ (float)col*spell_dim, (float)row*spell_dim, (float)spell_dim, (float)spell_dim },
+                               Vector2Zero(), 0.0f, WHITE);
+            }
+        }
+
+        // RADAR/MAP???
+        DrawRectangle(spell_dim*5, 0, 512 - spell_dim*5, 128, GRAY);
+    EndTextureMode();
 }
 
-void update(Player& player, PlayerStats& player_stats, Vector2& mouse_pos, Vector2& screen, Shader fxaa_shader, int resolutionLoc, RenderTexture2D& target) {
-    static std::vector<int> pressed_keys = {};
-
-    auto [first, last] = std::ranges::remove_if(pressed_keys, [](int key) {
-        return IsKeyReleased(key);
-    });
-    pressed_keys.erase(first, last);
-
+void update(const std::vector<std::pair<int, bool>>& pressed_keys, Textures& textures, Player& player, PlayerStats& player_stats, Vector2& mouse_pos, Vector2& screen, Shader fxaa_shader, int resolutionLoc) {
     static const int keys[] = { KEY_A, KEY_S, KEY_D, KEY_W };
     static const Vector2 movements[] = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } };
     static const float angles[] = { 0.0f, 90.0f, 180.0f, 270.0f };
@@ -250,8 +446,7 @@ void update(Player& player, PlayerStats& player_stats, Vector2& mouse_pos, Vecto
         screen = (Vector2){ (float)GetScreenWidth(), (float)GetScreenHeight() };
         SetShaderValue(fxaa_shader, resolutionLoc, &screen, SHADER_UNIFORM_VEC2);
 
-        UnloadRenderTexture(target);
-        target = LoadRenderTexture(screen.x, screen.y);
+        textures.update_target_size(screen);
     }
 
     for (int k = 0; k < 4; k++) {
@@ -277,23 +472,28 @@ void update(Player& player, PlayerStats& player_stats, Vector2& mouse_pos, Vecto
         player.angle = angle.x/angle.y;
     }
 
-    if (IsKeyDown(KEY_N) && !std::ranges::contains(pressed_keys, KEY_N)) {
+    if (is_key_pressed(pressed_keys, false, KEY_N)) {
         player_stats.mana -= 1;
-        pressed_keys.push_back(KEY_N);
-    } else if (IsKeyDown(KEY_M) && !std::ranges::contains(pressed_keys, KEY_M)) {
+    }
+    if (is_key_pressed(pressed_keys, false, KEY_M)) {
         player_stats.mana += 1;
-        pressed_keys.push_back(KEY_M);
+    }
+    if (is_key_pressed(pressed_keys, false, KEY_FOUR)) {
+        player_stats.cast_equipped(3);
     }
 
     mouse_pos = mouse_xz_in_world(GetMouseRay(GetMousePosition(), player.camera));
     float distance_to_player = std::abs(Vector2Distance((Vector2){player.position.x, player.position.z}, (Vector2){mouse_pos.x, mouse_pos.y}));
     player.mouse_in_reach = distance_to_player <= 100.0f;
+
+    player_stats.tick_cooldown();
 }
 
 int main() {
     InitWindow(0, 0, "Aetas Magus");
     SetWindowState(FLAG_FULLSCREEN_MODE);
     SetExitKey(KEY_NULL);
+    // DisableCursor();
 
     Vector2 screen = (Vector2){ (float)GetScreenWidth(), (float)GetScreenHeight() };
 
@@ -302,10 +502,17 @@ int main() {
         .model = LoadModel("./assets/player/player.obj"),
         .camera = {0},
     };
-    auto spell_idx = player.add_spell(Spell(Spell::Frost_Nova, Rarity::Rare, 5));
-    PlayerStats player_stats(100, 100, 2);
+    PlayerStats player_stats(100, 100, 4);
     player_stats.mana = 10;
-    player_stats.equip_spell(player.spellbook, spell_idx, 0);
+    player_stats.health = 30;
+    player_stats.add_exp(50);
+    auto frost_nove_idx = player_stats.add_spell_to_spellbook(Spell(Spell::Frost_Nova, Rarity::Rare, 5));
+    Spell void_implosion_spell = Spell(Spell::Void_Implosion, Rarity::Epic, 20);
+    void_implosion_spell.curr_cooldown = 40;
+    auto void_implosion = player_stats.add_spell_to_spellbook(void_implosion_spell);
+    std::println("SPELLBOOK_SIZE: {}", player_stats.spellbook.size());
+    std::println("EQUIP_SPELL: {}", player_stats.equip_spell(frost_nove_idx, 0));
+    std::println("EQUIP_SPELL: {}", player_stats.equip_spell(void_implosion, 3));
 
     player.camera.position = (Vector3){ 30.0f, 70.0f, 0.0f };
     player.camera.target = player.position;
@@ -315,26 +522,22 @@ int main() {
 
     Vector2 mouse_pos = (Vector2){0.0f, 0.0f};
 
-    Textures textures;
+    Textures textures(screen);
 
     Shader fxaa_shader = LoadShader(0, "./assets/fxaa.glsl");
     int resolutionLoc = GetShaderLocation(fxaa_shader, "resolution");
     SetShaderValue(fxaa_shader, resolutionLoc, &screen, SHADER_UNIFORM_VEC2);
 
-    RenderTexture2D target = LoadRenderTexture(screen.x, screen.y);
-
-    bool tick = true;
     double mili_accum = 0;
+
+    std::vector<int> registered_keys = { KEY_N, KEY_M, KEY_FOUR };
+    std::vector<std::pair<int, bool>> pressed_keys; // (KEY, if it was handled)
+    int key = 0;
 
     while (!WindowShouldClose()) {
         double time = GetTime();
-        if (tick) {
-            tick = false;
-            PollInputEvents();
-            update(player, player_stats, mouse_pos, screen, fxaa_shader, resolutionLoc, target);
-        }
 
-        BeginTextureMode(target);
+        BeginTextureMode(textures[Textures::Target]);
             ClearBackground(WHITE);
 
             BeginMode3D(player.camera);
@@ -345,34 +548,60 @@ int main() {
                              5.0f, 5.0f, 1.0f, 128,
                              player.mouse_in_reach ? (Color){ 235, 216, 91, 127 } : (Color){ 237, 175, 164, 127 });
             EndMode3D();
-
-            draw_ui(textures, player_stats, screen);
         EndTextureMode();
 
         int textureLoc = GetShaderLocation(fxaa_shader, "texture0");
-        SetShaderValueTexture(fxaa_shader, textureLoc, target.texture); 
+        SetShaderValueTexture(fxaa_shader, textureLoc, textures[Textures::Target].texture); 
+
+        draw_ui(textures, player_stats, screen);
 
         BeginDrawing();
             ClearBackground(WHITE);
 
             BeginShaderMode(fxaa_shader);
-                DrawTextureRec(target.texture,
-                               (Rectangle){ 0.0f, 0.0f, (float)target.texture.width, -(float)target.texture.height },
-                               (Vector2){ 0.0f, 0.0f },
-                               WHITE);
+                DrawTextureRec(textures[Textures::Target].texture,
+                               (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::Target].texture.width, -(float)textures[Textures::Target].texture.height },
+                               Vector2Zero(), WHITE);
             EndShaderMode();
+
+            float circle_ui_dim = screen.x * 1/8;
+            static const float padding = 10;
+            DrawTexturePro(textures[Textures::CircleUI].texture,
+                           (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::CircleUI].texture.width, -(float)textures[Textures::CircleUI].texture.height },
+                           (Rectangle){ screen.x - circle_ui_dim - padding, screen.y - circle_ui_dim - padding, circle_ui_dim, circle_ui_dim },
+                           Vector2Zero(), 0.0f, WHITE);
+
+            float spell_bar_width = screen.x/4.0f;
+            float spell_bar_height = spell_bar_width/4.0f;
+            DrawTexturePro(textures[Textures::SpellBarUI].texture,
+                           (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::SpellBarUI].texture.width, -(float)textures[Textures::SpellBarUI].texture.height },
+                           (Rectangle){ (screen.x - spell_bar_width)/2.0f, screen.y - spell_bar_height, spell_bar_width, spell_bar_height },
+                           Vector2Zero(), 0.0f, WHITE);
         EndDrawing();
         SwapScreenBuffer();
 
+        PollInputEvents();
+        auto [first, last] = std::ranges::remove_if(pressed_keys, [](const auto& pair) {
+            return pair.second && IsKeyUp(pair.first);
+        });
+        pressed_keys.erase(first, last);
+        for (const auto& key : registered_keys) {
+            if (is_key_pressed(pressed_keys, true, key)) continue;
+            if (IsKeyDown(key)) pressed_keys.push_back({ key, false });
+        }
+
         mili_accum += GetTime() - time;
-        if (mili_accum > TICKS/1000) {
+        if (mili_accum*1000 > (1000/TICKS)) {
             mili_accum = 0;
-            tick = true;
+
+            update(pressed_keys, textures, player, player_stats, mouse_pos, screen, fxaa_shader, resolutionLoc);
+            for (auto& [_, handled] : pressed_keys) {
+                handled = true;
+            }
         }
     }
 
     UnloadShader(fxaa_shader);
-    UnloadRenderTexture(target);
     UnloadModel(player.model);
 
     CloseWindow();
