@@ -22,6 +22,8 @@
           buildInputs = with pkgs;
             [
               cmake
+              glfw
+              libGL.dev
             ]
             ++ [raylib_patched];
           buildPhase = ''

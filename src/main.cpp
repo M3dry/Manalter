@@ -15,8 +15,81 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>
+#include "glad.h"
+#include <GLFW/glfw3.h>
 
 #define TICKS 20
+// TODO: make this a config variable
+#define MSAA 16
+
+RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples) {
+    RenderTexture2D target = { 0 };
+
+    // Step 1: Create a Framebuffer Object (FBO)
+    glGenFramebuffers(1, &target.id);
+    glBindFramebuffer(GL_FRAMEBUFFER, target.id);
+
+    // Step 2: Create a Multisample Renderbuffer for color
+    GLuint colorBufferMSAA;
+    glGenRenderbuffers(1, &colorBufferMSAA);
+    glBindRenderbuffer(GL_RENDERBUFFER, colorBufferMSAA);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_RGBA8, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorBufferMSAA);
+
+    // Step 3: Create a Multisample Renderbuffer for depth (optional)
+    GLuint depthBufferMSAA;
+    glGenRenderbuffers(1, &depthBufferMSAA);
+    glBindRenderbuffer(GL_RENDERBUFFER, depthBufferMSAA);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBufferMSAA);
+
+    // Step 4: Check if framebuffer is complete
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        TraceLog(LOG_WARNING, "Framebuffer is not complete!");
+    }
+
+    // Create a standard texture to blit the multisampled FBO to
+    glGenTextures(1, &target.texture.id);
+    glBindTexture(GL_TEXTURE_2D, target.texture.id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // Create the depth texture (standard depth format, not compressed)
+    glGenTextures(1, &target.depth.id);
+    glBindTexture(GL_TEXTURE_2D, target.depth.id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
+
+    // Create and assign the Texture2D object
+    target.texture.width = width;
+    target.texture.height = height;
+    target.texture.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;  // RGBA format
+    target.texture.mipmaps = 1;
+
+    // Create and assign the Depth texture
+    target.depth.width = width;
+    target.depth.height = height;
+    target.depth.format = PIXELFORMAT_UNCOMPRESSED_R32;  // Correct depth format
+    target.depth.mipmaps = 1;
+
+    // Unbind FBO
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    return target;
+}
+
+void EndTextureModeMSAA(RenderTexture2D target, RenderTexture2D resolveTarget) {
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, target.id);  // Bind the MSAA framebuffer (read source)
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveTarget.id); // Bind the non-MSAA framebuffer (write target)
+
+    // Blit the multisampled framebuffer to the non-multisampled texture
+    glBlitFramebuffer(0, 0, resolveTarget.texture.width, resolveTarget.texture.height, 
+                      0, 0, resolveTarget.texture.width, resolveTarget.texture.height, 
+                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    // Unbind framebuffer after resolving
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
 
 bool is_key_pressed(const std::vector<std::pair<int, bool>>& pressed_keys, bool plus_handled, int key) {
     for (const auto& [k, handled] : pressed_keys) {
@@ -144,6 +217,7 @@ const std::array<float, static_cast<std::size_t>(Rarity::Size)> Spell::rarity_mu
 using SpellBook = std::vector<Spell>;
 
 using Player = struct Player {
+    Vector3 prev_position;
     Vector3 position;
     float angle = 0.0f;
     Model model;
@@ -226,6 +300,16 @@ using PlayerStats = struct PlayerStats {
     }
 };
 
+struct hash_pair final {
+    template<class TFirst, class TSecond>
+    size_t operator()(const std::pair<TFirst, TSecond>& p) const noexcept {
+        uintmax_t hash = std::hash<TFirst>{}(p.first);
+        hash <<= sizeof(uintmax_t) * 4;
+        hash ^= std::hash<TSecond>{}(p.second);
+        return std::hash<uintmax_t>{}(hash);
+    }
+};
+
 class Textures {
   public:
     enum GeneralId {
@@ -255,6 +339,14 @@ class Textures {
         for (auto& [_, val] : spell_map) {
             UnloadTexture(val);
         }
+
+        for (auto& [_, val] : render_map) {
+            UnloadRenderTexture(val);
+        }
+
+        for (auto& [_, val] : spell_frame_map) {
+            UnloadTexture(val);
+        }
     };
 
     Texture2D operator [](GeneralId id) {
@@ -265,8 +357,8 @@ class Textures {
         return spell_map[name];
     }
 
-    RenderTexture2D operator [](RenderId id) {
-        return render_map[id];
+    RenderTexture2D operator [](RenderId id, bool resolved) {
+        return render_map[{id, resolved}];
     }
 
     Texture2D operator [](Rarity id) {
@@ -274,25 +366,27 @@ class Textures {
     }
 
     void update_target_size(Vector2 screen) {
-        UnloadRenderTexture(render_map[Textures::Target]);
-        render_map[Textures::Target] = LoadRenderTexture(screen.x, screen.y);
+        UnloadRenderTexture(render_map[{Textures::Target, true}]);
+        UnloadRenderTexture(render_map[{Textures::Target, false}]);
+        render_map[{Textures::Target, false}] = CreateRenderTextureMSAA(screen.x, screen.y, MSAA);
+        render_map[{Textures::Target, true}] = LoadRenderTexture(screen.x, screen.y);
     }
 
   private:
     std::unordered_map<GeneralId, Texture2D> general_map;
     std::unordered_map<Spell::Name, Texture2D> spell_map;
-    std::unordered_map<RenderId, RenderTexture2D> render_map;
+    std::unordered_map<std::pair<RenderId, bool>, RenderTexture2D, hash_pair> render_map;
     std::unordered_map<Rarity, Texture2D> spell_frame_map;
 
     void add_general_textures() {
         Image img = LoadImage("./assets/spell-icons/empty-slot.png");
         general_map[EmptySpellSlot] = LoadTextureFromImage(img);
-        SetTextureFilter(general_map[EmptySpellSlot], TEXTURE_FILTER_TRILINEAR);
+        SetTextureFilter(general_map[EmptySpellSlot], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         Image img2 = LoadImage("./assets/spell-icons/locked-slot.png");
         general_map[LockedSlot] = LoadTextureFromImage(img2);
-        SetTextureFilter(general_map[LockedSlot], TEXTURE_FILTER_TRILINEAR);
+        SetTextureFilter(general_map[LockedSlot], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img2);
     }
 
@@ -301,15 +395,18 @@ class Textures {
             auto name = static_cast<Spell::Name>(name_i);
             Image img = LoadImage((Spell::icon_path + "/" + Spell::icon_map[name_i]).c_str());
             spell_map[name] = LoadTextureFromImage(img);
-            SetTextureFilter(spell_map[name], TEXTURE_FILTER_TRILINEAR);
+            SetTextureFilter(spell_map[name], TEXTURE_FILTER_BILINEAR);
             UnloadImage(img);
         }
     };
 
     void add_render_textures(Vector2 screen) {
-        render_map[Textures::Target] = LoadRenderTexture(screen.x, screen.y);
-        render_map[CircleUI] = LoadRenderTexture(1023, 1023); // odd to have a center pixel
-        render_map[SpellBarUI] = LoadRenderTexture(512, 128);
+        render_map[{Textures::Target, false}] = CreateRenderTextureMSAA(screen.x, screen.y, MSAA);
+        render_map[{Textures::Target, true}] = LoadRenderTexture(screen.x, screen.y);
+        render_map[{CircleUI, false}] = CreateRenderTextureMSAA(1023, 1023, MSAA); // odd, to have a center pixel
+        render_map[{CircleUI, true}] = LoadRenderTexture(1023, 1023);
+        render_map[{SpellBarUI, false}] = CreateRenderTextureMSAA(512, 128, MSAA);
+        render_map[{SpellBarUI, true}] = LoadRenderTexture(512, 128);
     }
 
     void add_spell_frames() {
@@ -317,7 +414,7 @@ class Textures {
             auto rarity = static_cast<Rarity>(rarity_i);
             Image img = LoadImage((rarity_frame_path + "/" + rarity_frames[rarity_i]).c_str());
             spell_frame_map[rarity] = LoadTextureFromImage(img);
-            SetTextureFilter(spell_frame_map[rarity], TEXTURE_FILTER_TRILINEAR);
+            SetTextureFilter(spell_frame_map[rarity], TEXTURE_FILTER_BILINEAR);
             UnloadImage(img);
         }
     }
@@ -341,7 +438,7 @@ void draw_ui(Textures& textures, const PlayerStats& player_stats, const Vector2&
     static const uint32_t outer_radius = 1023/2;
     static const Vector2 center = (Vector2){ (float)outer_radius, (float)outer_radius };
 
-    BeginTextureMode(textures[Textures::CircleUI]);
+    BeginTextureMode(textures[Textures::CircleUI, false]);
         ClearBackground(BLANK);
 
         DrawCircleV(center, outer_radius, BLACK);
@@ -380,9 +477,10 @@ void draw_ui(Textures& textures, const PlayerStats& player_stats, const Vector2&
         DrawRing(center, outer_radius - 6.2f*padding, outer_radius - 5*padding, 0.0f, 360.0f, 512, BLACK);
         DrawLineEx((Vector2){ center.x, 0.0f }, (Vector2){ center.y, 1022.0f - 6*padding }, 10.0f, BLACK);
     EndTextureMode();
+    EndTextureModeMSAA(textures[Textures::CircleUI, false], textures[Textures::CircleUI, true]);
 
     // Spell Bar
-    BeginTextureMode(textures[Textures::SpellBarUI]);
+    BeginTextureMode(textures[Textures::SpellBarUI, false]);
         ClearBackground(BLANK);
 
         DrawRectangle(0, 0, 512, 128, RED);
@@ -432,9 +530,10 @@ void draw_ui(Textures& textures, const PlayerStats& player_stats, const Vector2&
         // RADAR/MAP???
         DrawRectangle(spell_dim*5, 0, 512 - spell_dim*5, 128, GRAY);
     EndTextureMode();
+    EndTextureModeMSAA(textures[Textures::SpellBarUI, false], textures[Textures::SpellBarUI, true]);
 }
 
-void update(const std::vector<std::pair<int, bool>>& pressed_keys, Textures& textures, Player& player, PlayerStats& player_stats, Vector2& mouse_pos, Vector2& screen, Shader fxaa_shader, int resolutionLoc) {
+void update(const std::vector<std::pair<int, bool>>& pressed_keys, Textures& textures, Player& player, PlayerStats& player_stats, Vector2& screen, Shader fxaa_shader, int resolutionLoc) {
     static const int keys[] = { KEY_A, KEY_S, KEY_D, KEY_W };
     static const Vector2 movements[] = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } };
     static const float angles[] = { 0.0f, 90.0f, 180.0f, 270.0f };
@@ -460,14 +559,15 @@ void update(const std::vector<std::pair<int, bool>>& pressed_keys, Textures& tex
     if (length != 1 && length != 0) movement = Vector2Divide(movement, { length, length });
 
     if (movement.x != 0 || movement.y != 0) {
-        auto x = movement.x/10; 
-        auto z = movement.y/10;
+        auto x = movement.x*5;
+        auto z = movement.y*5;
+        player.prev_position = player.position;
         player.position.x += x;
         player.position.z += z;
 
-        player.camera.position.x += x;
-        player.camera.position.z += z;
-        player.camera.target = player.position;
+        // player.camera.position.x += x;
+        // player.camera.position.z += z;
+        // player.camera.target = player.position;
 
         player.angle = angle.x/angle.y;
     }
@@ -478,13 +578,24 @@ void update(const std::vector<std::pair<int, bool>>& pressed_keys, Textures& tex
     if (is_key_pressed(pressed_keys, false, KEY_M)) {
         player_stats.mana += 1;
     }
-    if (is_key_pressed(pressed_keys, false, KEY_FOUR)) {
-        player_stats.cast_equipped(3);
-    }
 
-    mouse_pos = mouse_xz_in_world(GetMouseRay(GetMousePosition(), player.camera));
-    float distance_to_player = std::abs(Vector2Distance((Vector2){player.position.x, player.position.z}, (Vector2){mouse_pos.x, mouse_pos.y}));
-    player.mouse_in_reach = distance_to_player <= 100.0f;
+    const std::vector<std::pair<int, int>> spell_keys = {
+        { KEY_ONE, 0 },
+        { KEY_TWO, 1 },
+        { KEY_THREE, 2 },
+        { KEY_FOUR, 3 },
+        { KEY_FIVE, 4 },
+        { KEY_SIX, 5 },
+        { KEY_SEVEN, 6 },
+        { KEY_EIGHT, 7 },
+        { KEY_NINE, 8 },
+        { KEY_ZERO, 9 },
+    };
+    for (const auto& [key, num] : spell_keys) {
+        if (is_key_pressed(pressed_keys, false, key)) {
+            player_stats.cast_equipped(num);
+        }
+    }
 
     player_stats.tick_cooldown();
 }
@@ -493,12 +604,15 @@ int main() {
     InitWindow(0, 0, "Aetas Magus");
     SetWindowState(FLAG_FULLSCREEN_MODE);
     SetExitKey(KEY_NULL);
+    // TODO: dumb fix until I figure out how to change face orientation in blender lol
+    // rlDisableBackfaceCulling();
     // DisableCursor();
 
     Vector2 screen = (Vector2){ (float)GetScreenWidth(), (float)GetScreenHeight() };
 
     Player player = {
-        .position = { 0.0f, 10.0f, 0.0f },
+        .prev_position = Vector3Zero(),
+        .position = Vector3Zero(),
         .model = LoadModel("./assets/player/player.obj"),
         .camera = {0},
     };
@@ -514,6 +628,7 @@ int main() {
     std::println("EQUIP_SPELL: {}", player_stats.equip_spell(frost_nove_idx, 0));
     std::println("EQUIP_SPELL: {}", player_stats.equip_spell(void_implosion, 3));
 
+    const Vector3 camera_offset = (Vector3){ 30.0f, 70.0f, 0.0f };
     player.camera.position = (Vector3){ 30.0f, 70.0f, 0.0f };
     player.camera.target = player.position;
     player.camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
@@ -529,52 +644,65 @@ int main() {
     SetShaderValue(fxaa_shader, resolutionLoc, &screen, SHADER_UNIFORM_VEC2);
 
     double mili_accum = 0;
+    double time = 0;
 
-    std::vector<int> registered_keys = { KEY_N, KEY_M, KEY_FOUR };
+    Vector3 interpolated_position = Vector3Zero();
+
+    std::vector<int> registered_keys = { KEY_N, KEY_M, KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN, KEY_EIGHT, KEY_NINE, KEY_ZERO };
     std::vector<std::pair<int, bool>> pressed_keys; // (KEY, if it was handled)
     int key = 0;
 
     while (!WindowShouldClose()) {
-        double time = GetTime();
+        time = GetTime();
+        interpolated_position = Vector3Lerp(player.prev_position, player.position, mili_accum/(1000/TICKS));
+        player.camera.target = interpolated_position;
+        player.camera.position = Vector3Lerp(player.camera.position, Vector3Add(camera_offset, interpolated_position), 1.0f);
 
-        BeginTextureMode(textures[Textures::Target]);
+        mouse_pos = mouse_xz_in_world(GetMouseRay(GetMousePosition(), player.camera));
+        float distance_to_player = std::abs(Vector2Distance((Vector2){player.position.x, player.position.z}, (Vector2){mouse_pos.x, mouse_pos.y}));
+        player.mouse_in_reach = distance_to_player <= 100.0f;
+
+        BeginTextureMode(textures[Textures::Target, false]);
             ClearBackground(WHITE);
 
             BeginMode3D(player.camera);
                 DrawGrid(1000, 5.0f);
-                DrawModelEx(player.model, player.position, (Vector3){ 0.0f, 1.0f, 0.0f }, player.angle, (Vector3){ 0.2f, 0.2f, 0.2f }, ORANGE);
+
+                DrawModelEx(player.model, interpolated_position, (Vector3){ 0.0f, 1.0f, 0.0f }, player.angle, (Vector3){ 0.2f, 0.2f, 0.2f }, ORANGE);
 
                 DrawCylinder((Vector3){ mouse_pos.x, 0.0f, mouse_pos.y },
                              5.0f, 5.0f, 1.0f, 128,
                              player.mouse_in_reach ? (Color){ 235, 216, 91, 127 } : (Color){ 237, 175, 164, 127 });
             EndMode3D();
         EndTextureMode();
+        EndTextureModeMSAA(textures[Textures::Target, false], textures[Textures::Target, true]);
 
-        int textureLoc = GetShaderLocation(fxaa_shader, "texture0");
-        SetShaderValueTexture(fxaa_shader, textureLoc, textures[Textures::Target].texture); 
+        // int textureLoc = GetShaderLocation(fxaa_shader, "texture0");
+        // SetShaderValueTexture(fxaa_shader, textureLoc, target.texture);
 
         draw_ui(textures, player_stats, screen);
 
         BeginDrawing();
             ClearBackground(WHITE);
 
-            BeginShaderMode(fxaa_shader);
-                DrawTextureRec(textures[Textures::Target].texture,
-                               (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::Target].texture.width, -(float)textures[Textures::Target].texture.height },
+            // BeginShaderMode(fxaa_shader);
+                DrawTextureRec(textures[Textures::Target, true].texture,
+                               (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::Target, true].texture.width, -(float)textures[Textures::Target, true].texture.height },
                                Vector2Zero(), WHITE);
-            EndShaderMode();
+            // EndShaderMode();
 
             float circle_ui_dim = screen.x * 1/8;
             static const float padding = 10;
-            DrawTexturePro(textures[Textures::CircleUI].texture,
-                           (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::CircleUI].texture.width, -(float)textures[Textures::CircleUI].texture.height },
+            SetTextureFilter(textures[Textures::CircleUI, true].texture, TEXTURE_FILTER_BILINEAR);
+            DrawTexturePro(textures[Textures::CircleUI, true].texture,
+                           (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::CircleUI, true].texture.width, -(float)textures[Textures::CircleUI, true].texture.height },
                            (Rectangle){ screen.x - circle_ui_dim - padding, screen.y - circle_ui_dim - padding, circle_ui_dim, circle_ui_dim },
                            Vector2Zero(), 0.0f, WHITE);
 
             float spell_bar_width = screen.x/4.0f;
             float spell_bar_height = spell_bar_width/4.0f;
-            DrawTexturePro(textures[Textures::SpellBarUI].texture,
-                           (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::SpellBarUI].texture.width, -(float)textures[Textures::SpellBarUI].texture.height },
+            DrawTexturePro(textures[Textures::SpellBarUI, true].texture,
+                           (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::SpellBarUI, true].texture.width, -(float)textures[Textures::SpellBarUI, true].texture.height },
                            (Rectangle){ (screen.x - spell_bar_width)/2.0f, screen.y - spell_bar_height, spell_bar_width, spell_bar_height },
                            Vector2Zero(), 0.0f, WHITE);
         EndDrawing();
@@ -591,10 +719,10 @@ int main() {
         }
 
         mili_accum += GetTime() - time;
-        if (mili_accum*1000 > (1000/TICKS)) {
+        if (mili_accum*1000 >= (1000/TICKS)) {
             mili_accum = 0;
 
-            update(pressed_keys, textures, player, player_stats, mouse_pos, screen, fxaa_shader, resolutionLoc);
+            update(pressed_keys, textures, player, player_stats, screen, fxaa_shader, resolutionLoc);
             for (auto& [_, handled] : pressed_keys) {
                 handled = true;
             }

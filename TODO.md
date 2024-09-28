@@ -9,6 +9,7 @@
 - [x] spell bar
 - [ ] inventory
 - [ ] main menu
+- [ ] hub menu
 - [ ] pause menu
 ## general
 - [ ] saves
