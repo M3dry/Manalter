@@ -18,78 +18,10 @@
 #include "glad.h"
 #include <GLFW/glfw3.h>
 
+#include "spell.hpp"
+#include "assets.hpp"
+
 #define TICKS 20
-// TODO: make this a config variable
-#define MSAA 16
-
-RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples) {
-    RenderTexture2D target = { 0 };
-
-    // Step 1: Create a Framebuffer Object (FBO)
-    glGenFramebuffers(1, &target.id);
-    glBindFramebuffer(GL_FRAMEBUFFER, target.id);
-
-    // Step 2: Create a Multisample Renderbuffer for color
-    GLuint colorBufferMSAA;
-    glGenRenderbuffers(1, &colorBufferMSAA);
-    glBindRenderbuffer(GL_RENDERBUFFER, colorBufferMSAA);
-    glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_RGBA8, width, height);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorBufferMSAA);
-
-    // Step 3: Create a Multisample Renderbuffer for depth (optional)
-    GLuint depthBufferMSAA;
-    glGenRenderbuffers(1, &depthBufferMSAA);
-    glBindRenderbuffer(GL_RENDERBUFFER, depthBufferMSAA);
-    glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8, width, height);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBufferMSAA);
-
-    // Step 4: Check if framebuffer is complete
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        TraceLog(LOG_WARNING, "Framebuffer is not complete!");
-    }
-
-    // Create a standard texture to blit the multisampled FBO to
-    glGenTextures(1, &target.texture.id);
-    glBindTexture(GL_TEXTURE_2D, target.texture.id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    // Create the depth texture (standard depth format, not compressed)
-    glGenTextures(1, &target.depth.id);
-    glBindTexture(GL_TEXTURE_2D, target.depth.id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
-
-    // Create and assign the Texture2D object
-    target.texture.width = width;
-    target.texture.height = height;
-    target.texture.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;  // RGBA format
-    target.texture.mipmaps = 1;
-
-    // Create and assign the Depth texture
-    target.depth.width = width;
-    target.depth.height = height;
-    target.depth.format = PIXELFORMAT_UNCOMPRESSED_R32;  // Correct depth format
-    target.depth.mipmaps = 1;
-
-    // Unbind FBO
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    return target;
-}
-
-void EndTextureModeMSAA(RenderTexture2D target, RenderTexture2D resolveTarget) {
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, target.id);  // Bind the MSAA framebuffer (read source)
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveTarget.id); // Bind the non-MSAA framebuffer (write target)
-
-    // Blit the multisampled framebuffer to the non-multisampled texture
-    glBlitFramebuffer(0, 0, resolveTarget.texture.width, resolveTarget.texture.height, 
-                      0, 0, resolveTarget.texture.width, resolveTarget.texture.height, 
-                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-    // Unbind framebuffer after resolving
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
 
 bool is_key_pressed(const std::vector<std::pair<int, bool>>& pressed_keys, bool plus_handled, int key) {
     for (const auto& [k, handled] : pressed_keys) {
@@ -99,122 +31,6 @@ bool is_key_pressed(const std::vector<std::pair<int, bool>>& pressed_keys, bool 
 
     return false;
 }
-
-// very generic names, TODO: maybe come up with better ones
-enum struct Rarity {
-    Common = 0,
-    Uncommon,
-    Rare,
-    Epic,
-    Legendary,
-    Size
-};
-
-static const std::string rarity_frame_path = "./assets/spell-icons/frames";
-static const std::array<std::string, static_cast<std::size_t>(Rarity::Size)> rarity_frames = {
-    "common.png", // Common
-    "uncommon.png", // Uncommon
-    "rare.png", // Rare
-    "epic.png", // Epic
-    "legendary.png", // Legendary
-};
-
-using Spell = struct Spell {
-    enum Name {
-        Fire_Wall = 0,
-        Falling_Icicle,
-        Lightning_Strike,
-        Frost_Nova,
-        Void_Implosion,
-        Mana_Detonation,
-        NameSize, // keep last
-    };
-
-    enum Type {
-        AOE,
-        AtMouse,
-        AtPlayer,
-        Fire,
-        Ice,
-        Lightning,
-        DarkMagic,
-    };
-
-    using Types = std::unordered_set<Type>;
-
-    static const std::array<Types, NameSize> type_map;
-    // in ticks, doesn't change with rarity
-    static const std::array<int, NameSize> cooldown_map;
-    static const std::string icon_path;
-    // just file name, path is `Spell::icon_path`
-    static const std::array<std::string, NameSize> icon_map;
-    static const std::array<float, static_cast<std::size_t>(Rarity::Size)> rarity_multiplier;
-
-    Name name;
-    Rarity rarity;
-    uint16_t lvl;
-    // exp collected since level up
-    uint32_t exp;
-    // in ticks
-    int curr_cooldown;
-
-    Spell(Name name, Rarity rarity, uint16_t lvl)
-        : name(name), rarity(rarity), lvl(lvl), exp(0), curr_cooldown(0) {};
-
-    const Types& get_type() const {
-        return Spell::type_map[name];
-    };
-
-    int get_cooldown() const {
-        return Spell::cooldown_map[name];
-    }
-
-    const std::string& get_icon() const {
-        return Spell::icon_map[name];
-    }
-
-    float get_rarity_multiplier() const {
-        return Spell::rarity_multiplier[static_cast<std::size_t>(rarity)];
-    }
-};
-
-const std::array<Spell::Types, Spell::NameSize> Spell::type_map = {
-    std::unordered_set({ Spell::AOE, Spell::AtMouse, Spell::Fire }), // Fire Wall
-    std::unordered_set({ Spell::AtMouse, Spell::Ice }), // Falling Icicle
-    std::unordered_set({ Spell::AtMouse, Spell::Lightning }), // Lightning Strike
-    std::unordered_set({ Spell::AOE,  Spell::AtMouse, Spell::Ice }), // Frost Nova
-    std::unordered_set({ Spell::AOE, Spell::AtMouse, Spell::DarkMagic }), // Void Implosion
-    std::unordered_set({ Spell::AOE, Spell::AtPlayer, Spell::DarkMagic }), // Mana Detonation
-};
-
-const std::array<int, Spell::NameSize> Spell::cooldown_map = {
-    10, // Fire Wall
-    10, // Falling Icicle
-    15, // Lightning Strike
-    20, // Frost Nova
-    40, // Void Implosion
-    40, // Mana Detonation
-};
-
-const std::string Spell::icon_path = "./assets/spell-icons";
-const std::array<std::string, Spell::NameSize> Spell::icon_map = {
-    "fire-wall.png", // Fire Wall
-    "falling-icicle.png", // Falling Icicle
-    "lightning-strike.png", // Lightning Strike
-    "frost-nova.png", // Frost Nova
-    "void-implosion.png", // Void Implosion
-    "mana-detonation.png", // Mana Detonation
-};
-
-const std::array<float, static_cast<std::size_t>(Rarity::Size)> Spell::rarity_multiplier = {
-    1.0f, // Common
-    1.1f, // Uncommon
-    1.3f, // Rare
-    1.6f, // Epic
-    2.0f, // Legendary
-};
-
-using SpellBook = std::vector<Spell>;
 
 using Player = struct Player {
     Vector3 prev_position;
@@ -244,6 +60,7 @@ using PlayerStats = struct PlayerStats {
     PlayerStats(uint32_t max_health, uint32_t max_mana, uint8_t max_spells)
         : max_health(max_health), max_mana(max_mana), health(max_health), mana(max_mana), lvl(0), exp(0), exp_to_next_lvl(100), max_spells(max_spells), equipped_spells(10, UINT32_MAX) {};
 
+    // Return how much exp is required to level up from `lvl - 1` to `lvl`
     static uint32_t exp_to_lvl(uint16_t lvl) {
         return 100 * std::pow(lvl, 2);
     }
@@ -300,126 +117,6 @@ using PlayerStats = struct PlayerStats {
     }
 };
 
-struct hash_pair final {
-    template<class TFirst, class TSecond>
-    size_t operator()(const std::pair<TFirst, TSecond>& p) const noexcept {
-        uintmax_t hash = std::hash<TFirst>{}(p.first);
-        hash <<= sizeof(uintmax_t) * 4;
-        hash ^= std::hash<TSecond>{}(p.second);
-        return std::hash<uintmax_t>{}(hash);
-    }
-};
-
-class Textures {
-  public:
-    enum GeneralId {
-        EmptySpellSlot,
-        LockedSlot,
-    };
-
-    enum RenderId {
-        Target,
-        CircleUI,
-        SpellBarUI,
-    };
-
-    Textures(Vector2 screen) : general_map({}), spell_map({}), render_map({}), spell_frame_map({}) {
-        add_general_textures();
-        add_spell_textures();
-        add_render_textures(screen);
-        add_spell_frames();
-    };
-    Textures(const Textures&) = delete;
-
-    ~Textures() {
-        for (auto& [_, val] : general_map) {
-            UnloadTexture(val);
-        }
-
-        for (auto& [_, val] : spell_map) {
-            UnloadTexture(val);
-        }
-
-        for (auto& [_, val] : render_map) {
-            UnloadRenderTexture(val);
-        }
-
-        for (auto& [_, val] : spell_frame_map) {
-            UnloadTexture(val);
-        }
-    };
-
-    Texture2D operator [](GeneralId id) {
-        return general_map[id];
-    }
-
-    Texture2D operator [](Spell::Name name) {
-        return spell_map[name];
-    }
-
-    RenderTexture2D operator [](RenderId id, bool resolved) {
-        return render_map[{id, resolved}];
-    }
-
-    Texture2D operator [](Rarity id) {
-        return spell_frame_map[id];
-    }
-
-    void update_target_size(Vector2 screen) {
-        UnloadRenderTexture(render_map[{Textures::Target, true}]);
-        UnloadRenderTexture(render_map[{Textures::Target, false}]);
-        render_map[{Textures::Target, false}] = CreateRenderTextureMSAA(screen.x, screen.y, MSAA);
-        render_map[{Textures::Target, true}] = LoadRenderTexture(screen.x, screen.y);
-    }
-
-  private:
-    std::unordered_map<GeneralId, Texture2D> general_map;
-    std::unordered_map<Spell::Name, Texture2D> spell_map;
-    std::unordered_map<std::pair<RenderId, bool>, RenderTexture2D, hash_pair> render_map;
-    std::unordered_map<Rarity, Texture2D> spell_frame_map;
-
-    void add_general_textures() {
-        Image img = LoadImage("./assets/spell-icons/empty-slot.png");
-        general_map[EmptySpellSlot] = LoadTextureFromImage(img);
-        SetTextureFilter(general_map[EmptySpellSlot], TEXTURE_FILTER_BILINEAR);
-        UnloadImage(img);
-
-        Image img2 = LoadImage("./assets/spell-icons/locked-slot.png");
-        general_map[LockedSlot] = LoadTextureFromImage(img2);
-        SetTextureFilter(general_map[LockedSlot], TEXTURE_FILTER_BILINEAR);
-        UnloadImage(img2);
-    }
-
-    void add_spell_textures() {
-        for (int name_i = 0; name_i < Spell::NameSize; name_i++) {
-            auto name = static_cast<Spell::Name>(name_i);
-            Image img = LoadImage((Spell::icon_path + "/" + Spell::icon_map[name_i]).c_str());
-            spell_map[name] = LoadTextureFromImage(img);
-            SetTextureFilter(spell_map[name], TEXTURE_FILTER_BILINEAR);
-            UnloadImage(img);
-        }
-    };
-
-    void add_render_textures(Vector2 screen) {
-        render_map[{Textures::Target, false}] = CreateRenderTextureMSAA(screen.x, screen.y, MSAA);
-        render_map[{Textures::Target, true}] = LoadRenderTexture(screen.x, screen.y);
-        render_map[{CircleUI, false}] = CreateRenderTextureMSAA(1023, 1023, MSAA); // odd, to have a center pixel
-        render_map[{CircleUI, true}] = LoadRenderTexture(1023, 1023);
-        render_map[{SpellBarUI, false}] = CreateRenderTextureMSAA(512, 128, MSAA);
-        render_map[{SpellBarUI, true}] = LoadRenderTexture(512, 128);
-    }
-
-    void add_spell_frames() {
-        for (int rarity_i = 0; rarity_i < static_cast<int>(Rarity::Size); rarity_i++) {
-            auto rarity = static_cast<Rarity>(rarity_i);
-            Image img = LoadImage((rarity_frame_path + "/" + rarity_frames[rarity_i]).c_str());
-            spell_frame_map[rarity] = LoadTextureFromImage(img);
-            SetTextureFilter(spell_frame_map[rarity], TEXTURE_FILTER_BILINEAR);
-            UnloadImage(img);
-        }
-    }
-};
-
 Vector2 mouse_xz_in_world(Ray mouse) {
     const float x = -mouse.position.y/mouse.direction.y;
 
@@ -428,17 +125,12 @@ Vector2 mouse_xz_in_world(Ray mouse) {
     return (Vector2){ mouse.position.x + x*mouse.direction.x, mouse.position.z + x*mouse.direction.z };
 }
 
-void draw_circle_texture(Texture2D texture, Vector2 center, float radius, Color color) {
-    DrawTextureEx(texture, (Vector2){ center.x - radius, center.y - radius }, 0.0f, 0.001f * radius, color);
-}
-
-// Will draw ui to the corresponding RenderTextures
-void draw_ui(Textures& textures, const PlayerStats& player_stats, const Vector2& screen) {
+void draw_ui(Assets::Store& assets, const PlayerStats& player_stats, const Vector2& screen) {
     static const uint32_t padding = 10;
     static const uint32_t outer_radius = 1023/2;
     static const Vector2 center = (Vector2){ (float)outer_radius, (float)outer_radius };
 
-    BeginTextureMode(textures[Textures::CircleUI, false]);
+    BeginTextureMode(assets[Assets::CircleUI, false]);
         ClearBackground(BLANK);
 
         DrawCircleV(center, outer_radius, BLACK);
@@ -477,10 +169,10 @@ void draw_ui(Textures& textures, const PlayerStats& player_stats, const Vector2&
         DrawRing(center, outer_radius - 6.2f*padding, outer_radius - 5*padding, 0.0f, 360.0f, 512, BLACK);
         DrawLineEx((Vector2){ center.x, 0.0f }, (Vector2){ center.y, 1022.0f - 6*padding }, 10.0f, BLACK);
     EndTextureMode();
-    EndTextureModeMSAA(textures[Textures::CircleUI, false], textures[Textures::CircleUI, true]);
+    EndTextureModeMSAA(assets[Assets::CircleUI, false], assets[Assets::CircleUI, true]);
 
     // Spell Bar
-    BeginTextureMode(textures[Textures::SpellBarUI, false]);
+    BeginTextureMode(assets[Assets::SpellBarUI, false]);
         ClearBackground(BLANK);
 
         DrawRectangle(0, 0, 512, 128, RED);
@@ -492,10 +184,7 @@ void draw_ui(Textures& textures, const PlayerStats& player_stats, const Vector2&
             int col = i - 5*row;
 
             if (i >= player_stats.max_spells) {
-                DrawTexturePro(textures[Textures::LockedSlot],
-                               (Rectangle){ 1.0f, 0.0f, (float)textures[Textures::LockedSlot].width, (float)textures[Textures::LockedSlot].height },
-                               (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim },
-                               Vector2Zero(), 0.0f, WHITE);
+                assets.draw_texture(Assets::LockedSlot, (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim });
                 continue;
             }
 
@@ -503,37 +192,26 @@ void draw_ui(Textures& textures, const PlayerStats& player_stats, const Vector2&
                 const Spell& spell = *spell_opt;
 
                 // TODO: rn ignoring the fact that the frame draws over the spell icon
-                Texture2D spell_tex = textures[spell.name];
-                DrawTexturePro(spell_tex,
-                               (Rectangle){ 0.0f, 0.0f, (float)spell_tex.width, (float)spell_tex.height },
-                               (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim },
-                               Vector2Zero(), 0.0f, WHITE);
+                assets.draw_texture(spell.name, (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim });
 
                 BeginBlendMode(BLEND_ADDITIVE);
                     float cooldown_height = spell_dim * spell.curr_cooldown/spell.get_cooldown();
                     DrawRectangle(col*spell_dim, spell_dim*row + (spell_dim - cooldown_height), spell_dim, cooldown_height, { 130, 130, 130, 128 });
                 EndBlendMode();
 
-                Texture2D frame = textures[spell.rarity];
-                DrawTexturePro(frame,
-                               (Rectangle){ 0.0f, 0.0f, (float)frame.width, (float)frame.height },
-                               (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim },
-                               Vector2Zero(), 0.0f, WHITE);
+                assets.draw_texture(spell.rarity, (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim });
             } else {
-                DrawTexturePro(textures[Textures::EmptySpellSlot],
-                               (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::EmptySpellSlot].width, (float)textures[Textures::EmptySpellSlot].height },
-                               (Rectangle){ (float)col*spell_dim, (float)row*spell_dim, (float)spell_dim, (float)spell_dim },
-                               Vector2Zero(), 0.0f, WHITE);
+                assets.draw_texture(Assets::EmptySpellSlot, (Rectangle){ (float)col*spell_dim, (float)row*spell_dim, (float)spell_dim, (float)spell_dim });
             }
         }
 
         // RADAR/MAP???
         DrawRectangle(spell_dim*5, 0, 512 - spell_dim*5, 128, GRAY);
     EndTextureMode();
-    EndTextureModeMSAA(textures[Textures::SpellBarUI, false], textures[Textures::SpellBarUI, true]);
+    EndTextureModeMSAA(assets[Assets::SpellBarUI, false], assets[Assets::SpellBarUI, true]);
 }
 
-void update(const std::vector<std::pair<int, bool>>& pressed_keys, Textures& textures, Player& player, PlayerStats& player_stats, Vector2& screen, Shader fxaa_shader, int resolutionLoc) {
+void update(const std::vector<std::pair<int, bool>>& pressed_keys, Assets::Store& assets, Player& player, PlayerStats& player_stats, Vector2& screen, Shader fxaa_shader, int resolutionLoc) {
     static const int keys[] = { KEY_A, KEY_S, KEY_D, KEY_W };
     static const Vector2 movements[] = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } };
     static const float angles[] = { 0.0f, 90.0f, 180.0f, 270.0f };
@@ -545,7 +223,7 @@ void update(const std::vector<std::pair<int, bool>>& pressed_keys, Textures& tex
         screen = (Vector2){ (float)GetScreenWidth(), (float)GetScreenHeight() };
         SetShaderValue(fxaa_shader, resolutionLoc, &screen, SHADER_UNIFORM_VEC2);
 
-        textures.update_target_size(screen);
+        assets.update_target_size(screen);
     }
 
     for (int k = 0; k < 4; k++) {
@@ -561,14 +239,10 @@ void update(const std::vector<std::pair<int, bool>>& pressed_keys, Textures& tex
     if (movement.x != 0 || movement.y != 0) {
         auto x = movement.x*5;
         auto z = movement.y*5;
+
         player.prev_position = player.position;
         player.position.x += x;
         player.position.z += z;
-
-        // player.camera.position.x += x;
-        // player.camera.position.z += z;
-        // player.camera.target = player.position;
-
         player.angle = angle.x/angle.y;
     }
 
@@ -620,13 +294,17 @@ int main() {
     player_stats.mana = 10;
     player_stats.health = 30;
     player_stats.add_exp(50);
+
     auto frost_nove_idx = player_stats.add_spell_to_spellbook(Spell(Spell::Frost_Nova, Rarity::Rare, 5));
-    Spell void_implosion_spell = Spell(Spell::Void_Implosion, Rarity::Epic, 20);
-    void_implosion_spell.curr_cooldown = 40;
-    auto void_implosion = player_stats.add_spell_to_spellbook(void_implosion_spell);
+    auto void_implosion = player_stats.add_spell_to_spellbook(Spell(Spell::Void_Implosion, Rarity::Epic, 20));
+    Spell random_spell = Spell::random({Rarity::Uncommon, Rarity::Legendary}, {0, 100});
+    auto random_idx = player_stats.add_spell_to_spellbook(random_spell);
+    std::println("RANDOM SPELL:\n  name: {}\n  rarity: {}\n  lvl: {}",
+                 Spell::icon_map[random_spell.name], Rarity::frames[static_cast<int>(random_spell.rarity)], random_spell.lvl);
     std::println("SPELLBOOK_SIZE: {}", player_stats.spellbook.size());
-    std::println("EQUIP_SPELL: {}", player_stats.equip_spell(frost_nove_idx, 0));
-    std::println("EQUIP_SPELL: {}", player_stats.equip_spell(void_implosion, 3));
+    player_stats.equip_spell(frost_nove_idx, 0);
+    player_stats.equip_spell(random_idx, 2);
+    player_stats.equip_spell(void_implosion, 3);
 
     const Vector3 camera_offset = (Vector3){ 30.0f, 70.0f, 0.0f };
     player.camera.position = (Vector3){ 30.0f, 70.0f, 0.0f };
@@ -637,17 +315,23 @@ int main() {
 
     Vector2 mouse_pos = (Vector2){0.0f, 0.0f};
 
-    Textures textures(screen);
+    Assets::Store assets(screen);
 
     Shader fxaa_shader = LoadShader(0, "./assets/fxaa.glsl");
     int resolutionLoc = GetShaderLocation(fxaa_shader, "resolution");
     SetShaderValue(fxaa_shader, resolutionLoc, &screen, SHADER_UNIFORM_VEC2);
+
+    Shader grass_shader = LoadShader("./assets/grass.vs.glsl", "./assets/grass.fs.glsl");
+    Mesh plane_mesh = GenMeshPlane(1000.0f, 1000.0f, 100, 100);
+    Model plane_model = LoadModelFromMesh(plane_mesh);
+    plane_model.materials[0].shader = grass_shader;
 
     double mili_accum = 0;
     double time = 0;
 
     Vector3 interpolated_position = Vector3Zero();
 
+    // TODO: customizable controls
     std::vector<int> registered_keys = { KEY_N, KEY_M, KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN, KEY_EIGHT, KEY_NINE, KEY_ZERO };
     std::vector<std::pair<int, bool>> pressed_keys; // (KEY, if it was handled)
     int key = 0;
@@ -662,11 +346,11 @@ int main() {
         float distance_to_player = std::abs(Vector2Distance((Vector2){player.position.x, player.position.z}, (Vector2){mouse_pos.x, mouse_pos.y}));
         player.mouse_in_reach = distance_to_player <= 100.0f;
 
-        BeginTextureMode(textures[Textures::Target, false]);
+        BeginTextureMode(assets[Assets::Target, false]);
             ClearBackground(WHITE);
 
             BeginMode3D(player.camera);
-                DrawGrid(1000, 5.0f);
+                DrawModel(plane_model, Vector3Zero(), 1.0f, WHITE);
 
                 DrawModelEx(player.model, interpolated_position, (Vector3){ 0.0f, 1.0f, 0.0f }, player.angle, (Vector3){ 0.2f, 0.2f, 0.2f }, ORANGE);
 
@@ -675,36 +359,28 @@ int main() {
                              player.mouse_in_reach ? (Color){ 235, 216, 91, 127 } : (Color){ 237, 175, 164, 127 });
             EndMode3D();
         EndTextureMode();
-        EndTextureModeMSAA(textures[Textures::Target, false], textures[Textures::Target, true]);
+        EndTextureModeMSAA(assets[Assets::Target, false], assets[Assets::Target, true]);
 
         // int textureLoc = GetShaderLocation(fxaa_shader, "texture0");
         // SetShaderValueTexture(fxaa_shader, textureLoc, target.texture);
 
-        draw_ui(textures, player_stats, screen);
+        draw_ui(assets, player_stats, screen);
 
         BeginDrawing();
             ClearBackground(WHITE);
 
             // BeginShaderMode(fxaa_shader);
-                DrawTextureRec(textures[Textures::Target, true].texture,
-                               (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::Target, true].texture.width, -(float)textures[Textures::Target, true].texture.height },
-                               Vector2Zero(), WHITE);
+                assets.draw_texture(Assets::Target, true, {});
             // EndShaderMode();
 
             float circle_ui_dim = screen.x * 1/8;
             static const float padding = 10;
-            SetTextureFilter(textures[Textures::CircleUI, true].texture, TEXTURE_FILTER_BILINEAR);
-            DrawTexturePro(textures[Textures::CircleUI, true].texture,
-                           (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::CircleUI, true].texture.width, -(float)textures[Textures::CircleUI, true].texture.height },
-                           (Rectangle){ screen.x - circle_ui_dim - padding, screen.y - circle_ui_dim - padding, circle_ui_dim, circle_ui_dim },
-                           Vector2Zero(), 0.0f, WHITE);
+            SetTextureFilter(assets[Assets::CircleUI, true].texture, TEXTURE_FILTER_BILINEAR);
+            assets.draw_texture(Assets::CircleUI, true, (Rectangle){ screen.x - circle_ui_dim - padding, screen.y - circle_ui_dim - padding, circle_ui_dim, circle_ui_dim });
 
             float spell_bar_width = screen.x/4.0f;
             float spell_bar_height = spell_bar_width/4.0f;
-            DrawTexturePro(textures[Textures::SpellBarUI, true].texture,
-                           (Rectangle){ 0.0f, 0.0f, (float)textures[Textures::SpellBarUI, true].texture.width, -(float)textures[Textures::SpellBarUI, true].texture.height },
-                           (Rectangle){ (screen.x - spell_bar_width)/2.0f, screen.y - spell_bar_height, spell_bar_width, spell_bar_height },
-                           Vector2Zero(), 0.0f, WHITE);
+            assets.draw_texture(Assets::SpellBarUI, true, (Rectangle){ (screen.x - spell_bar_width)/2.0f, screen.y - spell_bar_height, spell_bar_width, spell_bar_height });
         EndDrawing();
         SwapScreenBuffer();
 
@@ -722,7 +398,7 @@ int main() {
         if (mili_accum*1000 >= (1000/TICKS)) {
             mili_accum = 0;
 
-            update(pressed_keys, textures, player, player_stats, screen, fxaa_shader, resolutionLoc);
+            update(pressed_keys, assets, player, player_stats, screen, fxaa_shader, resolutionLoc);
             for (auto& [_, handled] : pressed_keys) {
                 handled = true;
             }
@@ -730,7 +406,9 @@ int main() {
     }
 
     UnloadShader(fxaa_shader);
+    UnloadShader(grass_shader);
     UnloadModel(player.model);
+    UnloadModel(plane_model);
 
     CloseWindow();
 
