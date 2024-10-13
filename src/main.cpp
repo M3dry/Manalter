@@ -11,6 +11,7 @@
 #include <numbers>
 #include <array>
 #include <utility>
+#include <variant>
 
 #include <raylib.h>
 #include <raymath.h>
@@ -22,6 +23,7 @@
 #include "assets.hpp"
 
 #define TICKS 20
+#define DEBUG
 
 bool is_key_pressed(const std::vector<std::pair<int, bool>>& pressed_keys, bool plus_handled, int key) {
     for (const auto& [k, handled] : pressed_keys) {
@@ -35,11 +37,86 @@ bool is_key_pressed(const std::vector<std::pair<int, bool>>& pressed_keys, bool 
 using Player = struct Player {
     Vector3 prev_position;
     Vector3 position;
+    Vector3 interpolated_position;
     float angle = 0.0f;
     Model model;
-    Camera3D camera;
+    std::array<Vector3, 4> base_hitbox_points;
+    Camera3D camera = {0};
     bool mouse_in_reach = false;
+
+    static const Vector3 camera_offset;
+    static const float model_scale;
+
+    Player(Vector3 position) : prev_position(position), position(position), interpolated_position(position), model(LoadModel("./assets/player/player.obj")) {
+        camera.position = camera_offset;
+        camera.target = position;
+        camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
+        camera.fovy = 90.0f;
+        camera.projection = CAMERA_PERSPECTIVE;
+
+        BoundingBox mesh_bb = GetMeshBoundingBox(model.meshes[0]);
+        Vector3 min = Vector3Scale(mesh_bb.min, model_scale);
+        Vector3 max = Vector3Scale(mesh_bb.max, model_scale);
+
+        // 0.1f so when drawn it doesn't clash floor model
+        base_hitbox_points = { (Vector3){ min.x, 0.1f, max.z }, (Vector3){ max.x, 0.1f, max.z }, (Vector3){ min.x, 0.1f, min.z }, (Vector3){ max.x, 0.1f, min.z } };
+    }
+
+    void update_interpolated_pos(double mili_accum) {
+        interpolated_position = Vector3Lerp(prev_position, position, (mili_accum*1000)/(1000/TICKS));
+        prev_position = interpolated_position;
+        camera.target = interpolated_position;
+        camera.position = Vector3Lerp(camera.position, Vector3Add(camera_offset, interpolated_position), 1.0f);
+    }
+
+    void update_in_reach(Vector2 mouse) {
+        float distance = std::abs(Vector2Distance((Vector2){position.x, position.z}, mouse));
+        mouse_in_reach = distance <= 100.0f;
+    }
+
+    // new_pos:
+    //   .xy - player xy axis
+    //   .z - player angle
+    void update_position(Vector2 new_pos, float new_angle) {
+        prev_position = position;
+        position.x += new_pos.x;
+        position.z += new_pos.y;
+        angle = new_angle;
+    }
+
+    void draw_model() const {
+        DrawModelEx(model, interpolated_position, (Vector3){ 0.0f, 1.0f, 0.0f }, angle, (Vector3){ model_scale, model_scale, model_scale }, ORANGE);
+
+        std::println("ANGLE: {}", angle);
+
+        #ifdef DEBUG
+            Vector2 hitbox_center = (Vector2){ base_hitbox_points[3].x - base_hitbox_points[1].x, base_hitbox_points[0].z - base_hitbox_points[1].z };
+            hitbox_center.x += position.x;
+            hitbox_center.y += position.z;
+            DrawSphere((Vector3){ hitbox_center.x, 0.0f, hitbox_center.y }, 2.0f, BLUE);
+            std::vector<Vector3> points = {};
+            for (const auto& p : base_hitbox_points) {
+                Matrix matrix = {0};
+                matrix.m0 = std::cos(angle);
+                matrix.m1 = std::sin(angle);
+                matrix.m4 = -std::sin(angle);
+                matrix.m5 = std::cos(angle);
+                Vector2 xy = Vector2Add(Vector2Transform((Vector2){ p.x + position.x - hitbox_center.x, p.z + position.z - hitbox_center.y }, matrix), hitbox_center);
+
+                points.push_back((Vector3){ xy.x, p.y, xy.y });
+            }
+
+            DrawTriangleStrip3D(points.data(), points.size(), RED);
+        #endif
+    }
+
+    ~Player() {
+        UnloadModel(model);
+    }
 };
+
+const Vector3 Player::camera_offset = (Vector3){ 30.0f, 70.0f, 0.0f };
+const float Player::model_scale = 0.2f;
 
 using PlayerStats = struct PlayerStats {
     uint32_t max_health;
@@ -80,8 +157,8 @@ using PlayerStats = struct PlayerStats {
         return spellbook[equipped_spells[idx]];
     }
 
-    uint32_t add_spell_to_spellbook(Spell spell) {
-        spellbook.push_back(spell);
+    uint32_t add_spell_to_spellbook(Spell&& spell) {
+        spellbook.emplace_back(std::move(spell));
 
         return spellbook.size() - 1;
     }
@@ -96,7 +173,7 @@ using PlayerStats = struct PlayerStats {
         equipped_spells[slot_id] = spellbook_idx;
 
         return 0;
-    };
+    }
 
     void tick_cooldown() {
         for (int i = 0; i < 10 && i < max_spells; i++) {
@@ -114,6 +191,49 @@ using PlayerStats = struct PlayerStats {
 
         Spell& spell = spellbook[equipped_spells[idx]];
         spell.curr_cooldown = spell.get_cooldown();
+    }
+};
+
+class ItemDrop {
+  public:
+    enum struct Type {
+        Spell,
+        // TODO: Armor, jewelry
+    };
+
+    Type type;
+    Vector2 location;
+
+    template <typename... Args>
+    ItemDrop(Type type, Vector2 location, Args&&... args)
+      : type(type), location(location) {
+        switch (type) {
+            case Type::Spell:
+                item->emplace<Spell>(std::forward<Args>(args)...);
+                break;
+        }
+    }
+
+    void draw_name(std::function<Vector2(Vector3)> to_screen_coords) const {
+        Vector2 pos = to_screen_coords({location.x, 0, location.y});
+        DrawText(get_name().c_str(), pos.x, pos.y, 20, WHITE);
+    }
+
+    void move_item(std::function<void(Spell&&)> spell_f) {
+        switch (type) {
+            case Type::Spell: return spell_f(std::move(std::get<Spell>(*item)));
+        }
+    }
+
+    
+  private:
+    std::optional<std::variant<Spell>> item;
+
+    const std::string& get_name() const {
+        switch (type) {
+            case Type::Spell:
+                return Spell::name_map[std::get<Spell>(*item).name];
+        }
     }
 };
 
@@ -153,7 +273,7 @@ void draw_ui(Assets::Store& assets, const PlayerStats& player_stats, const Vecto
         int mana_height   = 2*(outer_radius - 6*padding) * (1 - mana_b);
 
         // TODO: clean up this shit
-        static const float segments = 100.0f;
+        static const float segments = 512.0f;
         for (int i = 0; i < segments; i++) {
             float health_x = (outer_radius - 6.0f*padding) - (i + 1.0f)*health_height/segments;
             float mana_x = (outer_radius - 6.0f*padding) - (i + 1.0f)*mana_height/segments;
@@ -211,7 +331,9 @@ void draw_ui(Assets::Store& assets, const PlayerStats& player_stats, const Vecto
     EndTextureModeMSAA(assets[Assets::SpellBarUI, false], assets[Assets::SpellBarUI, true]);
 }
 
-void update(const std::vector<std::pair<int, bool>>& pressed_keys, Assets::Store& assets, Player& player, PlayerStats& player_stats, Vector2& screen, Shader fxaa_shader, int resolutionLoc) {
+void update(const std::vector<std::pair<int, bool>>& pressed_keys,
+            Assets::Store& assets, Player& player, PlayerStats& player_stats,
+            Vector2& screen, Shader fxaa_shader, int resolutionLoc) {
     static const int keys[] = { KEY_A, KEY_S, KEY_D, KEY_W };
     static const Vector2 movements[] = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } };
     static const float angles[] = { 0.0f, 90.0f, 180.0f, 270.0f };
@@ -237,13 +359,7 @@ void update(const std::vector<std::pair<int, bool>>& pressed_keys, Assets::Store
     if (length != 1 && length != 0) movement = Vector2Divide(movement, { length, length });
 
     if (movement.x != 0 || movement.y != 0) {
-        auto x = movement.x*5;
-        auto z = movement.y*5;
-
-        player.prev_position = player.position;
-        player.position.x += x;
-        player.position.z += z;
-        player.angle = angle.x/angle.y;
+        player.update_position((Vector2){ movement.x*5, movement.y*5 }, angle.x/angle.y);
     }
 
     if (is_key_pressed(pressed_keys, false, KEY_N)) {
@@ -278,42 +394,26 @@ int main() {
     InitWindow(0, 0, "Aetas Magus");
     SetWindowState(FLAG_FULLSCREEN_MODE);
     SetExitKey(KEY_NULL);
-    // TODO: dumb fix until I figure out how to change face orientation in blender lol
-    // rlDisableBackfaceCulling();
     // DisableCursor();
 
     Vector2 screen = (Vector2){ (float)GetScreenWidth(), (float)GetScreenHeight() };
 
-    Player player = {
-        .prev_position = Vector3Zero(),
-        .position = Vector3Zero(),
-        .model = LoadModel("./assets/player/player.obj"),
-        .camera = {0},
-    };
+    Player player(Vector3Zero());
     PlayerStats player_stats(100, 100, 4);
-    player_stats.mana = 10;
-    player_stats.health = 30;
-    player_stats.add_exp(50);
+    player_stats.add_exp(69);
 
     auto frost_nove_idx = player_stats.add_spell_to_spellbook(Spell(Spell::Frost_Nova, Rarity::Rare, 5));
     auto void_implosion = player_stats.add_spell_to_spellbook(Spell(Spell::Void_Implosion, Rarity::Epic, 20));
-    Spell random_spell = Spell::random({Rarity::Uncommon, Rarity::Legendary}, {0, 100});
-    auto random_idx = player_stats.add_spell_to_spellbook(random_spell);
-    std::println("RANDOM SPELL:\n  name: {}\n  rarity: {}\n  lvl: {}",
-                 Spell::icon_map[random_spell.name], Rarity::frames[static_cast<int>(random_spell.rarity)], random_spell.lvl);
+    // Spell random_spell = Spell::random({Rarity::Uncommon, Rarity::Legendary}, {0, 100});
+    // auto random_idx = player_stats.add_spell_to_spellbook(random_spell);
+    // std::println("RANDOM SPELL:\n  name: {}\n  rarity: {}\n  lvl: {}",
+    //              Spell::icon_map[random_spell.name], Rarity::frames[static_cast<int>(random_spell.rarity)], random_spell.lvl);
     std::println("SPELLBOOK_SIZE: {}", player_stats.spellbook.size());
     player_stats.equip_spell(frost_nove_idx, 0);
-    player_stats.equip_spell(random_idx, 2);
+    // player_stats.equip_spell(random_idx, 2);
     player_stats.equip_spell(void_implosion, 3);
 
-    const Vector3 camera_offset = (Vector3){ 30.0f, 70.0f, 0.0f };
-    player.camera.position = (Vector3){ 30.0f, 70.0f, 0.0f };
-    player.camera.target = player.position;
-    player.camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
-    player.camera.fovy = 90.0f;
-    player.camera.projection = CAMERA_PERSPECTIVE;
-
-    Vector2 mouse_pos = (Vector2){0.0f, 0.0f};
+    Vector2 mouse_pos = Vector2Zero();
 
     Assets::Store assets(screen);
 
@@ -329,7 +429,11 @@ int main() {
     double mili_accum = 0;
     double time = 0;
 
-    Vector3 interpolated_position = Vector3Zero();
+    std::vector<ItemDrop> item_drops = {};
+    item_drops.emplace_back(ItemDrop::Type::Spell, (Vector2){ 200.0f, 100.0f },
+                            Spell::Fire_Wall, Rarity::Legendary, 20);
+    item_drops.emplace_back(ItemDrop::Type::Spell, (Vector2){ 200.0f, 150.0f },
+                            Spell::Falling_Icicle, Rarity::Epic, 30);
 
     // TODO: customizable controls
     std::vector<int> registered_keys = { KEY_N, KEY_M, KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN, KEY_EIGHT, KEY_NINE, KEY_ZERO };
@@ -338,13 +442,10 @@ int main() {
 
     while (!WindowShouldClose()) {
         time = GetTime();
-        interpolated_position = Vector3Lerp(player.prev_position, player.position, mili_accum/(1000/TICKS));
-        player.camera.target = interpolated_position;
-        player.camera.position = Vector3Lerp(player.camera.position, Vector3Add(camera_offset, interpolated_position), 1.0f);
 
+        player.update_interpolated_pos(mili_accum);
         mouse_pos = mouse_xz_in_world(GetMouseRay(GetMousePosition(), player.camera));
-        float distance_to_player = std::abs(Vector2Distance((Vector2){player.position.x, player.position.z}, (Vector2){mouse_pos.x, mouse_pos.y}));
-        player.mouse_in_reach = distance_to_player <= 100.0f;
+        player.update_in_reach(mouse_pos);
 
         BeginTextureMode(assets[Assets::Target, false]);
             ClearBackground(WHITE);
@@ -352,12 +453,18 @@ int main() {
             BeginMode3D(player.camera);
                 DrawModel(plane_model, Vector3Zero(), 1.0f, WHITE);
 
-                DrawModelEx(player.model, interpolated_position, (Vector3){ 0.0f, 1.0f, 0.0f }, player.angle, (Vector3){ 0.2f, 0.2f, 0.2f }, ORANGE);
+                player.draw_model();
 
                 DrawCylinder((Vector3){ mouse_pos.x, 0.0f, mouse_pos.y },
                              5.0f, 5.0f, 1.0f, 128,
                              player.mouse_in_reach ? (Color){ 235, 216, 91, 127 } : (Color){ 237, 175, 164, 127 });
             EndMode3D();
+
+            for (const auto& item_drop : item_drops) {
+               item_drop.draw_name([camera = player.camera, &screen](auto pos) {
+                    return GetWorldToScreenEx(pos, camera, screen.x, screen.y);
+                });
+            }
         EndTextureMode();
         EndTextureModeMSAA(assets[Assets::Target, false], assets[Assets::Target, true]);
 
@@ -372,6 +479,12 @@ int main() {
             // BeginShaderMode(fxaa_shader);
                 assets.draw_texture(Assets::Target, true, {});
             // EndShaderMode();
+            DrawText(("POS: [" + std::to_string(player.position.x) + ", " + std::to_string(player.position.z) + "]").c_str(), 10, 10, 20, BLACK);
+            DrawText(("INTER_POS: [" + std::to_string(player.interpolated_position.x) + ", " + std::to_string(player.interpolated_position.z) + "]").c_str(), 10, 30, 20, BLACK);
+
+            for (int i = 0; i < 4; i++) {
+                DrawText(("H[" + std::to_string(i) + "]: " + std::to_string(player.base_hitbox_points[i].x) + ", " +  std::to_string(player.base_hitbox_points[i].z)).c_str(), 10, 50 +i*20, 20, BLACK);
+            }
 
             float circle_ui_dim = screen.x * 1/8;
             static const float padding = 10;
@@ -391,7 +504,7 @@ int main() {
         pressed_keys.erase(first, last);
         for (const auto& key : registered_keys) {
             if (is_key_pressed(pressed_keys, true, key)) continue;
-            if (IsKeyDown(key)) pressed_keys.push_back({ key, false });
+            if (IsKeyDown(key)) pressed_keys.emplace_back(key, false);
         }
 
         mili_accum += GetTime() - time;
@@ -407,7 +520,6 @@ int main() {
 
     UnloadShader(fxaa_shader);
     UnloadShader(grass_shader);
-    UnloadModel(player.model);
     UnloadModel(plane_model);
 
     CloseWindow();

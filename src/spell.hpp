@@ -1,10 +1,13 @@
 #pragma once
 
+#include <cstdint>
 #include <utility>
 #include <string>
 #include <array>
 #include <unordered_set>
+#include <unordered_map>
 #include <vector>
+#include <functional>
 
 // very generic names, TODO: maybe come up with better ones
 namespace Rarity {
@@ -50,6 +53,7 @@ using Spell = struct Spell {
 
     using Types = std::unordered_set<Type>;
 
+    static const std::array<std::string, NameSize> name_map;
     static const std::array<Types, NameSize> type_map;
     // in ticks, doesn't change with rarity
     static const std::array<int, NameSize> cooldown_map;
@@ -69,6 +73,9 @@ using Spell = struct Spell {
 
     Spell(Name name, Rarity::Type rarity, uint16_t lvl)
         : name(name), rarity(rarity), lvl(lvl), exp(0), curr_cooldown(0) {};
+    Spell(Spell&& s) noexcept
+        : name(std::move(s.name)), rarity(s.rarity), lvl(s.lvl),
+          exp(s.exp), curr_cooldown(s.curr_cooldown) {};
 
     const Types& get_type() const {
         return Spell::type_map[name];
@@ -91,7 +98,7 @@ using Spell = struct Spell {
     //                                           Legendary, Legendary -> Legendary
     // lvl_range    - inclusive from both sides,
     //                order doesn't matter,
-    static Spell random(std::pair<Rarity::Type, Rarity::Type> rarity_range, std::pair<uint16_t, uint16_t> lvl_range) {
+    static Spell create_random(std::pair<Rarity::Type, Rarity::Type> rarity_range, std::pair<uint16_t, uint16_t> lvl_range) {
         auto [r1, r2] = rarity_range;
         Rarity::Type rarity = static_cast<Rarity::Type>(GetRandomValue(std::min(r1, r2), std::max(r1, r2)));
 
@@ -100,6 +107,20 @@ using Spell = struct Spell {
 
         return Spell(static_cast<Name>(GetRandomValue(0, NameSize - 1)), rarity, lvl);
     };
+
+    // TODO: better random spells
+    // static Spell create_random2(std::unordered_map<Rarity::Type, uint8_t> rarity_table, std::function<> lvl_) {
+    //     
+    // }
+};
+
+const std::array<std::string, Spell::NameSize> Spell::name_map = {
+    "Fire Wall",
+    "Falling Icicle",
+    "Lightning Strike",
+    "Frost Nova",
+    "Void Implosion",
+    "Mana Detonation",
 };
 
 const std::array<Spell::Types, Spell::NameSize> Spell::type_map = {
