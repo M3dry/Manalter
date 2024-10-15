@@ -82,7 +82,7 @@ void EndTextureModeMSAA(RenderTexture2D target, RenderTexture2D resolveTarget) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-namespace Assets {
+namespace assets {
     class Store;
 
     template<typename T>

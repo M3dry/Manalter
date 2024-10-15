@@ -1,5 +1,6 @@
 set(APP_SOURCES
-    main.cpp
+    # main.cpp
+    test.cpp
 )
 
 add_executable(aetas_magus ${APP_SOURCES})

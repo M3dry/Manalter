@@ -1,44 +1,54 @@
 #include <raylib.h>
+#include "hitbox.hpp"
+#include <string>
 
 int main(void)
 {
-    const int screenWidth = 800;
-    const int screenHeight = 450;
+    InitWindow(0, 0, "Sigma sigma on the wall");
 
-    InitWindow(screenWidth, screenHeight, "raylib [core] example - 3d camera mode");
+    shapes::Polygon poly1((Vector2){ 450, 350 }, { (Vector2){ 400, 300 }, (Vector2){ 500, 300 }, (Vector2){ 500, 400 }, (Vector2){ 400, 400 } });
+    shapes::Polygon poly2({ (Vector2){ 700, 300 }, (Vector2){ 600, 400 }, (Vector2){ 700, 500 }, (Vector2){ 800, 400 } });
 
-    Camera3D camera = { 0 };
-    camera.position = (Vector3){ 0.0f, 10.0f, 10.0f };  // Camera position
-    camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };      // Camera looking at point
-    camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };          // Camera up vector (rotation towards target)
-    camera.fovy = 45.0f;                                // Camera field-of-view Y
-    camera.projection = CAMERA_PERSPECTIVE;             // Camera mode type
+    shapes::Polygon* poly_control = &poly1;
+    int controlling = 1;
 
-    Vector3 cubePosition = { 0.0f, 0.0f, 0.0f };
+    while (!WindowShouldClose()) {
+        Vector2 movement = {0};
+        if (IsKeyPressed(KEY_A)) {
+            movement.x = -10.0f;
+        } else if (IsKeyPressed(KEY_D)) {
+            movement.x = 10.0f;
+        } else if (IsKeyPressed(KEY_W)) {
+            movement.y = -10.0f;
+        } else if (IsKeyPressed(KEY_S)) {
+            movement.y = 10.0f;
+        } else if (IsKeyPressed(KEY_SPACE)) {
+            if (controlling == 1) {
+                controlling = 2;
+                poly_control = &poly2;
+            } else {
+                controlling = 1;
+                poly_control = &poly1;
+            }
+        } else if (IsKeyPressed(KEY_LEFT)) {
+            poly_control->rotate(-5.0f);
+        } else if (IsKeyPressed(KEY_RIGHT)) {
+            poly_control->rotate(5.0f);
+        }
+        poly_control->update(movement);
 
-    SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
-
-    while (!WindowShouldClose())    // Detect window close button or ESC key
-    {
         BeginDrawing();
+            ClearBackground(WHITE);
 
-            ClearBackground(RAYWHITE);
+            DrawText(("COLLISION: " + std::to_string(SAT::check_collision(poly1, poly2))).c_str(), 10, 10, 20, BLACK);
+            DrawText(("CONTROLLING: " + std::to_string(controlling)).c_str(), 10, 30, 20, BLACK);
 
-            BeginMode3D(camera);
-
-                Vector3 points[4] = { { 5.0f, 0.0f, 5.0f }, { 5.0f, 0.0f, -5.0f }, { -5.0f, 0.0f, 5.0f }, { -5.0f, 0.0f, -5.0f } };
-                DrawTriangleStrip3D(points, 4, RED);
-
-            EndMode3D();
-
-            DrawText("Welcome to the third dimension!", 10, 40, 20, DARKGRAY);
-
-            DrawFPS(10, 10);
-
+            poly1.draw_lines(BLACK);
+            poly2.draw_lines(BLACK);
         EndDrawing();
     }
 
-    CloseWindow();        // Close window and OpenGL context
+    CloseWindow();
 
     return 0;
 }

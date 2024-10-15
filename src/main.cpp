@@ -19,8 +19,10 @@
 #include "glad.h"
 #include <GLFW/glfw3.h>
 
+#include "rayhacks.hpp"
 #include "spell.hpp"
 #include "assets.hpp"
+#include "hitbox.hpp"
 
 #define TICKS 20
 #define DEBUG
@@ -87,8 +89,6 @@ using Player = struct Player {
     void draw_model() const {
         DrawModelEx(model, interpolated_position, (Vector3){ 0.0f, 1.0f, 0.0f }, angle, (Vector3){ model_scale, model_scale, model_scale }, ORANGE);
 
-        std::println("ANGLE: {}", angle);
-
         #ifdef DEBUG
             Vector2 hitbox_center = (Vector2){ base_hitbox_points[3].x - base_hitbox_points[1].x, base_hitbox_points[0].z - base_hitbox_points[1].z };
             hitbox_center.x += position.x;
@@ -97,10 +97,10 @@ using Player = struct Player {
             std::vector<Vector3> points = {};
             for (const auto& p : base_hitbox_points) {
                 Matrix matrix = {0};
-                matrix.m0 = std::cos(angle);
-                matrix.m1 = std::sin(angle);
-                matrix.m4 = -std::sin(angle);
-                matrix.m5 = std::cos(angle);
+                matrix.m0 = std::cos((360 - angle) * DEG2RAD);
+                matrix.m1 = std::sin((360 - angle) * DEG2RAD);
+                matrix.m4 = -std::sin((360 - angle) * DEG2RAD);
+                matrix.m5 = std::cos((360 - angle) * DEG2RAD);
                 Vector2 xy = Vector2Add(Vector2Transform((Vector2){ p.x + position.x - hitbox_center.x, p.z + position.z - hitbox_center.y }, matrix), hitbox_center);
 
                 points.push_back((Vector3){ xy.x, p.y, xy.y });
@@ -245,12 +245,12 @@ Vector2 mouse_xz_in_world(Ray mouse) {
     return (Vector2){ mouse.position.x + x*mouse.direction.x, mouse.position.z + x*mouse.direction.z };
 }
 
-void draw_ui(Assets::Store& assets, const PlayerStats& player_stats, const Vector2& screen) {
+void draw_ui(assets::Store& assets, const PlayerStats& player_stats, const Vector2& screen) {
     static const uint32_t padding = 10;
     static const uint32_t outer_radius = 1023/2;
     static const Vector2 center = (Vector2){ (float)outer_radius, (float)outer_radius };
 
-    BeginTextureMode(assets[Assets::CircleUI, false]);
+    BeginTextureMode(assets[assets::CircleUI, false]);
         ClearBackground(BLANK);
 
         DrawCircleV(center, outer_radius, BLACK);
@@ -289,10 +289,10 @@ void draw_ui(Assets::Store& assets, const PlayerStats& player_stats, const Vecto
         DrawRing(center, outer_radius - 6.2f*padding, outer_radius - 5*padding, 0.0f, 360.0f, 512, BLACK);
         DrawLineEx((Vector2){ center.x, 0.0f }, (Vector2){ center.y, 1022.0f - 6*padding }, 10.0f, BLACK);
     EndTextureMode();
-    EndTextureModeMSAA(assets[Assets::CircleUI, false], assets[Assets::CircleUI, true]);
+    EndTextureModeMSAA(assets[assets::CircleUI, false], assets[assets::CircleUI, true]);
 
     // Spell Bar
-    BeginTextureMode(assets[Assets::SpellBarUI, false]);
+    BeginTextureMode(assets[assets::SpellBarUI, false]);
         ClearBackground(BLANK);
 
         DrawRectangle(0, 0, 512, 128, RED);
@@ -304,7 +304,7 @@ void draw_ui(Assets::Store& assets, const PlayerStats& player_stats, const Vecto
             int col = i - 5*row;
 
             if (i >= player_stats.max_spells) {
-                assets.draw_texture(Assets::LockedSlot, (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim });
+                assets.draw_texture(assets::LockedSlot, (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim });
                 continue;
             }
 
@@ -321,18 +321,18 @@ void draw_ui(Assets::Store& assets, const PlayerStats& player_stats, const Vecto
 
                 assets.draw_texture(spell.rarity, (Rectangle){ (float)col*spell_dim, (float)spell_dim*row, (float)spell_dim, (float)spell_dim });
             } else {
-                assets.draw_texture(Assets::EmptySpellSlot, (Rectangle){ (float)col*spell_dim, (float)row*spell_dim, (float)spell_dim, (float)spell_dim });
+                assets.draw_texture(assets::EmptySpellSlot, (Rectangle){ (float)col*spell_dim, (float)row*spell_dim, (float)spell_dim, (float)spell_dim });
             }
         }
 
         // RADAR/MAP???
         DrawRectangle(spell_dim*5, 0, 512 - spell_dim*5, 128, GRAY);
     EndTextureMode();
-    EndTextureModeMSAA(assets[Assets::SpellBarUI, false], assets[Assets::SpellBarUI, true]);
+    EndTextureModeMSAA(assets[assets::SpellBarUI, false], assets[assets::SpellBarUI, true]);
 }
 
 void update(const std::vector<std::pair<int, bool>>& pressed_keys,
-            Assets::Store& assets, Player& player, PlayerStats& player_stats,
+            assets::Store& assets, Player& player, PlayerStats& player_stats,
             Vector2& screen, Shader fxaa_shader, int resolutionLoc) {
     static const int keys[] = { KEY_A, KEY_S, KEY_D, KEY_W };
     static const Vector2 movements[] = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } };
@@ -350,7 +350,7 @@ void update(const std::vector<std::pair<int, bool>>& pressed_keys,
 
     for (int k = 0; k < 4; k++) {
         if (IsKeyDown(keys[k])) {
-            movement = Vector2Add(movement, movements[k]);
+            movement += movements[k];
             angle.x += (k == 3 && angle.x == 0) ? -90.0f : angles[k];
             angle.y++;
         }
@@ -415,7 +415,7 @@ int main() {
 
     Vector2 mouse_pos = Vector2Zero();
 
-    Assets::Store assets(screen);
+    assets::Store assets(screen);
 
     Shader fxaa_shader = LoadShader(0, "./assets/fxaa.glsl");
     int resolutionLoc = GetShaderLocation(fxaa_shader, "resolution");
@@ -447,7 +447,7 @@ int main() {
         mouse_pos = mouse_xz_in_world(GetMouseRay(GetMousePosition(), player.camera));
         player.update_in_reach(mouse_pos);
 
-        BeginTextureMode(assets[Assets::Target, false]);
+        BeginTextureMode(assets[assets::Target, false]);
             ClearBackground(WHITE);
 
             BeginMode3D(player.camera);
@@ -466,7 +466,7 @@ int main() {
                 });
             }
         EndTextureMode();
-        EndTextureModeMSAA(assets[Assets::Target, false], assets[Assets::Target, true]);
+        EndTextureModeMSAA(assets[assets::Target, false], assets[assets::Target, true]);
 
         // int textureLoc = GetShaderLocation(fxaa_shader, "texture0");
         // SetShaderValueTexture(fxaa_shader, textureLoc, target.texture);
@@ -477,23 +477,25 @@ int main() {
             ClearBackground(WHITE);
 
             // BeginShaderMode(fxaa_shader);
-                assets.draw_texture(Assets::Target, true, {});
+                assets.draw_texture(assets::Target, true, {});
             // EndShaderMode();
             DrawText(("POS: [" + std::to_string(player.position.x) + ", " + std::to_string(player.position.z) + "]").c_str(), 10, 10, 20, BLACK);
             DrawText(("INTER_POS: [" + std::to_string(player.interpolated_position.x) + ", " + std::to_string(player.interpolated_position.z) + "]").c_str(), 10, 30, 20, BLACK);
+            DrawText(("ANGLE: " + std::to_string(player.angle)).c_str(), 10, 50 , 20, BLACK);
 
             for (int i = 0; i < 4; i++) {
-                DrawText(("H[" + std::to_string(i) + "]: " + std::to_string(player.base_hitbox_points[i].x) + ", " +  std::to_string(player.base_hitbox_points[i].z)).c_str(), 10, 50 +i*20, 20, BLACK);
+                DrawText(("H[" + std::to_string(i) + "]: " + std::to_string(player.base_hitbox_points[i].x) + ", " +  std::to_string(player.base_hitbox_points[i].z)).c_str(), 10, 70 +i*20, 20, BLACK);
             }
+
 
             float circle_ui_dim = screen.x * 1/8;
             static const float padding = 10;
-            SetTextureFilter(assets[Assets::CircleUI, true].texture, TEXTURE_FILTER_BILINEAR);
-            assets.draw_texture(Assets::CircleUI, true, (Rectangle){ screen.x - circle_ui_dim - padding, screen.y - circle_ui_dim - padding, circle_ui_dim, circle_ui_dim });
+            SetTextureFilter(assets[assets::CircleUI, true].texture, TEXTURE_FILTER_BILINEAR);
+            assets.draw_texture(assets::CircleUI, true, (Rectangle){ screen.x - circle_ui_dim - padding, screen.y - circle_ui_dim - padding, circle_ui_dim, circle_ui_dim });
 
             float spell_bar_width = screen.x/4.0f;
             float spell_bar_height = spell_bar_width/4.0f;
-            assets.draw_texture(Assets::SpellBarUI, true, (Rectangle){ (screen.x - spell_bar_width)/2.0f, screen.y - spell_bar_height, spell_bar_width, spell_bar_height });
+            assets.draw_texture(assets::SpellBarUI, true, (Rectangle){ (screen.x - spell_bar_width)/2.0f, screen.y - spell_bar_height, spell_bar_width, spell_bar_height });
         EndDrawing();
         SwapScreenBuffer();
 
