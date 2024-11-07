@@ -1,10 +1,15 @@
 set(APP_SOURCES
-    # main.cpp
-    test.cpp
+    main.cpp
+    assets.cpp
+    hitbox.cpp
+    loop.cpp
+    loop_wrapper.cpp
+    rayhacks.cpp
+    spell.cpp
 )
 
-add_executable(aetas_magus ${APP_SOURCES})
+add_executable(manalter ${APP_SOURCES})
 
-target_link_libraries(aetas_magus PRIVATE raylib)
+target_link_libraries(manalter PRIVATE raylib)
 
-target_include_directories(aetas_magus PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(manalter PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

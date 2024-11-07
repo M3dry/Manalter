@@ -1,4 +1,5 @@
-#version 330
+#version 300 es
+precision mediump float;
 
 #define FXAA_REDUCE_MIN (1.0/128.0)
 #define FXAA_REDUCE_MUL (1.0/8.0)
