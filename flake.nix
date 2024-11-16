@@ -33,11 +33,35 @@
             cp src/manalter $out/bin/manalter
           '';
         };
+        hitbox-demo = pkgs.gcc14Stdenv.mkDerivation {
+          pname = "Hitbox demo";
+          version = "0.1.0";
+          src = ./.;
+          buildInputs = with pkgs;
+            [
+              cmake
+              glfw
+              libGL.dev
+            ] ++ [raylib_patched];
+          buildPhase = ''
+            make hitbox_demo
+          '';
+          installPhase = ''
+            mkdir -p $out/bin
+            cp src/hitbox_demo $out/bin/hitbox_demo
+          '';
+        };
       in rec {
         packages.default = manalter;
-        apps.default = flake-utils.lib.mkApp {
-          drv = manalter;
-          exePath = "/bin/manalter";
+        apps = {
+          hitbox-demo = flake-utils.lib.mkApp {
+            drv = hitbox-demo;
+            exePath = "/bin/hitbox_demo";
+          };
+          default = flake-utils.lib.mkApp {
+            drv = manalter;
+            exePath = "/bin/manalter";
+          };
         };
         devShell = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [

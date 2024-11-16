@@ -14,4 +14,6 @@ Vector2 operator *(const Vector2& x, const float& c);
 Vector2& operator+=(Vector2& lhs, const float& c);
 Vector2& operator-=(Vector2& lhs, const float& c);
 Vector2& operator*=(Vector2& lhs, const float& c);
+Vector2& operator/=(Vector2& lhs, const float& c);
+bool operator==(const Vector2& lhs, const Vector2& rhs);
 #endif

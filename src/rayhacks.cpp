@@ -54,4 +54,14 @@ Vector2& operator*=(Vector2& lhs, const float& c) {
     lhs.y *= c;
     return lhs;
 }
+
+Vector2& operator/=(Vector2& lhs, const float& c) {
+    lhs.x /= c;
+    lhs.y /= c;
+    return lhs;
+}
+
+bool operator==(const Vector2& lhs, const Vector2& rhs) {
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
 #endif
