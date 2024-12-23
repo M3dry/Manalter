@@ -6,6 +6,8 @@ set(MANALTER_SOURCES
     loop_wrapper.cpp
     rayhacks.cpp
     spell.cpp
+    spell_caster.cpp
+    utility.cpp
 )
 
 set(HITBOX_DEMO_SOURCES
@@ -17,6 +19,7 @@ set(HITBOX_DEMO_SOURCES
 add_executable(manalter ${MANALTER_SOURCES})
 target_link_libraries(manalter PRIVATE raylib)
 target_include_directories(manalter PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(manalter PRIVATE DEBUG)
 
 add_executable(hitbox_demo ${HITBOX_DEMO_SOURCES})
 target_link_libraries(hitbox_demo PRIVATE raylib)

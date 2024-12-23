@@ -1,10 +1,12 @@
 #include "hitbox.hpp"
 
 #include <cassert>
-#include <ranges>
-#include <print>
-#include <utility>
 #include <limits>
+#include <print>
+#include <raylib.h>
+#include <utility>
+
+#include "rayhacks.hpp"
 
 std::pair<float, float> project_polygon(const shapes::Polygon& poly, const Vector2& axis) {
     float min = std::numeric_limits<float>::max();
@@ -58,14 +60,14 @@ namespace shapes {
     void Polygon::rotate(float angle) {
         if (!center) return;
 
-        float cos_angle = std::cos(angle*DEG2RAD);
-        float sin_angle = std::sin(angle*DEG2RAD);
+        float cos_angle = std::cos(angle * DEG2RAD);
+        float sin_angle = std::sin(angle * DEG2RAD);
 
         for (auto& p : points) {
             float x_center = p.x - center->x;
             float y_center = p.y - center->y;
-            p.x = x_center*cos_angle - y_center*sin_angle + center->x;
-            p.y = x_center*sin_angle + y_center*cos_angle + center->y;
+            p.x = x_center * cos_angle - y_center * sin_angle + center->x;
+            p.y = x_center * sin_angle + y_center * cos_angle + center->y;
         }
     }
 
@@ -77,10 +79,21 @@ namespace shapes {
         }
     }
 
-    Circle::Circle(Vector2 center, float radius) : center(center), radius(radius) {}
+    Circle::Circle(Vector2 center, float radius) : center(center), radius(radius) {
+    }
 
     void Circle::update(const Vector2& movement) {
         center += movement;
+    }
+
+    void Circle::draw_3D(Color color, float y) const {
+        DrawCircle3D((Vector3){center.x, y, center.y}, radius,
+                     (Vector3){
+                         1.0f,
+                         0.0f,
+                         0.0f,
+                     },
+                     90.0f, color);
     }
 }
 
@@ -88,7 +101,7 @@ bool check_collision(const shapes::Polygon& poly1, const shapes::Polygon& poly2)
     int points = poly1.points.size();
     for (int i = 0; i < points; i++) {
         Vector2 edge = poly1.points[(i + 1) % points] - poly1.points[i];
-        Vector2 axis = Vector2Normalize((Vector2){ -edge.y, edge.x });
+        Vector2 axis = Vector2Normalize((Vector2){-edge.y, edge.x});
 
         auto [min_poly1, max_poly1] = project_polygon(poly1, axis);
         auto [min_poly2, max_poly2] = project_polygon(poly2, axis);
@@ -100,7 +113,7 @@ bool check_collision(const shapes::Polygon& poly1, const shapes::Polygon& poly2)
     points = poly2.points.size();
     for (int i = 0; i < points; i++) {
         Vector2 edge = poly2.points[(i + 1) % points] - poly2.points[i];
-        Vector2 axis = Vector2Normalize((Vector2){ -edge.y, edge.x });
+        Vector2 axis = Vector2Normalize((Vector2){-edge.y, edge.x});
 
         auto [min_poly1, max_poly1] = project_polygon(poly1, axis);
         auto [min_poly2, max_poly2] = project_polygon(poly2, axis);
@@ -114,8 +127,8 @@ bool check_collision(const shapes::Polygon& poly1, const shapes::Polygon& poly2)
 
 bool check_collision(const shapes::Circle& circle1, const shapes::Circle& circle2) {
     float dist_sqr = Vector2DistanceSqr(circle1.center, circle2.center);
-    float sum_radius = (circle1.radius + circle2.radius)*(circle1.radius + circle2.radius);
- 
+    float sum_radius = (circle1.radius + circle2.radius) * (circle1.radius + circle2.radius);
+
     return dist_sqr >= sum_radius;
 }
 
@@ -151,7 +164,7 @@ bool check_collision(const shapes::Polygon& poly, const shapes::Circle& circle) 
     int points = poly.points.size();
     for (int i = 0; i < points; i++) {
         Vector2 edge = poly.points[(i + 1) % points] - poly.points[i];
-        Vector2 axis = Vector2Normalize((Vector2){ -edge.y, edge.x });
+        Vector2 axis = Vector2Normalize((Vector2){-edge.y, edge.x});
 
         auto [min_poly, max_poly] = project_polygon(poly, axis);
         auto [min_circle, max_circle] = project_cirle(circle, axis);

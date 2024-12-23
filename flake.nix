@@ -12,7 +12,7 @@
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
-        raylib_patched = pkgs.raylib.overrideAttrs (oldAttrs: rec {
+        raylib_patched = pkgs.raylib.overrideAttrs (oldAttrs: {
           patches = oldAttrs.patches ++ [./raylib.patch];
         });
         manalter = pkgs.gcc14Stdenv.mkDerivation {
@@ -51,7 +51,7 @@
             cp src/hitbox_demo $out/bin/hitbox_demo
           '';
         };
-      in rec {
+      in {
         packages.default = manalter;
         apps = {
           hitbox-demo = flake-utils.lib.mkApp {
@@ -71,7 +71,7 @@
             gdb
 
             xorg.libX11 xorg.libXi xorg.libXcursor xorg.libXrandr xorg.libXinerama
-          ];
+          ] ++ [raylib_patched];
         };
       }
     );

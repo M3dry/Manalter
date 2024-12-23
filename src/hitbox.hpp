@@ -1,12 +1,10 @@
 #pragma once
 
-#include <vector>
 #include <optional>
+#include <vector>
 
 #include <raylib.h>
 #include <raymath.h>
-
-#include "rayhacks.hpp"
 
 namespace shapes {
     using Polygon = struct Polygon {
@@ -31,6 +29,8 @@ namespace shapes {
         Circle(Vector2 center, float radius);
 
         void update(const Vector2& movement);
+
+        void draw_3D(Color color, float y) const;
     };
 }
 

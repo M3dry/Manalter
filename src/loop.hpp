@@ -2,16 +2,16 @@
 
 #include "raylib.h"
 
-#include <vector>
-#include <utility>
-#include <optional>
 #include <cstdint>
 #include <functional>
+#include <optional>
+#include <utility>
 #include <variant>
+#include <vector>
 
-#include "spell.hpp"
 #include "assets.hpp"
 #include "hitbox.hpp"
+#include "spell.hpp"
 
 #define TICKS 20
 
@@ -25,14 +25,12 @@ using Player = struct Player {
     // can assume this is always a value
     std::optional<shapes::Polygon> hitbox;
     Camera3D camera = {0};
-    bool mouse_in_reach = false;
 
     static const Vector3 camera_offset;
     static const float model_scale;
 
     Player(Vector3 position);
     void update_interpolated_pos(double mili_accum);
-    void update_in_reach(Vector2 mouse);
     void update_position(Vector2 movement, float new_angle);
     void draw_model() const;
     ~Player();
@@ -41,8 +39,12 @@ using Player = struct Player {
 using PlayerStats = struct PlayerStats {
     uint32_t max_health;
     uint32_t health;
+    // per second
+    uint32_t health_regen;
     uint32_t max_mana;
     uint32_t mana;
+    // per second
+    uint32_t mana_regen;
     uint16_t lvl;
     // exp collected since level up
     uint32_t exp;
@@ -53,8 +55,9 @@ using PlayerStats = struct PlayerStats {
     // otherwise index of spell in spellbook
     std::vector<uint32_t> equipped_spells;
     SpellBook spellbook = {};
+    uint8_t tick_counter = 0;
 
-    PlayerStats(uint32_t max_health, uint32_t max_mana, uint8_t max_spells);
+    PlayerStats(uint32_t max_health, uint32_t health_regen, uint32_t max_mana, uint32_t mana_regen, uint8_t max_spells);
     // Return how much exp is required to level up from `lvl - 1` to `lvl`
     static uint32_t exp_to_lvl(uint16_t lvl);
     void add_exp(uint32_t e);
@@ -64,8 +67,8 @@ using PlayerStats = struct PlayerStats {
     // -1 - spell isn't inside the spellbook
     // 0 - ok
     int equip_spell(uint32_t spellbook_idx, uint8_t slot_id);
-    void tick_cooldown();
-    void cast_equipped(int idx);
+    void tick();
+    void cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos);
 };
 
 class ItemDrop {
@@ -81,9 +84,21 @@ class ItemDrop {
     shapes::Circle hitbox;
 
     ItemDrop(Vector2 center, Spell&& spell);
+
+    ItemDrop(ItemDrop&&) noexcept = default;
+    ItemDrop& operator=(ItemDrop&&) noexcept = default;
+
     void draw_name(std::function<Vector2(Vector3)> to_screen_coords) const;
-    void move_item(std::function<void(Spell&&)> spell_f);
-    const std::string& get_name() const;
+    template <typename T> T&& move_item() {
+        switch (type) {
+            case Type::Spell:
+                return std::move(std::get<T>(item));
+        }
+
+        std::unreachable();
+    }
+    std::string_view get_name() const;
+
   private:
     std::variant<Spell> item;
 };
@@ -95,11 +110,13 @@ class Loop {
     PlayerStats player_stats;
     Vector2 mouse_pos;
     assets::Store assets;
+    bool spellbook_open;
     std::vector<ItemDrop> item_drops;
     std::vector<int> registered_keys;
 
     Loop(int width, int height);
     void operator()();
+
   private:
     double prev_time = 0.0f;
     double accum_time = 0.0f;

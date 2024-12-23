@@ -3,12 +3,10 @@
 #include "loop.hpp"
 
 #ifdef PLATFORM_WEB
+#include "loop_wrapper.hpp"
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
-#include "loop_wrapper.hpp"
 #endif
-
-#define DEBUG
 
 int main() {
     int width = 0, height = 0;

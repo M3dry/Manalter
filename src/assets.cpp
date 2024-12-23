@@ -3,7 +3,7 @@
 
 #ifndef PLATFORM_WEB
 RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples) {
-    RenderTexture2D target = { 0 };
+    RenderTexture2D target = {0};
 
     // Step 1: Create a Framebuffer Object (FBO)
     glGenFramebuffers(1, &target.id);
@@ -43,13 +43,13 @@ RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples) {
     // Create and assign the Texture2D object
     target.texture.width = width;
     target.texture.height = height;
-    target.texture.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;  // RGBA format
+    target.texture.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8; // RGBA format
     target.texture.mipmaps = 1;
 
     // Create and assign the Depth texture
     target.depth.width = width;
     target.depth.height = height;
-    target.depth.format = PIXELFORMAT_UNCOMPRESSED_R32;  // Correct depth format
+    target.depth.format = PIXELFORMAT_UNCOMPRESSED_R32; // Correct depth format
     target.depth.mipmaps = 1;
 
     // Unbind FBO
@@ -59,13 +59,12 @@ RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples) {
 }
 
 void EndTextureModeMSAA(RenderTexture2D target, RenderTexture2D resolveTarget) {
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, target.id);  // Bind the MSAA framebuffer (read source)
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, target.id);        // Bind the MSAA framebuffer (read source)
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveTarget.id); // Bind the non-MSAA framebuffer (write target)
 
     // Blit the multisampled framebuffer to the non-multisampled texture
-    glBlitFramebuffer(0, 0, resolveTarget.texture.width, resolveTarget.texture.height, 
-                      0, 0, resolveTarget.texture.width, resolveTarget.texture.height, 
-                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBlitFramebuffer(0, 0, resolveTarget.texture.width, resolveTarget.texture.height, 0, 0,
+                      resolveTarget.texture.width, resolveTarget.texture.height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
     // Unbind framebuffer after resolving
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -77,36 +76,40 @@ RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples) {
 
 void EndTextureModeMSAA(RenderTexture2D target, RenderTexture2D resolveTarget) {
     BeginTextureMode(resolveTarget);
-        DrawTexturePro(target.texture,
-                       (Rectangle){ 0.0f, 0.0f, (float)resolveTarget.texture.width, -(float)resolveTarget.texture.height },
-                       (Rectangle){ 0.0f, 0.0f, (float)resolveTarget.texture.width, (float)resolveTarget.texture.height },
-                       Vector2Zero(), 0.0f, WHITE);
+    DrawTexturePro(target.texture,
+                   (Rectangle){0.0f, 0.0f, (float)resolveTarget.texture.width, -(float)resolveTarget.texture.height},
+                   (Rectangle){0.0f, 0.0f, (float)resolveTarget.texture.width, (float)resolveTarget.texture.height},
+                   Vector2Zero(), 0.0f, WHITE);
     EndTextureMode();
 }
 #endif
 
 namespace assets {
-    Store::Store(Vector2 screen) : texture_map({}), render_map({}) {
+    Store::Store(Vector2 screen) : texture_map({}), render_map({}), font_map({}) {
         add_textures();
         add_render_textures(screen);
+        add_fonts();
     };
 
     Store::~Store() {
-        for (auto& val : texture_map) {
-            UnloadTexture(val);
+        for (auto& tex : texture_map) {
+            UnloadTexture(tex);
         }
 
-        for (auto& val : render_map) {
-            UnloadRenderTexture(val);
+        for (auto& render_tex : render_map) {
+            UnloadRenderTexture(render_tex);
+        }
+
+        for (auto& font : font_map) {
+            UnloadFont(font);
         }
     };
 
     void Store::draw_texture(RenderId render_id, bool resolved, std::optional<Rectangle> dest) {
         auto tex = (*this)[render_id, resolved].texture;
-        DrawTexturePro(tex,
-                       (Rectangle){ 0.0f, 0.0f, (float)tex.width, -(float)tex.height },
-                       dest ? *dest : (Rectangle){ 0.0f, 0.0f, (float)tex.width, (float)tex.height },
-                       Vector2Zero(), 0.0f, WHITE);
+        DrawTexturePro(tex, (Rectangle){0.0f, 0.0f, (float)tex.width, -(float)tex.height},
+                       dest ? *dest : (Rectangle){0.0f, 0.0f, (float)tex.width, (float)tex.height}, Vector2Zero(), 0.0f,
+                       WHITE);
     }
 
     Texture2D Store::operator[](GeneralId id) {
@@ -125,11 +128,21 @@ namespace assets {
         return index_render_map(id, resolved);
     }
 
+    Font Store::operator[](FontId id) {
+        return font_map[id];
+    }
+
     void Store::update_target_size(Vector2 screen) {
         UnloadRenderTexture((*this)[Target, true]);
         UnloadRenderTexture((*this)[Target, false]);
         index_render_map(Target, false) = CreateRenderTextureMSAA(screen.x, screen.y, MSAA);
         index_render_map(Target, true) = LoadRenderTexture(screen.x, screen.y);
+
+        UnloadRenderTexture((*this)[SpellBarUI, true]);
+        UnloadRenderTexture((*this)[SpellBarUI, false]);
+        index_render_map(SpellBarUI, false) =
+            CreateRenderTextureMSAA(SpellBookWidth(screen), SpellBookHeight(screen), MSAA);
+        index_render_map(SpellBarUI, true) = LoadRenderTexture(SpellBookWidth(screen), SpellBookHeight(screen));
     }
 
     RenderTexture2D& Store::index_render_map(RenderId id, bool resolved) {
@@ -141,7 +154,7 @@ namespace assets {
     }
 
     int Store::id_to_idx(Spell::Name name) {
-        return name + GeneralIdSize;
+        return static_cast<int>(name) + static_cast<int>(GeneralIdSize);
     }
 
     int Store::id_to_idx(Rarity::Type id) {
@@ -181,5 +194,13 @@ namespace assets {
         index_render_map(CircleUI, true) = LoadRenderTexture(1023, 1023);
         index_render_map(SpellBarUI, false) = CreateRenderTextureMSAA(512, 128, MSAA);
         index_render_map(SpellBarUI, true) = LoadRenderTexture(512, 128);
+
+        index_render_map(SpellBookUI, false) =
+            CreateRenderTextureMSAA(SpellBookWidth(screen), SpellBookHeight(screen), MSAA);
+        index_render_map(SpellBookUI, true) = LoadRenderTexture(SpellBookWidth(screen), SpellBookHeight(screen));
+    }
+
+    void Store::add_fonts() {
+        font_map[Macondo] = LoadFontEx("./assets/Macondo/Macondo-Regular.ttf", 64, nullptr, 0);
     }
 }

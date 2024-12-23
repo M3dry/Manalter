@@ -1,0 +1,5 @@
+/build
+/.cache
+/web-build
+/.clangd
+/compile_commands.json
