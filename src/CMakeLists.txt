@@ -8,12 +8,17 @@ set(MANALTER_SOURCES
     spell.cpp
     spell_caster.cpp
     utility.cpp
+    ringbuffer.cpp
 )
 
 set(HITBOX_DEMO_SOURCES
     hitbox_demo.cpp
     hitbox.cpp
     rayhacks.cpp
+)
+
+set(PLAYGROUND_SOURCES
+    playground.cpp
 )
 
 add_executable(manalter ${MANALTER_SOURCES})
@@ -24,3 +29,7 @@ target_compile_definitions(manalter PRIVATE DEBUG)
 add_executable(hitbox_demo ${HITBOX_DEMO_SOURCES})
 target_link_libraries(hitbox_demo PRIVATE raylib)
 target_include_directories(hitbox_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(plaground ${PLAYGROUND_SOURCES})
+target_link_libraries(plaground PRIVATE raylib)
+target_include_directories(plaground PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

@@ -373,8 +373,10 @@ Loop::Loop(int width, int height)
 #endif
 
     auto frost_nove_idx = player_stats.add_spell_to_spellbook(Spell(Spell::Frost_Nova, Rarity::Rare, 5));
+    auto fire_wall = player_stats.add_spell_to_spellbook(Spell(Spell::Fire_Wall, Rarity::Epic, 10));
     auto void_implosion = player_stats.add_spell_to_spellbook(Spell(Spell::Void_Implosion, Rarity::Epic, 20));
     player_stats.equip_spell(frost_nove_idx, 0);
+    player_stats.equip_spell(fire_wall, 1);
     player_stats.equip_spell(void_implosion, 3);
 
     item_drops.emplace_back((Vector2){200.0f, 200.0f}, Spell(Spell::Fire_Wall, Rarity::Epic, 30));
@@ -437,13 +439,6 @@ void Loop::operator()() {
                  .c_str(),
              10, 30, 20, BLACK);
     DrawText(("ANGLE: " + std::to_string(player.angle)).c_str(), 10, 50, 20, BLACK);
-
-    // for (int i = 0; i < 4; i++) {
-    //     DrawText(("H[" + std::to_string(i) + "]: " +
-    //     std::to_string(player.base_hitbox_points[i].x) + ", " +
-    //     std::to_string(player.base_hitbox_points[i].z)).c_str(), 10, 70
-    //     +i*20, 20, BLACK);
-    // }
 
     float circle_ui_dim = screen.x * 1 / 8;
     static const float padding = 10;

@@ -15,6 +15,7 @@ int main() {
 #endif
 
     InitWindow(width, height, "Aetas Magus");
+    SetWindowState(FLAG_FULLSCREEN_MODE);
     SetExitKey(KEY_NULL);
     // DisableCursor();
 

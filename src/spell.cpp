@@ -68,8 +68,14 @@ const std::array<std::pair<int, int>, Rarity::Size> Spell::manacost_randomizatio
     std::make_pair(-40, -10), // Legendary
 };
 
-const std::array<std::variant<Spell::Radius, Spell::DistanceWidth>, Spell::NameSize> Spell::reach_map = {
-    std::make_tuple(100, 20, 20, 5), // Fire Wall
+const std::array<std::variant<Spell::Radius, Spell::SpellToMouse>, Spell::NameSize> Spell::reach_map = {
+    (Spell::SpellToMouse){
+        .length = 30,
+        .width = 5,
+        .stop_after = 50,
+        .duration = 30,
+        .speed = 5,
+    }, // Fire Wall
     (uint8_t)5,                      // Falling Icicle
     (uint8_t)0,                      // Lightning Strike
     (uint8_t)25,                     // Frost Nova
@@ -119,7 +125,7 @@ const std::pair<int, int>& Spell::get_manacost_randomization() const {
     return Spell::manacost_randomization_map[static_cast<int>(rarity)];
 };
 
-const std::variant<Spell::Radius, Spell::DistanceWidth>& Spell::get_reach() const {
+const std::variant<Spell::Radius, Spell::SpellToMouse>& Spell::get_reach() const {
     return Spell::reach_map[name];
 }
 

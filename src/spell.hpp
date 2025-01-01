@@ -5,7 +5,6 @@
 #include <raylib.h>
 #include <string>
 #include <string_view>
-#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -86,13 +85,17 @@ using Spell = struct Spell {
     // AtPlayer, AtMouse
     // 0 value makes it hit what is right under the cursor
     using Radius = uint8_t;
-    // ToMouse
-    // 1. reach - gets lerped between mouse and player if smaller
-    // 2. width
-    // 3. duration (in ticks) - how long will the spell last
-    // 4. speed (whatever the units are for length per tick)
-    using DistanceWidth = std::tuple<uint16_t, uint8_t, uint16_t, uint16_t>;
-    static const std::array<std::variant<Radius, DistanceWidth>, NameSize> reach_map;
+    struct SpellToMouse {
+        uint16_t length;
+        uint8_t width;
+        // after how many units should the spell stop
+        // 0 - no stopping
+        uint16_t stop_after;
+        uint16_t duration;
+        // units per tick
+        uint8_t speed;
+    };
+    static const std::array<std::variant<Radius, SpellToMouse>, NameSize> reach_map;
 
     Name name;
     Rarity::Type rarity;
@@ -116,7 +119,7 @@ using Spell = struct Spell {
     const std::string& get_icon_path() const;
     float get_rarity_multiplier() const;
     const std::pair<int, int>& get_manacost_randomization() const;
-    const std::variant<Spell::Radius, Spell::DistanceWidth>& get_reach() const;
+    const std::variant<Spell::Radius, Spell::SpellToMouse>& get_reach() const;
 
     // rarity_range - inclusive from both sides,
     //                order doesn't matter, eg. Rare, Common -> Common, Uncommon, Rare

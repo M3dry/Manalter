@@ -1,73 +1,82 @@
 #include "assets.hpp"
+#include "raylib.h"
 #include <print>
 
 #ifndef PLATFORM_WEB
 RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples) {
-    RenderTexture2D target = {0};
+    return LoadRenderTexture(width, height);
 
-    // Step 1: Create a Framebuffer Object (FBO)
-    glGenFramebuffers(1, &target.id);
-    glBindFramebuffer(GL_FRAMEBUFFER, target.id);
-
-    // Step 2: Create a Multisample Renderbuffer for color
-    GLuint colorBufferMSAA;
-    glGenRenderbuffers(1, &colorBufferMSAA);
-    glBindRenderbuffer(GL_RENDERBUFFER, colorBufferMSAA);
-    glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_RGBA8, width, height);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorBufferMSAA);
-
-    // Step 3: Create a Multisample Renderbuffer for depth (optional)
-    GLuint depthBufferMSAA;
-    glGenRenderbuffers(1, &depthBufferMSAA);
-    glBindRenderbuffer(GL_RENDERBUFFER, depthBufferMSAA);
-    glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8, width, height);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBufferMSAA);
-
-    // Step 4: Check if framebuffer is complete
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        TraceLog(LOG_WARNING, "Framebuffer is not complete!");
-    }
-
-    // Create a standard texture to blit the multisampled FBO to
-    glGenTextures(1, &target.texture.id);
-    glBindTexture(GL_TEXTURE_2D, target.texture.id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    // Create the depth texture (standard depth format, not compressed)
-    glGenTextures(1, &target.depth.id);
-    glBindTexture(GL_TEXTURE_2D, target.depth.id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
-
-    // Create and assign the Texture2D object
-    target.texture.width = width;
-    target.texture.height = height;
-    target.texture.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8; // RGBA format
-    target.texture.mipmaps = 1;
-
-    // Create and assign the Depth texture
-    target.depth.width = width;
-    target.depth.height = height;
-    target.depth.format = PIXELFORMAT_UNCOMPRESSED_R32; // Correct depth format
-    target.depth.mipmaps = 1;
-
-    // Unbind FBO
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    return target;
+    /*RenderTexture2D target = {0};*/
+    /**/
+    /*// Step 1: Create a Framebuffer Object (FBO)*/
+    /*glGenFramebuffers(1, &target.id);*/
+    /*glBindFramebuffer(GL_FRAMEBUFFER, target.id);*/
+    /**/
+    /*// Step 2: Create a Multisample Renderbuffer for color*/
+    /*GLuint colorBufferMSAA;*/
+    /*glGenRenderbuffers(1, &colorBufferMSAA);*/
+    /*glBindRenderbuffer(GL_RENDERBUFFER, colorBufferMSAA);*/
+    /*glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_RGBA8, width, height);*/
+    /*glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorBufferMSAA);*/
+    /**/
+    /*// Step 3: Create a Multisample Renderbuffer for depth (optional)*/
+    /*GLuint depthBufferMSAA;*/
+    /*glGenRenderbuffers(1, &depthBufferMSAA);*/
+    /*glBindRenderbuffer(GL_RENDERBUFFER, depthBufferMSAA);*/
+    /*glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH24_STENCIL8, width, height);*/
+    /*glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBufferMSAA);*/
+    /**/
+    /*// Step 4: Check if framebuffer is complete*/
+    /*if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {*/
+    /*    TraceLog(LOG_WARNING, "Framebuffer is not complete!");*/
+    /*}*/
+    /**/
+    /*// Create a standard texture to blit the multisampled FBO to*/
+    /*glGenTextures(1, &target.texture.id);*/
+    /*glBindTexture(GL_TEXTURE_2D, target.texture.id);*/
+    /*glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);*/
+    /*glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);*/
+    /*glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);*/
+    /**/
+    /*// Create the depth texture (standard depth format, not compressed)*/
+    /*glGenTextures(1, &target.depth.id);*/
+    /*glBindTexture(GL_TEXTURE_2D, target.depth.id);*/
+    /*glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, width, height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);*/
+    /**/
+    /*// Create and assign the Texture2D object*/
+    /*target.texture.width = width;*/
+    /*target.texture.height = height;*/
+    /*target.texture.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8; // RGBA format*/
+    /*target.texture.mipmaps = 1;*/
+    /**/
+    /*// Create and assign the Depth texture*/
+    /*target.depth.width = width;*/
+    /*target.depth.height = height;*/
+    /*target.depth.format = PIXELFORMAT_UNCOMPRESSED_R32; // Correct depth format*/
+    /*target.depth.mipmaps = 1;*/
+    /**/
+    /*// Unbind FBO*/
+    /*glBindFramebuffer(GL_FRAMEBUFFER, 0);*/
+    /**/
+    /*return target;*/
 }
 
 void EndTextureModeMSAA(RenderTexture2D target, RenderTexture2D resolveTarget) {
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, target.id);        // Bind the MSAA framebuffer (read source)
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveTarget.id); // Bind the non-MSAA framebuffer (write target)
-
-    // Blit the multisampled framebuffer to the non-multisampled texture
-    glBlitFramebuffer(0, 0, resolveTarget.texture.width, resolveTarget.texture.height, 0, 0,
-                      resolveTarget.texture.width, resolveTarget.texture.height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-    // Unbind framebuffer after resolving
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    BeginTextureMode(resolveTarget);
+        DrawTexturePro(target.texture,
+                    (Rectangle){ 0.0f, 0.0f, (float)target.texture.width, -(float)target.texture.height },
+                    (Rectangle){ 0.0f, 0.0f, (float)resolveTarget.texture.width, (float)resolveTarget.texture.height },
+                    (Vector2){ 0.0f, 0.0f, }, 0.0f, WHITE);
+    EndTextureMode();
+    /*glBindFramebuffer(GL_READ_FRAMEBUFFER, target.id);        // Bind the MSAA framebuffer (read source)*/
+    /*glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveTarget.id); // Bind the non-MSAA framebuffer (write target)*/
+    /**/
+    /*// Blit the multisampled framebuffer to the non-multisampled texture*/
+    /*glBlitFramebuffer(0, 0, resolveTarget.texture.width, resolveTarget.texture.height, 0, 0,*/
+    /*                  resolveTarget.texture.width, resolveTarget.texture.height, GL_COLOR_BUFFER_BIT, GL_NEAREST);*/
+    /**/
+    /*// Unbind framebuffer after resolving*/
+    /*glBindFramebuffer(GL_FRAMEBUFFER, 0);*/
 }
 #else
 RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples) {
