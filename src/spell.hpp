@@ -9,6 +9,15 @@
 #include <variant>
 #include <vector>
 
+enum struct Element {
+    Fire = 0,
+    Ice,
+    Lightning,
+    DarkMagic,
+    Size,
+};
+
+
 // very generic names, TODO: maybe come up with better ones
 namespace Rarity {
     enum Type {
@@ -39,7 +48,7 @@ namespace Rarity {
 
 using Spell = struct Spell {
     enum Name {
-        Fire_Wall,
+        Fire_Wall = 0,
         Falling_Icicle,
         Lightning_Strike,
         Frost_Nova,
@@ -50,19 +59,11 @@ using Spell = struct Spell {
 
     // TODO: split into element and "play style"
     enum Type {
-        AtMouse,
+        AtMouse = 0,
         AtPlayer,
         // originates from player and goes towards the mouse
         // can go further than the mouse pointer
         ToMouse,
-    };
-
-    enum Element {
-        Fire,
-        Ice,
-        Lightning,
-        DarkMagic,
-        ElementSize,
     };
 
     /*using Types = std::unordered_set<Type>;*/

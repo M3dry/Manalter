@@ -12,6 +12,7 @@
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
+        pleaseKeepMyInputs = pkgs.writeTextDir "bin/.inputs" (builtins.concatStringsSep " " (builtins.attrValues {inherit nixpkgs;}));
         raylib_patched = pkgs.raylib.overrideAttrs (oldAttrs: {
           patches = oldAttrs.patches ++ [./raylib.patch];
         });
@@ -24,7 +25,8 @@
               cmake
               glfw
               libGL.dev
-            ] ++ [raylib_patched];
+            ]
+            ++ [raylib_patched];
           buildPhase = ''
             make manalter
           '';
@@ -42,13 +44,13 @@
               cmake
               glfw
               libGL.dev
-            ] ++ [raylib_patched];
+            ]
+            ++ [raylib_patched];
           buildPhase = ''
             make hitbox_demo
           '';
           installPhase = ''
-            mkdir -p $out/bin
-            cp src/hitbox_demo $out/bin/hitbox_demo
+            mkdir -p $out/bin cp src/hitbox_demo $out/bin/hitbox_demo
           '';
         };
       in {
@@ -64,14 +66,21 @@
           };
         };
         devShell = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [
-            cmake
-            glfw libGLU
-            gcc14
-            gdb
+          nativeBuildInputs = with pkgs;
+            [
+              cmake
+              glfw
+              libGLU
+              gcc14
+              gdb
 
-            xorg.libX11 xorg.libXi xorg.libXcursor xorg.libXrandr xorg.libXinerama
-          ] ++ [raylib_patched];
+              xorg.libX11
+              xorg.libXi
+              xorg.libXcursor
+              xorg.libXrandr
+              xorg.libXinerama
+            ]
+            ++ [raylib_patched pleaseKeepMyInputs];
         };
       }
     );

@@ -9,6 +9,7 @@ set(MANALTER_SOURCES
     spell_caster.cpp
     utility.cpp
     ringbuffer.cpp
+    enemies.cpp
 )
 
 set(HITBOX_DEMO_SOURCES

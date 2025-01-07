@@ -15,13 +15,13 @@ const std::array<Spell::Type, Spell::NameSize> Spell::type_map = {
     Spell::AtPlayer, // Mana Detonation
 };
 
-const std::array<Spell::Element, Spell::NameSize> Spell::element_map = {
-    Spell::Fire,      // Fire Wall
-    Spell::Ice,       // Falling Icicle
-    Spell::Lightning, // Lightning Strike
-    Spell::Ice,       // Frost Nova
-    Spell::DarkMagic, // Void Implosion
-    Spell::DarkMagic, // Mana Detonation
+const std::array<Element, Spell::NameSize> Spell::element_map = {
+    Element::Fire,      // Fire Wall
+    Element::Ice,       // Falling Icicle
+    Element::Lightning, // Lightning Strike
+    Element::Ice,       // Frost Nova
+    Element::DarkMagic, // Void Implosion
+    Element::DarkMagic, // Mana Detonation
 };
 
 const std::array<int, Spell::NameSize> Spell::cooldown_map = {
@@ -101,7 +101,7 @@ Spell::Type Spell::get_type() const {
     return Spell::type_map[name];
 };
 
-const Spell::Element& Spell::get_element() const {
+const Element& Spell::get_element() const {
     return Spell::element_map[name];
 };
 

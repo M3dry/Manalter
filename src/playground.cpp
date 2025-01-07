@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
     Vector2 mouse_pos = GetMousePosition();
     Vector2 relative, a, b;
     float angle = 0.0f;
-    while (!WindowShouldClose()) {pint
+    while (!WindowShouldClose()) {
         mouse_pos = GetMousePosition();
         relative = (Vector2){mouse_pos.x - center.x, center.y - mouse_pos.y};
         angle = std::atan(relative.y / relative.x);
