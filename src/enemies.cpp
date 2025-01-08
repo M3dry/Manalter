@@ -31,10 +31,11 @@ const std::array<float, static_cast<int>(EnemyType::Size)> Enemy::simple_hitbox_
 
 };
 
-Enemy::Enemy(EnemyType type, Vector2 target, Vector2 position)
+Enemy::Enemy(EnemyType type, Vector2 target, Vector2 position, bool boss)
     : position((Vector3){position.x, Enemy::y_component[static_cast<int>(type)], position.y}),
       movement(Vector2Normalize(position - target)),
-      simple_hitbox(shapes::Circle(position, Enemy::simple_hitbox_radius[static_cast<int>(type)])), type(type) {
+      simple_hitbox(shapes::Circle(position, Enemy::simple_hitbox_radius[static_cast<int>(type)])), type(type),
+      boss(boss) {
     // TODO: health, damage, speed,
     //       angle, state
 }

@@ -30,11 +30,11 @@ bool is_key_pressed(const std::vector<std::pair<int, bool>>& pressed_keys, bool 
 }
 
 const Vector3 Player::camera_offset = (Vector3){30.0f, 70.0f, 0.0f};
-const float Player::model_scale = 0.2f;
+const float Player::model_scale = 0.5f;
 
 Player::Player(Vector3 position)
     : prev_position(position), position(position), interpolated_position(position),
-      model(LoadModel("./assets/player/player.obj")) {
+      model(LoadModel("./assets/player/player.glb")), animations(nullptr), animationsCount(0) {
     camera.position = camera_offset;
     camera.target = position;
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
@@ -48,6 +48,12 @@ Player::Player(Vector3 position)
     hitbox =
         shapes::Polygon((Vector2){max.x + min.x, max.z + min.z}, {(Vector2){min.x, max.z}, (Vector2){min.x, min.z},
                                                                   (Vector2){max.x, min.z}, (Vector2){max.x, max.z}});
+
+    animations = LoadModelAnimations("./assets/player/player.glb", &animationsCount);
+    // TODO: better animatin handling system
+    // Idle animation
+    animationCurrent = 1;
+    TraceLog(LOG_INFO, ("Animations: " + std::to_string(animationsCount)).c_str());
 }
 
 void Player::update_interpolated_pos(double accum_time) {
@@ -67,9 +73,14 @@ void Player::update_position(Vector2 movement, float new_angle) {
     hitbox->update(movement);
 }
 
+void Player::update_model() {
+    animationCurrent = (animationCurrent + 1) % animations[animationIndex].frameCount;
+    UpdateModelAnimation(model, animations[animationIndex], animationCurrent);
+}
+
 void Player::draw_model() const {
-    DrawModelEx(model, interpolated_position, (Vector3){0.0f, 1.0f, 0.0f}, angle,
-                (Vector3){model_scale, model_scale, model_scale}, ORANGE);
+    DrawModelEx(model, interpolated_position, (Vector3){0.0f, 0.0f, 1.0f}, 90.0f,
+                (Vector3){model_scale, model_scale, model_scale}, WHITE);
 
 #ifdef DEBUG
     DrawSphere((Vector3){hitbox->center->x, 1.0f, hitbox->center->y}, 1.0f, BLUE);
@@ -79,6 +90,7 @@ void Player::draw_model() const {
 
 Player::~Player() {
     UnloadModel(model);
+    UnloadModelAnimations(animations, animationsCount);
 }
 
 PlayerStats::PlayerStats(uint32_t max_health, uint32_t health_regen, uint32_t max_mana, uint32_t mana_regen,
@@ -528,6 +540,7 @@ void Loop::update() {
         }
     }
 
+    player.update_model();
     player_stats.tick();
     caster::tick(player_stats.spellbook);
 

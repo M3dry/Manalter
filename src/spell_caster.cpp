@@ -33,13 +33,6 @@ namespace caster {
                   a = (Vector2){origin.x + a.x, origin.y - a.y};
                   b = (Vector2){origin.x + b.x, origin.y - b.y};
 
-                  std::println("ANGLE: {}", angle * 180.0f / std::numbers::pi);
-                  std::println("MOVEMENT: [{};{}]", movement.x, movement.y);
-                  std::println("ORIGIN: [{};{}]", origin.x, origin.y);
-                  std::println("RELATIVE: [{};{}]", relative.x, relative.y);
-                  std::println("A: [{};{}]", a.x, a.y);
-                  std::println("A: [{};{}]", b.x, b.y);
-
                   return {
                       // head
                       a,

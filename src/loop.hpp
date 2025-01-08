@@ -20,7 +20,13 @@ using Player = struct Player {
     Vector3 position;
     Vector3 interpolated_position;
     float angle = 0.0f;
+
     Model model;
+    ModelAnimation* animations;
+    int animationsCount;
+    int animationCurrent;
+    int animationIndex = 0;
+
     // screw c++, this has to be here :(
     // can assume this is always a value
     std::optional<shapes::Polygon> hitbox;
@@ -32,6 +38,7 @@ using Player = struct Player {
     Player(Vector3 position);
     void update_interpolated_pos(double mili_accum);
     void update_position(Vector2 movement, float new_angle);
+    void update_model();
     void draw_model() const;
     ~Player();
 };

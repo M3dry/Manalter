@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <variant>
 
+#define BOSS_SCALE_FACTOR 10.0f
+
 enum struct EnemyType {
     Size,
 };
@@ -30,11 +32,13 @@ struct Enemy {
     // for proper collisions also check against `hitbox(EnemyType)` if `simple_hitbox` detects a collision
     shapes::Circle simple_hitbox;
 
-    // TODO: State for each enemy type
     EnemyType type;
+    // Stats are multiplied by `BOSS_SCALE_FACTOR` and model is increased by 2x
+    bool boss;
+    // TODO: State for each enemy type
     std::variant<int> state;
 
-    Enemy(EnemyType type, Vector2 target, Vector2 position);
+    Enemy(EnemyType type, Vector2 target, Vector2 position, bool boss);
 
     // only use if `simple_hitbox` determined a collision
     shapes::Polygon hitbox(EnemyType type) const;
