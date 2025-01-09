@@ -24,8 +24,8 @@ using Player = struct Player {
     Model model;
     ModelAnimation* animations;
     int animationsCount;
-    int animationCurrent;
-    int animationIndex = 0;
+    int animationCurrent = 0;
+    int animationIndex = 2;
 
     // screw c++, this has to be here :(
     // can assume this is always a value

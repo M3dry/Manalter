@@ -30,11 +30,11 @@ bool is_key_pressed(const std::vector<std::pair<int, bool>>& pressed_keys, bool 
 }
 
 const Vector3 Player::camera_offset = (Vector3){30.0f, 70.0f, 0.0f};
-const float Player::model_scale = 0.5f;
+const float Player::model_scale = 0.2f;
 
 Player::Player(Vector3 position)
     : prev_position(position), position(position), interpolated_position(position),
-      model(LoadModel("./assets/player/player.glb")), animations(nullptr), animationsCount(0) {
+      model(LoadModel("./assets/player/player.glb")), animations(nullptr) {
     camera.position = camera_offset;
     camera.target = position;
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
@@ -45,6 +45,8 @@ Player::Player(Vector3 position)
     Vector3 min = Vector3Scale(mesh_bb.min, model_scale);
     Vector3 max = Vector3Scale(mesh_bb.max, model_scale);
 
+    model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
+
     hitbox =
         shapes::Polygon((Vector2){max.x + min.x, max.z + min.z}, {(Vector2){min.x, max.z}, (Vector2){min.x, min.z},
                                                                   (Vector2){max.x, min.z}, (Vector2){max.x, max.z}});
@@ -52,7 +54,6 @@ Player::Player(Vector3 position)
     animations = LoadModelAnimations("./assets/player/player.glb", &animationsCount);
     // TODO: better animatin handling system
     // Idle animation
-    animationCurrent = 1;
     TraceLog(LOG_INFO, ("Animations: " + std::to_string(animationsCount)).c_str());
 }
 
@@ -79,7 +80,7 @@ void Player::update_model() {
 }
 
 void Player::draw_model() const {
-    DrawModelEx(model, interpolated_position, (Vector3){0.0f, 0.0f, 1.0f}, 90.0f,
+    DrawModelEx(model, interpolated_position, (Vector3){0.0f, 1.0f, 0.0f}, angle,
                 (Vector3){model_scale, model_scale, model_scale}, WHITE);
 
 #ifdef DEBUG
