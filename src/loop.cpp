@@ -161,7 +161,7 @@ void PlayerStats::cast_equipped(int idx, const Vector2& player_position, const V
 
     auto spell_id = equipped_spells[idx];
     Spell& spell = spellbook[spell_id];
-    if (mana < spell.manacost) return;
+    if (mana < spell.manacost || spell.curr_cooldown > 0) return;
 
     mana -= spell.manacost;
     spell.curr_cooldown = spell.get_cooldown();
