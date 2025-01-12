@@ -2,46 +2,165 @@
 
 #include "hitbox.hpp"
 #include "raylib.h"
-#include "spell.hpp"
-#include <array>
+#include "raymath.h"
 #include <cstdint>
 #include <variant>
 
-#define BOSS_SCALE_FACTOR 10.0f
+#define BOSS_STAT_SCALING_FACTOR 10.0f
 
-enum struct EnemyType {
-    Size,
-};
+namespace enemies {
+    struct Enemy;
 
-struct Enemy {
-    static const std::array<float, static_cast<int>(EnemyType::Size)> y_component;
-    static const std::array<uint8_t, static_cast<int>(EnemyType::Size)> cap_value;
-    static const std::array<Element, static_cast<int>(EnemyType::Size)> element;
-    static const std::array<std::pair<uint32_t, uint32_t>, static_cast<int>(EnemyType::Size)> damage_range;
-    static const std::array<std::pair<uint32_t, uint32_t>, static_cast<int>(EnemyType::Size)> speed_range;
-    static const std::array<uint32_t, static_cast<int>(EnemyType::Size)> max_health;
-    static const std::array<float, static_cast<int>(EnemyType::Size)> simple_hitbox_radius;
+    enum struct EnemyType {
+        Human,
+        Undead,
+        Mage,
+        Giant,
+    };
 
-    uint32_t health;
-    uint32_t damage;
-    uint16_t speed;
+    struct Info {
+        const char* model_path;
+        float model_scale;
+        int default_anim;
+        float y_component;
+        int cap_value;
+        EnemyType element;
+        std::pair<uint32_t, uint32_t> damage_range;
+        std::pair<uint32_t, uint32_t> speed_range;
+        uint32_t max_health;
+        float simple_hitbox_radius;
+    };
 
-    Vector3 position;
-    Vector2 movement;
-    float angle;
-    // for proper collisions also check against `hitbox(EnemyType)` if `simple_hitbox` detects a collision
-    shapes::Circle simple_hitbox;
+    struct Paladin {
+        enum Animations {
+            HeadButt = 0,
+            Sprinting = 1,
+        };
 
-    EnemyType type;
-    // Stats are multiplied by `BOSS_SCALE_FACTOR` and model is increased by 2x
-    bool boss;
-    // TODO: State for each enemy type
-    std::variant<int> state;
+        int tick(Enemy& data, const shapes::Polygon target_hitbox);
 
-    Enemy(EnemyType type, Vector2 target, Vector2 position, bool boss);
+        static constexpr Info info = (Info){
+            .model_path = "./assets/paladin.glb",
+            .model_scale = 0.3f,
+            .default_anim = 1,
+            .y_component = 1.0f,
+            .cap_value = 2,
+            .element = EnemyType::Human,
+            .damage_range = {15, 20},
+            .speed_range = {2.5, 2.5},
+            .max_health = 100,
+            .simple_hitbox_radius = 10.0f,
+        };
+    };
 
-    // only use if `simple_hitbox` determined a collision
-    shapes::Polygon hitbox(EnemyType type) const;
-    void update_target(Vector2 new_target);
-    void tick(shapes::Polygon target_hitbox);
-};
+    struct Zombie {
+        int tick(Enemy& data, const shapes::Polygon target_hitbox);
+
+        static constexpr Info info = (Info){
+            .model_path = "./assets/zombie.glb",
+            .y_component = 1.0f,
+            .cap_value = 1,
+            .element = EnemyType::Undead,
+            .damage_range = {10, 20},
+            .speed_range = {1, 3},
+            .max_health = 50,
+            .simple_hitbox_radius = 5.0f,
+        };
+    };
+
+    struct Heraklios {
+        int tick(Enemy& data, const shapes::Polygon target_hitbox);
+
+        static constexpr Info info = (Info){
+            .model_path = "./assets/heraklios.glb",
+            .model_scale = 0.2f,
+            .default_anim = 0,
+            .y_component = 1.0f,
+            .cap_value = 5,
+            .element = EnemyType::Mage,
+            .damage_range = {30, 50},
+            .speed_range = {5, 10},
+            .max_health = 300,
+            .simple_hitbox_radius = 5.0f,
+        };
+    };
+
+    struct Maw {
+        int tick(Enemy& data, const shapes::Polygon target_hitbox);
+
+        static constexpr Info info = (Info){
+            .model_path = "./assets/maw.glb",
+            .model_scale = 0.2f,
+            .default_anim = 0,
+            .y_component = 1.0f,
+            .cap_value = 10,
+            .element = EnemyType::Giant,
+            .damage_range = {70, 100},
+            .speed_range = {4, 7},
+            .max_health = 500,
+            .simple_hitbox_radius = 10.0f,
+        };
+    };
+
+    template <typename T>
+    concept IsEnemy = requires(T e, Enemy& enemy, const shapes::Polygon& hitbox) {
+        { T::info } -> std::same_as<const Info&>;
+        // gets called if target hitbox collides or uncollides with enemy hitbox
+        { e.tick(enemy, hitbox) } -> std::same_as<int>;
+    };
+
+    struct Enemy {
+        enum CollisionState {
+            Collision,
+            Uncollision,
+            Unchanged,
+        };
+
+        Model model;
+        ModelAnimation* anims;
+        int anim_count;
+        int anim_index = 0;
+        int anim_curr_frame = 0;
+
+        uint32_t health;
+        uint32_t damage;
+        uint16_t speed;
+
+        Vector3 position;
+        Vector2 movement;
+        float angle;
+        shapes::Circle simple_hitbox;
+        CollisionState collision_state = Unchanged;
+
+        // Stats are multiplied by `BOSS_STAT_SCALING_FACTOR` and model is increased by 2x
+        bool boss;
+
+        template <IsEnemy... T> using State = std::variant<T...>;
+        State<Paladin, Zombie, Heraklios, Maw> state;
+
+        template <IsEnemy T>
+        Enemy(Vector2 position, bool boss, T&& enemy)
+            : model(LoadModel(T::info.model_path)), anims(LoadModelAnimations(T::info.model_path, &anim_count)),
+              anim_index(T::info.default_anim), position((Vector3){position.x, T::info.y_component, position.y}),
+              movement(Vector2Zero()),
+              simple_hitbox(shapes::Circle(position, T::info.simple_hitbox_radius)), boss(boss), state(enemy) {
+            model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
+            UpdateModelAnimation(model, anims[anim_index], anim_curr_frame);
+
+            health = T::info.max_health;
+
+            auto [min_speed, max_speed] = T::info.speed_range;
+            speed = GetRandomValue(min_speed, max_speed);
+
+            auto [min_damage, max_damage] = T::info.damage_range;
+            damage = GetRandomValue(min_damage, max_damage);
+        }
+
+        void draw() const;
+        void update_target(Vector2 new_target);
+        // returned number is the amount of damage taken by the player
+        int tick(shapes::Polygon target_hitbox);
+    };
+}
+
+using Enemies = std::vector<enemies::Enemy>;

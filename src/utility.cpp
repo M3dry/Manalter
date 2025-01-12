@@ -1,5 +1,6 @@
 #include "utility.hpp"
 
+#include <cmath>
 #include <print>
 
 std::pair<int, Vector2> max_font_size(const Font& font, float spacing, const Vector2& max_dims, std::string_view text) {
@@ -24,4 +25,13 @@ std::pair<int, Vector2> max_font_size(const Font& font, float spacing, const Vec
         } else
             font_size = (min + max) / 2;
     }
+}
+
+// angle will be of range 0 - 360
+// 0 degrees -> 12 o' clock
+// 90 degrees -> 3 o' clock
+// 180 degrees -> 6 o' clock
+// 270 degrees -> 9 o' clock
+float angle_from_point(const Vector2& point, const Vector2& origin) {
+    return std::fmod(270 - std::atan2(origin.y - point.y, origin.x - point.x) * 180 / std::numbers::pi, 360);
 }

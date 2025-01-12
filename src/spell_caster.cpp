@@ -3,21 +3,21 @@
 #include "rayhacks.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <print>
 #include <raylib.h>
 #include <raymath.h>
-#include <tuple>
 #include <vector>
 
 namespace caster {
     struct Moving {
-        Moving(std::size_t spell_id, const Spell::SpellToMouse& movement_info, const Vector2& movement,
+        Moving(std::size_t spell_id, const Spell::SpellToPoint& movement_info, const Vector2& movement,
                const Vector2& origin, const Vector2& mouse_position)
             : segment_length(movement_info.speed), spell_id(spell_id), till_removal(movement_info.duration),
               till_stopped(movement_info.stop_after), create_segments(movement_info.length / segment_length),
-              origin(origin), movement(movement), hitbox([&]() -> std::vector<Vector2> {
+              movement(movement), hitbox([&]() -> std::vector<Vector2> {
                   // FIX: Maybe do something nicer, but really screw oop
 
                   // time for some serious math
@@ -70,52 +70,86 @@ namespace caster {
         // when 0 stop creating segments
         uint16_t create_segments;
 
-        Vector2 origin;
         Vector2 movement;
         // 0, 1 points are the head
         // 2, 3 points are the tail
         shapes::Polygon hitbox;
     };
 
+    struct Circle {
+        Circle(std::size_t spell_id, Vector2 center, Spell::SpellCircle info)
+            : spell_id(spell_id), hitbox(center, info.init_radius), until_max(info.speed),
+              radius_increase((float)(info.max_radius - info.init_radius) / info.speed), wait(info.duration) {
+        }
+
+        bool tick() {
+            if (until_max > 0) {
+                hitbox.radius += radius_increase;
+                until_max--;
+            }
+
+            if (until_max == 0) return wait-- == 0;
+            return false;
+        }
+
+        std::size_t spell_id;
+        shapes::Circle hitbox;
+        uint8_t until_max;
+        float radius_increase;
+        uint16_t wait;
+    };
+
     std::vector<Moving> moving_spells = {};
-    std::vector<std::tuple<std::size_t, shapes::Circle>> circle_spells = {};
+    std::vector<Circle> circle_spells = {};
 
-    void cast(std::size_t spell_id, const Spell& spell, const Vector2& player_position, const Vector2& mouse_position) {
-        auto reach = spell.get_reach();
-
-        switch (spell.get_type()) {
-            case Spell::AtMouse: {
-                float radius = std::get<0>(reach);
-                circle_spells.emplace_back(spell_id, shapes::Circle(mouse_position, radius));
-                break;
-            }
-            case Spell::AtPlayer: {
-                float radius = std::get<0>(reach);
-                circle_spells.emplace_back(spell_id, shapes::Circle(player_position, radius));
-                break;
-            }
-            case Spell::ToMouse: {
-                Vector2 movement = Vector2Normalize(mouse_position - player_position);
-                moving_spells.emplace_back(spell_id, std::get<1>(reach), movement, player_position, mouse_position);
-                break;
-            }
+    Vector2 point(Spell::Point point, Vector2 mouse, Vector2 player) {
+        switch (point) {
+            case Spell::Point::Mouse:
+                return mouse;
+            case Spell::Point::Player:
+                return player;
+            case Spell::Point::NearestEnemy:
+                assert(false && "Not implemented");
         }
     }
 
-    void tick(const SpellBook& spellbook) {
-        for (auto [spell_id, circle] : circle_spells) {
-            // TODO: check for collisions between enemies and the `circle` shape
-        }
-        circle_spells.clear();
+    void cast(std::size_t spell_id, const Spell& spell, const Vector2& player_position, const Vector2& mouse_position) {
+        std::visit(
+            [&](auto&& arg) {
+                using T = std::decay_t<decltype(arg)>;
 
-        auto [first, last] = std::ranges::remove_if(moving_spells, [](auto& moving) { return moving.tick(/* NOTE: pass enemies here, IG? */); });
-        moving_spells.erase(first, last);
+                if constexpr (std::is_same_v<T, Spell::SpellCircle>) {
+                    Vector2 center = point(arg.point, mouse_position, player_position);
+
+                    circle_spells.emplace_back(spell_id, center, arg);
+                } else if constexpr (std::is_same_v<T, Spell::SpellToPoint>) {
+                    Vector2 movement =
+                        Vector2Normalize(point(arg.point, mouse_position, player_position) - player_position);
+
+                    moving_spells.emplace_back(spell_id, arg, movement, player_position, mouse_position);
+                }
+            },
+            spell.get_reach());
+    }
+
+    void tick(const SpellBook& spellbook) {
+        {
+            auto [first, last] = std::ranges::remove_if(
+                circle_spells, [](auto& circle) { return circle.tick(/* NOTE: pass enemies here, IG? */); });
+            circle_spells.erase(first, last);
+        }
+
+        {
+            auto [first, last] = std::ranges::remove_if(
+                moving_spells, [](auto& moving) { return moving.tick(/* NOTE: pass enemies here, IG? */); });
+            moving_spells.erase(first, last);
+        }
     }
 
 #ifdef DEBUG
     void draw_hitbox(float y) {
-        for (auto [_, circle] : circle_spells) {
-            circle.draw_3D(RED, y);
+        for (const auto& circle : circle_spells) {
+            circle.hitbox.draw_3D(RED, y);
         }
 
         for (const auto& moving : moving_spells) {

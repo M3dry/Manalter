@@ -1,5 +1,6 @@
 #pragma once
 
+#include "enemies.hpp"
 #include "raylib.h"
 
 #include <cstdint>
@@ -25,7 +26,7 @@ using Player = struct Player {
     ModelAnimation* animations;
     int animationsCount;
     int animationCurrent = 0;
-    int animationIndex = 2;
+    int animationIndex = 0;
 
     // screw c++, this has to be here :(
     // can assume this is always a value
@@ -37,8 +38,8 @@ using Player = struct Player {
 
     Player(Vector3 position);
     void update_interpolated_pos(double mili_accum);
-    void update_position(Vector2 movement, float new_angle);
-    void update_model();
+    void update(Vector2 movement, float new_angle);
+    /*void update_model();*/
     void draw_model() const;
     ~Player();
 };
@@ -80,14 +81,9 @@ using PlayerStats = struct PlayerStats {
 
 class ItemDrop {
   public:
-    enum struct Type {
-        Spell,
-        // TODO: Armor, jewelry
-    };
-
     static const float hitbox_radius;
 
-    Type type;
+    std::variant<Spell> item;
     shapes::Circle hitbox;
 
     ItemDrop(Vector2 center, Spell&& spell);
@@ -96,18 +92,7 @@ class ItemDrop {
     ItemDrop& operator=(ItemDrop&&) noexcept = default;
 
     void draw_name(std::function<Vector2(Vector3)> to_screen_coords) const;
-    template <typename T> T&& move_item() {
-        switch (type) {
-            case Type::Spell:
-                return std::move(std::get<T>(item));
-        }
-
-        std::unreachable();
-    }
     std::string_view get_name() const;
-
-  private:
-    std::variant<Spell> item;
 };
 
 class Loop {
@@ -120,6 +105,8 @@ class Loop {
     bool spellbook_open;
     std::vector<ItemDrop> item_drops;
     std::vector<int> registered_keys;
+
+    Enemies enemies;
 
     Loop(int width, int height);
     void operator()();

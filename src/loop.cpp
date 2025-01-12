@@ -29,7 +29,7 @@ bool is_key_pressed(const std::vector<std::pair<int, bool>>& pressed_keys, bool 
     return false;
 }
 
-const Vector3 Player::camera_offset = (Vector3){30.0f, 70.0f, 0.0f};
+const Vector3 Player::camera_offset = (Vector3){60.0f, 140.0f, 0.0f};
 const float Player::model_scale = 0.2f;
 
 Player::Player(Vector3 position)
@@ -48,13 +48,11 @@ Player::Player(Vector3 position)
     model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
 
     hitbox =
-        shapes::Polygon((Vector2){max.x + min.x, max.z + min.z}, {(Vector2){min.x, max.z}, (Vector2){min.x, min.z},
-                                                                  (Vector2){max.x, min.z}, (Vector2){max.x, max.z}});
+        shapes::Polygon((Vector2){max.x + min.x, max.y + min.y}, {(Vector2){min.x, max.y}, (Vector2){min.x, min.y},
+                                                                  (Vector2){max.x, min.y}, (Vector2){max.x, max.y}});
 
     animations = LoadModelAnimations("./assets/player/player.glb", &animationsCount);
-    // TODO: better animatin handling system
-    // Idle animation
-    TraceLog(LOG_INFO, ("Animations: " + std::to_string(animationsCount)).c_str());
+    UpdateModelAnimation(model, animations[animationIndex], animationCurrent);
 }
 
 void Player::update_interpolated_pos(double accum_time) {
@@ -64,18 +62,26 @@ void Player::update_interpolated_pos(double accum_time) {
     camera.position = Vector3Lerp(camera.position, Vector3Add(camera_offset, interpolated_position), 1.0f);
 }
 
-void Player::update_position(Vector2 movement, float new_angle) {
-    prev_position = position;
-    position.x += movement.x;
-    position.z += movement.y;
-    hitbox->rotate(angle - new_angle);
-    angle = new_angle;
+void Player::update(Vector2 movement, float new_angle) {
+    int lastIndex = animationIndex;
+    if (movement.x == 0 && movement.y == 0) {
+        animationIndex = 0;
+    } else {
+        prev_position = position;
+        position.x += movement.x;
+        position.z += movement.y;
+        hitbox->rotate(angle - new_angle);
+        angle = new_angle;
+        hitbox->update(movement);
 
-    hitbox->update(movement);
-}
+        animationIndex = 2;
+    }
 
-void Player::update_model() {
-    animationCurrent = (animationCurrent + 1) % animations[animationIndex].frameCount;
+    if (lastIndex != animationIndex) {
+        animationCurrent = 0;
+    } else {
+        animationCurrent = (animationCurrent + 3) % animations[animationIndex].frameCount;
+    }
     UpdateModelAnimation(model, animations[animationIndex], animationCurrent);
 }
 
@@ -171,8 +177,7 @@ void PlayerStats::cast_equipped(int idx, const Vector2& player_position, const V
 
 const float ItemDrop::hitbox_radius = 5.0f;
 
-ItemDrop::ItemDrop(Vector2 center, Spell&& spell)
-    : type(Type::Spell), hitbox(center, hitbox_radius), item(std::move(spell)) {
+ItemDrop::ItemDrop(Vector2 center, Spell&& spell) : hitbox(center, hitbox_radius), item(std::move(spell)) {
 }
 
 void ItemDrop::draw_name(std::function<Vector2(Vector3)> to_screen_coords) const {
@@ -182,12 +187,15 @@ void ItemDrop::draw_name(std::function<Vector2(Vector3)> to_screen_coords) const
 }
 
 std::string_view ItemDrop::get_name() const {
-    switch (type) {
-        case Type::Spell:
-            return std::get<Spell>(item).get_name();
-        default:
-            assert(false);
-    }
+    return std::visit(
+        [](auto&& arg) -> std::string_view {
+            using T = std::decay_t<decltype(arg)>;
+
+            if constexpr (std::is_same_v<T, Spell>) {
+                return arg.get_name();
+            }
+        },
+        item);
 }
 
 Vector2 mouse_xz_in_world(Ray mouse) {
@@ -380,7 +388,8 @@ Loop::Loop(int width, int height)
     : screen((Vector2){(float)width, (float)height}), player((Vector3){0.0f, 10.0f, 0.0f}),
       player_stats(100, 1, 100, 10, 4), mouse_pos(Vector2Zero()), assets(screen), spellbook_open(false),
       registered_keys({KEY_N, KEY_M, KEY_B, KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN,
-                       KEY_EIGHT, KEY_NINE, KEY_ZERO}) {
+                       KEY_EIGHT, KEY_NINE, KEY_ZERO}),
+      enemies({}) {
 #ifdef PLATFORM_WEB
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, this, false, resize_handler);
 #endif
@@ -395,6 +404,8 @@ Loop::Loop(int width, int height)
     item_drops.emplace_back((Vector2){200.0f, 200.0f}, Spell(Spell::Fire_Wall, Rarity::Epic, 30));
     item_drops.emplace_back((Vector2){200.0f, 150.0f}, Spell(Spell::Frost_Nova, Rarity::Epic, 30));
     item_drops.emplace_back((Vector2){200.0f, 100.0f}, Spell(Spell::Falling_Icicle, Rarity::Epic, 30));
+
+    enemies.emplace_back((Vector2){100.0f, 100.0f}, false, enemies::Paladin());
 };
 
 void Loop::operator()() {
@@ -414,6 +425,10 @@ void Loop::operator()() {
     DrawPlane((Vector3){0.0f, 0.0f, 0.0f}, (Vector2){1000.0f, 1000.0f}, GREEN);
 
     player.draw_model();
+
+    for (const auto& enemy : enemies) {
+        enemy.draw();
+    }
 
     for (const auto& item_drop : item_drops) {
         DrawCircle3D((Vector3){item_drop.hitbox.center.x, 1.0f, item_drop.hitbox.center.y}, item_drop.hitbox.radius,
@@ -452,6 +467,9 @@ void Loop::operator()() {
                  .c_str(),
              10, 30, 20, BLACK);
     DrawText(("ANGLE: " + std::to_string(player.angle)).c_str(), 10, 50, 20, BLACK);
+    DrawText(("PAlADIN ANIM INDEX: " + std::to_string(enemies[0].anim_index))
+                 .c_str(),
+             10, 90, 20, BLACK);
 
     float circle_ui_dim = screen.x * 1 / 8;
     static const float padding = 10;
@@ -516,10 +534,6 @@ void Loop::update() {
     float length = Vector2Length(movement);
     if (length != 1 && length != 0) movement = Vector2Divide(movement, {length, length});
 
-    if (movement.x != 0 || movement.y != 0) {
-        player.update_position((Vector2){movement.x * 5, movement.y * 5}, angle.x / angle.y);
-    }
-
     if (is_key_pressed(pressed_keys, false, KEY_N)) {
         player_stats.mana -= 1;
     }
@@ -541,23 +555,31 @@ void Loop::update() {
         }
     }
 
-    player.update_model();
+    player.update((Vector2){movement.x * 5, movement.y * 5}, angle.x / angle.y);
+
+    int damage_acum = 0;
+    for (auto& enemy : enemies) {
+        enemy.update_target((Vector2){player.position.x, player.position.z});
+        damage_acum += enemy.tick(*player.hitbox);
+    }
+
     player_stats.tick();
     caster::tick(player_stats.spellbook);
 
-    std::vector<ItemDrop>::iterator it = item_drops.begin();
-    int i = 0;
-    while (it != item_drops.end()) {
-        if (check_collision(*player.hitbox, item_drops[i].hitbox)) {
-            switch (item_drops[i].type) {
-                case ItemDrop::Type::Spell:
-                    player_stats.spellbook.emplace_back(item_drops[i].move_item<Spell>());
-                    break;
-            }
-            it = item_drops.erase(it);
-        } else
-            it++;
+    auto [first, last] = std::ranges::remove_if(item_drops, [&](auto& item_drop) -> bool {
+        if (!check_collision(*player.hitbox, item_drop.hitbox)) return false;
 
-        i++;
-    }
+        std::visit(
+            [&](auto&& arg) {
+                using T = std::decay_t<decltype(arg)>;
+
+                if constexpr (std::is_same_v<T, Spell>) {
+                    player_stats.spellbook.emplace_back(std::move(arg));
+                }
+            },
+            item_drop.item);
+
+        return true;
+    });
+    item_drops.erase(first, last);
 }

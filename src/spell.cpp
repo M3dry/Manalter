@@ -6,22 +6,13 @@ const std::array<std::string_view, Spell::NameSize> Spell::name_map = {
     "Fire Wall", "Falling Icicle", "Lightning Strike", "Frost Nova", "Void Implosion", "Mana Detonation",
 };
 
-const std::array<Spell::Type, Spell::NameSize> Spell::type_map = {
-    Spell::ToMouse,  // Fire Wall
-    Spell::AtMouse,  // Falling Icicle
-    Spell::AtMouse,  // Lightning Strike
-    Spell::AtMouse,  // Frost Nova
-    Spell::AtMouse,  // Void Implosion
-    Spell::AtPlayer, // Mana Detonation
-};
-
 const std::array<Element, Spell::NameSize> Spell::element_map = {
     Element::Fire,      // Fire Wall
     Element::Ice,       // Falling Icicle
-    Element::Lightning, // Lightning Strike
+    Element::Light, // Lightning Strike
     Element::Ice,       // Frost Nova
-    Element::DarkMagic, // Void Implosion
-    Element::DarkMagic, // Mana Detonation
+    Element::Shadow, // Void Implosion
+    Element::Light, // Mana Detonation
 };
 
 const std::array<int, Spell::NameSize> Spell::cooldown_map = {
@@ -68,19 +59,39 @@ const std::array<std::pair<int, int>, Rarity::Size> Spell::manacost_randomizatio
     std::make_pair(-40, -10), // Legendary
 };
 
-const std::array<std::variant<Spell::Radius, Spell::SpellToMouse>, Spell::NameSize> Spell::reach_map = {
-    (Spell::SpellToMouse){
+const std::array<std::variant<Spell::SpellCircle, Spell::SpellToPoint>, Spell::NameSize> Spell::reach_map = {
+    (Spell::SpellToPoint){
+        .point = Spell::Point::Mouse,
         .length = 30,
         .width = 5,
         .stop_after = 50,
         .duration = 30,
         .speed = 5,
     }, // Fire Wall
-    (uint8_t)5,                      // Falling Icicle
-    (uint8_t)0,                      // Lightning Strike
-    (uint8_t)25,                     // Frost Nova
-    (uint8_t)35,                     // Void Implosion
-    (uint8_t)50,                     // Mana Detonation
+    (Spell::SpellCircle){
+        .point = Spell::Point::Mouse,
+        .init_radius = 5,
+        .max_radius = 5
+    }, // Falling Icicle
+    (Spell::SpellCircle){
+        .point = Spell::Point::NearestEnemy,
+        .max_radius = 1
+    }, // Lightning Strike
+    (Spell::SpellCircle){
+        .point = Spell::Point::Mouse,
+        .max_radius = 15,
+        .speed = 5,
+    }, // Frost Nova
+    (Spell::SpellCircle){
+        .point = Spell::Point::NearestEnemy,
+        .max_radius = 5,
+        .speed = 5,
+    }, // Void Implosion
+    (Spell::SpellCircle){
+        .point = Spell::Point::Player,
+        .max_radius = 20,
+        .speed = 4,
+    }, // Mana Detonation
 };
 
 Spell::Spell(Name name, Rarity::Type rarity, uint16_t lvl)
@@ -96,10 +107,6 @@ const Color& Spell::get_rarity_color() const {
 std::string_view Spell::get_name() const {
     return Spell::name_map[name];
 }
-
-Spell::Type Spell::get_type() const {
-    return Spell::type_map[name];
-};
 
 const Element& Spell::get_element() const {
     return Spell::element_map[name];
@@ -125,7 +132,7 @@ const std::pair<int, int>& Spell::get_manacost_randomization() const {
     return Spell::manacost_randomization_map[static_cast<int>(rarity)];
 };
 
-const std::variant<Spell::Radius, Spell::SpellToMouse>& Spell::get_reach() const {
+const std::variant<Spell::SpellCircle, Spell::SpellToPoint>& Spell::get_reach() const {
     return Spell::reach_map[name];
 }
 

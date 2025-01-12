@@ -1,59 +1,90 @@
 #include "enemies.hpp"
+#include "hitbox.hpp"
 #include "rayhacks.hpp"
+#include "raylib.h"
 #include "raymath.h"
+#include "utility.hpp"
 #include <cassert>
 
-const std::array<float, static_cast<int>(EnemyType::Size)> Enemy::y_component = {
+namespace enemies {
+    int Paladin::tick(Enemy& data, const shapes::Polygon target_hitbox) {
+        switch (data.collision_state) {
+            case Enemy::Collision:
+                data.anim_index = 0;
+                data.anim_curr_frame = 0;
+                return data.damage;
+            case Enemy::Uncollision:
+                data.anim_index = 1;
+                data.anim_curr_frame = 0;
+                return 0;
+            case Enemy::Unchanged:
+                return 0;
+        }
+    }
 
-};
+    int Zombie::tick(Enemy& data, const shapes::Polygon target_hitbox) {
+        return 0;
+    }
 
-const std::array<uint8_t, static_cast<int>(EnemyType::Size)> Enemy::cap_value = {
+    int Heraklios::tick(Enemy& data, const shapes::Polygon target_hitbox) {
+        return 0;
+    }
 
-};
+    int Maw::tick(Enemy& data, const shapes::Polygon target_hitbox) {
+        return 0;
+    }
 
-const std::array<Element, static_cast<int>(EnemyType::Size)> Enemy::element = {
+    void Enemy::draw() const {
+        DrawModelEx(model, position, (Vector3){0.0f, 1.0f, 0.0f}, angle,
+                    std::visit(
+                        [](auto&& arg) -> Vector3 {
+                            auto scale = std::decay_t<decltype(arg)>::info.model_scale;
+                            return (Vector3){scale, scale, scale};
+                        },
+                        state),
+                    WHITE);
+#ifdef DEBUG
+        simple_hitbox.draw_3D(RED, 1.0f);
+#endif
+    }
 
-};
+    void Enemy::update_target(Vector2 new_target) {
+        movement = Vector2Normalize(new_target - (Vector2){position.x, position.z});
+        angle = angle_from_point(new_target, (Vector2){ position.x, position.z });
+    }
 
-const std::array<std::pair<uint32_t, uint32_t>, static_cast<int>(EnemyType::Size)> damage_range = {
+    int Enemy::tick(shapes::Polygon target_hitbox) {
+        return std::visit(
+            [&](auto&& arg) {
+                position.x += movement.x * speed;
+                position.z += movement.y * speed;
 
-};
+                simple_hitbox.center.x = position.x;
+                simple_hitbox.center.y = position.z;
 
-const std::array<std::pair<uint32_t, uint32_t>, static_cast<int>(EnemyType::Size)> speed_range = {
+                anim_curr_frame = (anim_curr_frame + 3) % anims[anim_index].frameCount;
+                UpdateModelAnimation(model, anims[anim_index], anim_curr_frame);
 
-};
+                if (check_collision(target_hitbox, simple_hitbox)) {
+                    switch (collision_state) {
+                        case Collision:
+                            collision_state = Unchanged;
+                            break;
+                        default:
+                            collision_state = Collision;
+                    }
+                } else {
+                    switch (collision_state) {
+                        case Uncollision:
+                            collision_state = Unchanged;
+                            break;
+                        default:
+                            collision_state = Uncollision;
+                    }
+                }
 
-const std::array<uint32_t, static_cast<int>(EnemyType::Size)> Enemy::max_health = {
-
-};
-
-const std::array<float, static_cast<int>(EnemyType::Size)> Enemy::simple_hitbox_radius = {
-
-};
-
-Enemy::Enemy(EnemyType type, Vector2 target, Vector2 position, bool boss)
-    : position((Vector3){position.x, Enemy::y_component[static_cast<int>(type)], position.y}),
-      movement(Vector2Normalize(position - target)),
-      simple_hitbox(shapes::Circle(position, Enemy::simple_hitbox_radius[static_cast<int>(type)])), type(type),
-      boss(boss) {
-    // TODO: health, damage, speed,
-    //       angle, state
-}
-
-shapes::Polygon Enemy::hitbox(EnemyType type) const {
-    assert(type != EnemyType::Size);
-
-    std::unreachable();
-}
-
-void Enemy::update_target(Vector2 new_target) {
-    movement = Vector2Normalize((Vector2){position.x, position.z} - new_target);
-    // TODO: Reset enemy state?
-}
-
-void Enemy::tick(shapes::Polygon target_hitbox) {
-    position.x += movement.x;
-    position.y += movement.y;
-
-    // TODO: change state
+                return arg.tick(*this, target_hitbox);
+            },
+            state);
+    }
 }

@@ -9,11 +9,13 @@
 #include <variant>
 #include <vector>
 
+// `+` - strong against these elements
+// `-` - weak against these elements
 enum struct Element {
     Fire = 0,
     Ice,
-    Lightning,
-    DarkMagic,
+    Shadow,
+    Light,
     Size,
 };
 
@@ -57,19 +59,7 @@ using Spell = struct Spell {
         NameSize,
     };
 
-    // TODO: split into element and "play style"
-    enum Type {
-        AtMouse = 0,
-        AtPlayer,
-        // originates from player and goes towards the mouse
-        // can go further than the mouse pointer
-        ToMouse,
-    };
-
-    /*using Types = std::unordered_set<Type>;*/
-
     static const std::array<std::string_view, NameSize> name_map;
-    static const std::array<Type, NameSize> type_map;
     static const std::array<Element, NameSize> element_map;
     // in ticks, doesn't change with rarity
     static const std::array<int, NameSize> cooldown_map;
@@ -86,7 +76,24 @@ using Spell = struct Spell {
     // AtPlayer, AtMouse
     // 0 value makes it hit what is right under the cursor
     using Radius = uint8_t;
-    struct SpellToMouse {
+    enum struct Point {
+        Player,
+        Mouse,
+        NearestEnemy,
+    };
+
+    struct SpellCircle {
+        Point point;
+        uint8_t init_radius = 0;
+        uint8_t max_radius;
+        // units per tick
+        uint8_t speed = 0;
+        // how many ticks to wait after reaching `max_radius` before removing spell
+        uint16_t duration = 0;
+    };
+
+    struct SpellToPoint {
+        Point point;
         uint16_t length;
         uint8_t width;
         // after how many units should the spell stop
@@ -96,7 +103,7 @@ using Spell = struct Spell {
         // units per tick
         uint8_t speed;
     };
-    static const std::array<std::variant<Radius, SpellToMouse>, NameSize> reach_map;
+    static const std::array<std::variant<SpellCircle, SpellToPoint>, NameSize> reach_map;
 
     Name name;
     Rarity::Type rarity;
@@ -113,14 +120,13 @@ using Spell = struct Spell {
 
     const Color& get_rarity_color() const;
     std::string_view get_name() const;
-    Type get_type() const;
     const Element& get_element() const;
     int get_cooldown() const;
     int get_manacost() const;
     const std::string& get_icon_path() const;
     float get_rarity_multiplier() const;
     const std::pair<int, int>& get_manacost_randomization() const;
-    const std::variant<Spell::Radius, Spell::SpellToMouse>& get_reach() const;
+    const std::variant<Spell::SpellCircle, Spell::SpellToPoint>& get_reach() const;
 
     // rarity_range - inclusive from both sides,
     //                order doesn't matter, eg. Rare, Common -> Common, Uncommon, Rare
