@@ -7,12 +7,12 @@
 #include <functional>
 #include <optional>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include "assets.hpp"
 #include "hitbox.hpp"
 #include "spell.hpp"
+#include "item_drops.hpp"
 
 #define TICKS 20
 
@@ -30,7 +30,7 @@ using Player = struct Player {
 
     // screw c++, this has to be here :(
     // can assume this is always a value
-    std::optional<shapes::Polygon> hitbox;
+    shapes::Circle hitbox;
     Camera3D camera = {0};
 
     static const Vector3 camera_offset;
@@ -79,22 +79,6 @@ using PlayerStats = struct PlayerStats {
     void cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos);
 };
 
-class ItemDrop {
-  public:
-    static const float hitbox_radius;
-
-    std::variant<Spell> item;
-    shapes::Circle hitbox;
-
-    ItemDrop(Vector2 center, Spell&& spell);
-
-    ItemDrop(ItemDrop&&) noexcept = default;
-    ItemDrop& operator=(ItemDrop&&) noexcept = default;
-
-    void draw_name(std::function<Vector2(Vector3)> to_screen_coords) const;
-    std::string_view get_name() const;
-};
-
 class Loop {
   public:
     Vector2 screen;
@@ -103,10 +87,10 @@ class Loop {
     Vector2 mouse_pos;
     assets::Store assets;
     bool spellbook_open;
-    std::vector<ItemDrop> item_drops;
     std::vector<int> registered_keys;
 
     Enemies enemies;
+    ItemDrops item_drops;
 
     Loop(int width, int height);
     void operator()();

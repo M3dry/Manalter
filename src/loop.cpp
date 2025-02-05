@@ -11,7 +11,10 @@
 #include <raylib.h>
 #include <raymath.h>
 
+#include "item_drops.hpp"
+#include "print"
 #include "rayhacks.hpp"
+#include "spell.hpp"
 #include "spell_caster.hpp"
 #include "utility.hpp"
 
@@ -34,7 +37,8 @@ const float Player::model_scale = 0.2f;
 
 Player::Player(Vector3 position)
     : prev_position(position), position(position), interpolated_position(position),
-      model(LoadModel("./assets/player/player.glb")), animations(nullptr) {
+      model(LoadModel("./assets/player/player.glb")), animations(nullptr),
+      hitbox((Vector2){position.x, position.z}, 8.0f) {
     camera.position = camera_offset;
     camera.target = position;
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
@@ -47,9 +51,10 @@ Player::Player(Vector3 position)
 
     model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
 
-    hitbox =
-        shapes::Polygon((Vector2){max.x + min.x, max.y + min.y}, {(Vector2){min.x, max.y}, (Vector2){min.x, min.y},
-                                                                  (Vector2){max.x, min.y}, (Vector2){max.x, max.y}});
+    /*hitbox =*/
+    /*    shapes::Polygon((Vector2){max.x + min.x, max.y + min.y}, {(Vector2){min.x, max.y}, (Vector2){min.x, min.y},*/
+    /*                                                              (Vector2){max.x, min.y}, (Vector2){max.x,
+     * max.y}});*/
 
     animations = LoadModelAnimations("./assets/player/player.glb", &animationsCount);
     UpdateModelAnimation(model, animations[animationIndex], animationCurrent);
@@ -70,9 +75,8 @@ void Player::update(Vector2 movement, float new_angle) {
         prev_position = position;
         position.x += movement.x;
         position.z += movement.y;
-        hitbox->rotate(angle - new_angle);
         angle = new_angle;
-        hitbox->update(movement);
+        hitbox.update(movement);
 
         animationIndex = 2;
     }
@@ -90,8 +94,8 @@ void Player::draw_model() const {
                 (Vector3){model_scale, model_scale, model_scale}, WHITE);
 
 #ifdef DEBUG
-    DrawSphere((Vector3){hitbox->center->x, 1.0f, hitbox->center->y}, 1.0f, BLUE);
-    hitbox->draw_lines_3D(RED, 1.0f);
+    DrawSphere((Vector3){hitbox.center.x, 1.0f, hitbox.center.y}, 1.0f, BLUE);
+    hitbox.draw_3D(RED, 1.0f);
 #endif
 }
 
@@ -155,8 +159,8 @@ void PlayerStats::tick() {
 
         Spell& spell = spellbook[equipped_spells[i]];
 
-        if (spell.curr_cooldown == 0) continue;
-        spell.curr_cooldown--;
+        if (spell.current_cooldown == 0) continue;
+        spell.current_cooldown--;
     }
 
     tick_counter++;
@@ -167,35 +171,12 @@ void PlayerStats::cast_equipped(int idx, const Vector2& player_position, const V
 
     auto spell_id = equipped_spells[idx];
     Spell& spell = spellbook[spell_id];
-    if (mana < spell.manacost || spell.curr_cooldown > 0) return;
+    if (mana < spell.manacost || spell.current_cooldown > 0) return;
 
     mana -= spell.manacost;
-    spell.curr_cooldown = spell.get_cooldown();
+    spell.current_cooldown = spell.cooldown;
 
     caster::cast(spell_id, spell, player_position, mouse_pos);
-}
-
-const float ItemDrop::hitbox_radius = 5.0f;
-
-ItemDrop::ItemDrop(Vector2 center, Spell&& spell) : hitbox(center, hitbox_radius), item(std::move(spell)) {
-}
-
-void ItemDrop::draw_name(std::function<Vector2(Vector3)> to_screen_coords) const {
-    Vector2 pos = to_screen_coords((Vector3){hitbox.center.x, 0.0f, hitbox.center.y});
-    auto name = get_name().data();
-    DrawText(name, pos.x, pos.y, 20, WHITE);
-}
-
-std::string_view ItemDrop::get_name() const {
-    return std::visit(
-        [](auto&& arg) -> std::string_view {
-            using T = std::decay_t<decltype(arg)>;
-
-            if constexpr (std::is_same_v<T, Spell>) {
-                return arg.get_name();
-            }
-        },
-        item);
 }
 
 Vector2 mouse_xz_in_world(Ray mouse) {
@@ -277,11 +258,10 @@ void draw_ui(assets::Store& assets, const PlayerStats& player_stats, const Vecto
 
             // TODO: rn ignoring the fact that the frame draws over the spell
             // icon
-            assets.draw_texture(spell.name, (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
-                                                        (float)spell_dim, (float)spell_dim});
-
+            assets.draw_texture(spell.get_spell_info().tag, (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
+                                                                        (float)spell_dim, (float)spell_dim});
             BeginBlendMode(BLEND_ADDITIVE);
-            float cooldown_height = spell_dim * (float)spell.curr_cooldown / spell.get_cooldown();
+            float cooldown_height = spell_dim * (float)spell.current_cooldown / spell.cooldown;
             DrawRectangle(col * spell_dim, spell_dim * row + (spell_dim - cooldown_height), spell_dim, cooldown_height,
                           {130, 130, 130, 128});
             EndBlendMode();
@@ -313,7 +293,7 @@ void draw_ui(assets::Store& assets, const PlayerStats& player_stats, const Vecto
     int total_spells = spellbook.size();
     int page_size = std::min((int)(spellbook_dims.y / spell_height - 1), total_spells);
     for (i = 0; i < page_size; i++) {
-        auto rarity_color = spellbook[i].get_rarity_color();
+        auto rarity_color = spellbook[i].get_rarity_info().color;
 
         // outer border
         spell_dims = (Rectangle){4.0f, 4.0f + i * 2.0f + i * spell_height, spellbook_dims.x, (float)spell_height};
@@ -327,7 +307,7 @@ void draw_ui(assets::Store& assets, const PlayerStats& player_stats, const Vecto
         DrawRectangleRec(spell_dims, WHITE);
 
         // spell icon
-        assets.draw_texture(spellbook[i].name,
+        assets.draw_texture(spellbook[i].get_spell_info().tag,
                             (Rectangle){spell_dims.x, spell_dims.y, spell_dims.height, spell_dims.height});
         spell_dims.x += spell_dims.height;
         spell_dims.width -= spell_dims.height + 3.0f;
@@ -359,12 +339,12 @@ void draw_ui(assets::Store& assets, const PlayerStats& player_stats, const Vecto
         DrawRectangleRec(exp_dims, GREEN);
         DrawRectangleRec(stat_bar, RED);
 
-        auto spell_name = spellbook[i].get_name();
+        auto spell_name = spellbook[i].get_spell_info().name;
         auto [name_font_size, name_text_dims] =
             max_font_size(assets[assets::Macondo], 1.0f, (Vector2){name_dims.width, name_dims.height}, spell_name);
         name_text_dims.x = name_dims.x + name_dims.width / 2.0f - name_text_dims.x / 2.0f;
         name_text_dims.y = name_dims.y;
-        DrawTextEx(assets[assets::Macondo], spell_name.data(), name_text_dims, name_font_size, 1.0f, rarity_color);
+        DrawTextEx(assets[assets::Macondo], spell_name, name_text_dims, name_font_size, 1.0f, rarity_color);
     }
     EndTextureMode();
     // EndTextureModeMSAA(assets[assets::SpellBookUI, false],
@@ -394,16 +374,16 @@ Loop::Loop(int width, int height)
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, this, false, resize_handler);
 #endif
 
-    auto frost_nove_idx = player_stats.add_spell_to_spellbook(Spell(Spell::Frost_Nova, Rarity::Rare, 5));
-    auto fire_wall = player_stats.add_spell_to_spellbook(Spell(Spell::Fire_Wall, Rarity::Epic, 10));
-    auto void_implosion = player_stats.add_spell_to_spellbook(Spell(Spell::Void_Implosion, Rarity::Epic, 20));
+    auto frost_nove_idx = player_stats.add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Rare, 5));
+    auto fire_wall = player_stats.add_spell_to_spellbook(Spell(spells::FireWall{}, Rarity::Epic, 10));
+    /*auto void_implosion = player_stats.add_spell_to_spellbook(Spell(Spell::Void_Implosion, Rarity::Epic, 20));*/
     player_stats.equip_spell(frost_nove_idx, 0);
     player_stats.equip_spell(fire_wall, 1);
-    player_stats.equip_spell(void_implosion, 3);
+    /*player_stats.equip_spell(void_implosion, 3);*/
 
-    item_drops.emplace_back((Vector2){200.0f, 200.0f}, Spell(Spell::Fire_Wall, Rarity::Epic, 30));
-    item_drops.emplace_back((Vector2){200.0f, 150.0f}, Spell(Spell::Frost_Nova, Rarity::Epic, 30));
-    item_drops.emplace_back((Vector2){200.0f, 100.0f}, Spell(Spell::Falling_Icicle, Rarity::Epic, 30));
+    item_drops.add_item_drop((Vector2){200.0f, 200.0f}, Spell(spells::FireWall{}, Rarity::Epic, 30));
+    item_drops.add_item_drop((Vector2){200.0f, 150.0f}, Spell(spells::FrostNova{}, Rarity::Epic, 30));
+    /*item_drops.emplace_back((Vector2){200.0f, 100.0f}, Spell(Spell::Falling_Icicle, Rarity::Epic, 30));*/
 
     enemies.emplace_back((Vector2){100.0f, 100.0f}, false, enemies::Paladin());
 };
@@ -430,22 +410,20 @@ void Loop::operator()() {
         enemy.draw();
     }
 
-    for (const auto& item_drop : item_drops) {
-        DrawCircle3D((Vector3){item_drop.hitbox.center.x, 1.0f, item_drop.hitbox.center.y}, item_drop.hitbox.radius,
-                     (Vector3){1.0f, 0.0f, 0.0f}, 90.0f, RED);
-    }
+    item_drops.draw_item_drops();
 
 #ifdef DEBUG
     caster::draw_hitbox(1.0f);
 #endif
+
     EndMode3D();
 
-    for (const auto& item_drop : item_drops) {
-        // FIX: capture by value
-        item_drop.draw_name([camera = player.camera, screen = this->screen](auto pos) {
-            return GetWorldToScreenEx(pos, camera, screen.x, screen.y);
-        });
-    }
+#ifdef DEBUG
+    item_drops.draw_item_drop_names([camera = player.camera, screen = this->screen](auto pos) {
+        return GetWorldToScreenEx(pos, camera, screen.x, screen.y);
+    });
+#endif
+
     EndTextureMode();
     EndTextureModeMSAA(assets[assets::Target, false], assets[assets::Target, true]);
 
@@ -467,9 +445,7 @@ void Loop::operator()() {
                  .c_str(),
              10, 30, 20, BLACK);
     DrawText(("ANGLE: " + std::to_string(player.angle)).c_str(), 10, 50, 20, BLACK);
-    DrawText(("PAlADIN ANIM INDEX: " + std::to_string(enemies[0].anim_index))
-                 .c_str(),
-             10, 90, 20, BLACK);
+    DrawText(("PAlADIN STATE: " + std::to_string(enemies[0].collision_state)).c_str(), 10, 70, 20, BLACK);
 
     float circle_ui_dim = screen.x * 1 / 8;
     static const float padding = 10;
@@ -557,29 +533,37 @@ void Loop::update() {
 
     player.update((Vector2){movement.x * 5, movement.y * 5}, angle.x / angle.y);
 
-    int damage_acum = 0;
-    for (auto& enemy : enemies) {
-        enemy.update_target((Vector2){player.position.x, player.position.z});
-        damage_acum += enemy.tick(*player.hitbox);
+    {
+        auto [first, last] = std::ranges::remove_if(enemies, [this](auto& enemy) -> bool {
+            enemy.update_target((Vector2){player.position.x, player.position.z});
+            if (enemy.health <= 0) {
+                return true;
+            }
+
+            if (player_stats.health != 0) {
+                auto damage = enemy.tick(player.hitbox);
+
+                if (damage >= player_stats.health) player_stats.health = 0;
+                else player_stats.health -= damage;
+            }
+
+            return false;
+        });
+        enemies.erase(first, last);
+    }
+
+    if (player_stats.health == 0) {
+        assert(false && "TODO: death -> main menu");
     }
 
     player_stats.tick();
-    caster::tick(player_stats.spellbook);
+    caster::tick(player_stats.spellbook, enemies);
 
-    auto [first, last] = std::ranges::remove_if(item_drops, [&](auto& item_drop) -> bool {
-        if (!check_collision(*player.hitbox, item_drop.hitbox)) return false;
+    item_drops.pickup(player.hitbox, [&](auto&& arg) {
+        using Item = std::decay_t<decltype(arg)>;
 
-        std::visit(
-            [&](auto&& arg) {
-                using T = std::decay_t<decltype(arg)>;
-
-                if constexpr (std::is_same_v<T, Spell>) {
-                    player_stats.spellbook.emplace_back(std::move(arg));
-                }
-            },
-            item_drop.item);
-
-        return true;
+        if constexpr (std::is_same_v<Item, Spell>) {
+            player_stats.spellbook.emplace_back(std::move(arg));
+        }
     });
-    item_drops.erase(first, last);
 }

@@ -10,6 +10,7 @@ set(MANALTER_SOURCES
     utility.cpp
     ringbuffer.cpp
     enemies.cpp
+    item_drops.cpp
 )
 
 set(HITBOX_DEMO_SOURCES

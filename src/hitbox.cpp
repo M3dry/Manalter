@@ -129,7 +129,7 @@ bool check_collision(const shapes::Circle& circle1, const shapes::Circle& circle
     float dist_sqr = Vector2DistanceSqr(circle1.center, circle2.center);
     float sum_radius = (circle1.radius + circle2.radius) * (circle1.radius + circle2.radius);
 
-    return dist_sqr >= sum_radius;
+    return dist_sqr < sum_radius;
 }
 
 int find_closest_point(const shapes::Circle& circle, const shapes::Polygon& poly) {

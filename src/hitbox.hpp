@@ -37,3 +37,12 @@ namespace shapes {
 bool check_collision(const shapes::Polygon& poly1, const shapes::Polygon& poly2);
 bool check_collision(const shapes::Circle& circle1, const shapes::Circle& circle2);
 bool check_collision(const shapes::Polygon& poly, const shapes::Circle& circle);
+
+template <typename T>
+concept Shape = requires (const T& shape, const shapes::Polygon& poly) {
+    { check_collision(shape, shape) } -> std::same_as<bool>;
+    { check_collision(poly, shape) } -> std::same_as<bool>;
+};
+
+static_assert(Shape<shapes::Circle>);
+static_assert(Shape<shapes::Polygon>);

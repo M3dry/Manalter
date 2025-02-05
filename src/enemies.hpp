@@ -3,14 +3,13 @@
 #include "hitbox.hpp"
 #include "raylib.h"
 #include "raymath.h"
+#include "spell.hpp"
 #include <cstdint>
 #include <variant>
 
-#define BOSS_STAT_SCALING_FACTOR 10.0f
+struct Enemy;
 
 namespace enemies {
-    struct Enemy;
-
     enum struct EnemyType {
         Human,
         Undead,
@@ -23,7 +22,7 @@ namespace enemies {
         float model_scale;
         int default_anim;
         float y_component;
-        int cap_value;
+        uint32_t cap_value;
         EnemyType element;
         std::pair<uint32_t, uint32_t> damage_range;
         std::pair<uint32_t, uint32_t> speed_range;
@@ -37,7 +36,7 @@ namespace enemies {
             Sprinting = 1,
         };
 
-        int tick(Enemy& data, const shapes::Polygon target_hitbox);
+        int tick(Enemy& data, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/paladin.glb",
@@ -54,7 +53,7 @@ namespace enemies {
     };
 
     struct Zombie {
-        int tick(Enemy& data, const shapes::Polygon target_hitbox);
+        int tick(Enemy& data, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/zombie.glb",
@@ -69,7 +68,7 @@ namespace enemies {
     };
 
     struct Heraklios {
-        int tick(Enemy& data, const shapes::Polygon target_hitbox);
+        int tick(Enemy& data, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/heraklios.glb",
@@ -86,7 +85,7 @@ namespace enemies {
     };
 
     struct Maw {
-        int tick(Enemy& data, const shapes::Polygon target_hitbox);
+        int tick(Enemy& data, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/maw.glb",
@@ -103,64 +102,67 @@ namespace enemies {
     };
 
     template <typename T>
-    concept IsEnemy = requires(T e, Enemy& enemy, const shapes::Polygon& hitbox) {
+    concept IsEnemy = requires(T e, Enemy& enemy, const shapes::Circle& hitbox) {
         { T::info } -> std::same_as<const Info&>;
         // gets called if target hitbox collides or uncollides with enemy hitbox
         { e.tick(enemy, hitbox) } -> std::same_as<int>;
     };
 
-    struct Enemy {
-        enum CollisionState {
-            Collision,
-            Uncollision,
-            Unchanged,
-        };
-
-        Model model;
-        ModelAnimation* anims;
-        int anim_count;
-        int anim_index = 0;
-        int anim_curr_frame = 0;
-
-        uint32_t health;
-        uint32_t damage;
-        uint16_t speed;
-
-        Vector3 position;
-        Vector2 movement;
-        float angle;
-        shapes::Circle simple_hitbox;
-        CollisionState collision_state = Unchanged;
-
-        // Stats are multiplied by `BOSS_STAT_SCALING_FACTOR` and model is increased by 2x
-        bool boss;
-
-        template <IsEnemy... T> using State = std::variant<T...>;
-        State<Paladin, Zombie, Heraklios, Maw> state;
-
-        template <IsEnemy T>
-        Enemy(Vector2 position, bool boss, T&& enemy)
-            : model(LoadModel(T::info.model_path)), anims(LoadModelAnimations(T::info.model_path, &anim_count)),
-              anim_index(T::info.default_anim), position((Vector3){position.x, T::info.y_component, position.y}),
-              movement(Vector2Zero()),
-              simple_hitbox(shapes::Circle(position, T::info.simple_hitbox_radius)), boss(boss), state(enemy) {
-            model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
-            UpdateModelAnimation(model, anims[anim_index], anim_curr_frame);
-
-            health = T::info.max_health;
-
-            auto [min_speed, max_speed] = T::info.speed_range;
-            speed = GetRandomValue(min_speed, max_speed);
-
-            auto [min_damage, max_damage] = T::info.damage_range;
-            damage = GetRandomValue(min_damage, max_damage);
-        }
-
-        void draw() const;
-        void update_target(Vector2 new_target);
-        // returned number is the amount of damage taken by the player
-        int tick(shapes::Polygon target_hitbox);
-    };
 }
 
-using Enemies = std::vector<enemies::Enemy>;
+struct Enemy {
+    enum CollisionState {
+        Collision,
+        Uncollision,
+        Unchanged,
+    };
+
+    Model model;
+    ModelAnimation* anims;
+    int anim_count;
+    int anim_index = 0;
+    int anim_curr_frame = 0;
+
+    uint32_t health;
+    uint32_t damage;
+    uint16_t speed;
+
+    Vector3 position;
+    Vector2 movement;
+    float angle;
+    shapes::Circle simple_hitbox;
+    CollisionState collision_state = Uncollision;
+
+    // TODO: Stats are multiplied by some scaling factor and model is increased by 2x
+    bool boss;
+
+    template <enemies::IsEnemy... T> using State = std::variant<T...>;
+    State<enemies::Paladin, enemies::Zombie, enemies::Heraklios, enemies::Maw> state;
+
+    template <enemies::IsEnemy T>
+    Enemy(Vector2 position, bool boss, T&& enemy)
+        : model(LoadModel(T::info.model_path)), anims(LoadModelAnimations(T::info.model_path, &anim_count)),
+          anim_index(T::info.default_anim), position((Vector3){position.x, T::info.y_component, position.y}),
+          movement(Vector2Zero()),
+          simple_hitbox(shapes::Circle(position, T::info.simple_hitbox_radius)), boss(boss), state(enemy) {
+        model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
+        UpdateModelAnimation(model, anims[anim_index], anim_curr_frame);
+
+        health = T::info.max_health;
+
+        auto [min_speed, max_speed] = T::info.speed_range;
+        speed = GetRandomValue(min_speed, max_speed);
+
+        auto [min_damage, max_damage] = T::info.damage_range;
+        damage = GetRandomValue(min_damage, max_damage);
+    }
+
+    void draw() const;
+    void update_target(Vector2 new_target);
+    // returned number is the amount of damage taken by the player
+    int tick(shapes::Circle target_hitbox);
+
+    void take_damage(uint32_t damage, Element element);
+};
+
+using Enemies = std::vector<Enemy>;

@@ -67,8 +67,8 @@ namespace assets {
         void draw_texture(RenderId render_id, bool resolved, std::optional<Rectangle> dest);
 
         Texture2D operator[](GeneralId id);
-        Texture2D operator[](Spell::Name name);
-        Texture2D operator[](Rarity::Type id);
+        Texture2D operator[](spells::Tag name);
+        Texture2D operator[](Rarity id);
         RenderTexture2D operator[](RenderId id, bool resolved);
         Font operator[](FontId id);
 
@@ -77,7 +77,7 @@ namespace assets {
       private:
         // order: GeneralIds, Names, Rarities
         std::array<Texture2D,
-                   static_cast<int>(GeneralIdSize) + static_cast<int>(Spell::NameSize) + static_cast<int>(Rarity::Size)>
+                   static_cast<int>(GeneralIdSize) + static_cast<int>(spells::Tag::Size) + static_cast<int>(Rarity::Size)>
             texture_map;
         std::array<RenderTexture2D, RenderIdSize * 2> render_map;
         std::array<Font, FontSize> font_map;
@@ -85,8 +85,8 @@ namespace assets {
         RenderTexture2D& index_render_map(RenderId id, bool resolved);
 
         int id_to_idx(GeneralId id);
-        int id_to_idx(Spell::Name name);
-        int id_to_idx(Rarity::Type id);
+        int id_to_idx(spells::Tag name);
+        int id_to_idx(Rarity id);
 
         void add_textures();
         void add_render_textures(Vector2 screen);

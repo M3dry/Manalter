@@ -1,6 +1,7 @@
 #include "spell_caster.hpp"
 #include "hitbox.hpp"
 #include "rayhacks.hpp"
+#include "spell.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -13,7 +14,7 @@
 
 namespace caster {
     struct Moving {
-        Moving(std::size_t spell_id, const Spell::SpellToPoint& movement_info, const Vector2& movement,
+        Moving(std::size_t spell_id, const spell::movement::Beam& movement_info, const Vector2& movement,
                const Vector2& origin, const Vector2& mouse_position)
             : segment_length(movement_info.speed), spell_id(spell_id), till_removal(movement_info.duration),
               till_stopped(movement_info.stop_after), create_segments(movement_info.length / segment_length),
@@ -46,7 +47,7 @@ namespace caster {
         }
 
         // when true spell finished
-        bool tick() {
+        bool tick(const SpellBook& spellbook, Enemies& enemies) {
             if (till_stopped > 0) {
                 if (create_segments > 0) {
                     hitbox.points[0] += movement;
@@ -58,7 +59,14 @@ namespace caster {
                 till_stopped--;
             }
 
-            return till_removal-- == 0;
+            for (auto& enemy : enemies) {
+                if (check_collision(hitbox, enemy.simple_hitbox)) {
+                    enemy.take_damage(spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element);
+                }
+            }
+
+            if (till_stopped <= 0) return till_removal-- == 0;
+            else return false;
         }
 
         uint16_t segment_length;
@@ -77,15 +85,21 @@ namespace caster {
     };
 
     struct Circle {
-        Circle(std::size_t spell_id, Vector2 center, Spell::SpellCircle info)
-            : spell_id(spell_id), hitbox(center, info.init_radius), until_max(info.speed),
-              radius_increase((float)(info.max_radius - info.init_radius) / info.speed), wait(info.duration) {
+        Circle(std::size_t spell_id, Vector2 center, spell::movement::Circle info)
+            : spell_id(spell_id), hitbox(center, info.initial_radius), until_max(info.speed),
+              radius_increase((float)(info.maximal_radius - info.initial_radius) / info.speed), wait(info.duration) {
         }
 
-        bool tick() {
+        bool tick(const SpellBook& spellbook, Enemies& enemies) {
             if (until_max > 0) {
                 hitbox.radius += radius_increase;
                 until_max--;
+            }
+
+            for (auto& enemy : enemies) {
+                if (check_collision(enemy.simple_hitbox, hitbox)) {
+                    enemy.take_damage(spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element);
+                }
             }
 
             if (until_max == 0) return wait-- == 0;
@@ -102,15 +116,23 @@ namespace caster {
     std::vector<Moving> moving_spells = {};
     std::vector<Circle> circle_spells = {};
 
-    Vector2 point(Spell::Point point, Vector2 mouse, Vector2 player) {
+    Vector2 point(spell::movement::Point point, Vector2 mouse, Vector2 player) {
         switch (point) {
-            case Spell::Point::Mouse:
+            case spell::movement::Mouse:
                 return mouse;
-            case Spell::Point::Player:
+            case spell::movement::Player:
                 return player;
-            case Spell::Point::NearestEnemy:
+            case spell::movement::ClosestEnemy:
                 assert(false && "Not implemented");
         }
+    }
+
+    void clear() {
+        moving_spells.clear();
+        moving_spells.shrink_to_fit();
+
+        circle_spells.clear();
+        circle_spells.shrink_to_fit();
     }
 
     void cast(std::size_t spell_id, const Spell& spell, const Vector2& player_position, const Vector2& mouse_position) {
@@ -118,30 +140,30 @@ namespace caster {
             [&](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
 
-                if constexpr (std::is_same_v<T, Spell::SpellCircle>) {
-                    Vector2 center = point(arg.point, mouse_position, player_position);
+                if constexpr (std::is_same_v<T, spell::movement::Circle>) {
+                    Vector2 center = point(arg.center, mouse_position, player_position);
 
                     circle_spells.emplace_back(spell_id, center, arg);
-                } else if constexpr (std::is_same_v<T, Spell::SpellToPoint>) {
+                } else if constexpr (std::is_same_v<T, spell::movement::Beam>) {
                     Vector2 movement =
-                        Vector2Normalize(point(arg.point, mouse_position, player_position) - player_position);
+                        Vector2Normalize(point(arg.dest, mouse_position, player_position) - point(arg.origin, mouse_position, player_position));
 
                     moving_spells.emplace_back(spell_id, arg, movement, player_position, mouse_position);
                 }
             },
-            spell.get_reach());
+            spell.get_spell_info().movement);
     }
 
-    void tick(const SpellBook& spellbook) {
+    void tick(const SpellBook& spellbook, Enemies& enemies) {
         {
             auto [first, last] = std::ranges::remove_if(
-                circle_spells, [](auto& circle) { return circle.tick(/* NOTE: pass enemies here, IG? */); });
+                circle_spells, [&spellbook, &enemies](auto& circle) { return circle.tick(spellbook, enemies); });
             circle_spells.erase(first, last);
         }
 
         {
             auto [first, last] = std::ranges::remove_if(
-                moving_spells, [](auto& moving) { return moving.tick(/* NOTE: pass enemies here, IG? */); });
+                moving_spells, [&spellbook, &enemies](auto& moving) { return moving.tick(spellbook, enemies); });
             moving_spells.erase(first, last);
         }
     }
