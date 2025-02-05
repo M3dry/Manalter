@@ -4,13 +4,14 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "spell.hpp"
+#include <cassert>
 #include <cstdint>
 #include <variant>
 
 struct Enemy;
 
 namespace enemies {
-    enum struct EnemyType {
+    enum struct EnemyClass {
         Human,
         Undead,
         Mage,
@@ -23,7 +24,7 @@ namespace enemies {
         int default_anim;
         float y_component;
         uint32_t cap_value;
-        EnemyType element;
+        EnemyClass element;
         std::pair<uint32_t, uint32_t> damage_range;
         std::pair<uint32_t, uint32_t> speed_range;
         uint32_t max_health;
@@ -44,7 +45,7 @@ namespace enemies {
             .default_anim = 1,
             .y_component = 1.0f,
             .cap_value = 2,
-            .element = EnemyType::Human,
+            .element = EnemyClass::Human,
             .damage_range = {15, 20},
             .speed_range = {2.5, 2.5},
             .max_health = 100,
@@ -59,7 +60,7 @@ namespace enemies {
             .model_path = "./assets/zombie.glb",
             .y_component = 1.0f,
             .cap_value = 1,
-            .element = EnemyType::Undead,
+            .element = EnemyClass::Undead,
             .damage_range = {10, 20},
             .speed_range = {1, 3},
             .max_health = 50,
@@ -76,7 +77,7 @@ namespace enemies {
             .default_anim = 0,
             .y_component = 1.0f,
             .cap_value = 5,
-            .element = EnemyType::Mage,
+            .element = EnemyClass::Mage,
             .damage_range = {30, 50},
             .speed_range = {5, 10},
             .max_health = 300,
@@ -93,7 +94,7 @@ namespace enemies {
             .default_anim = 0,
             .y_component = 1.0f,
             .cap_value = 10,
-            .element = EnemyType::Giant,
+            .element = EnemyClass::Giant,
             .damage_range = {70, 100},
             .speed_range = {4, 7},
             .max_health = 500,
@@ -108,6 +109,63 @@ namespace enemies {
         { e.tick(enemy, hitbox) } -> std::same_as<int>;
     };
 
+#define EACH_ENEMY(F, G)                                                                                               \
+    G(Paladin)                                                                                                         \
+    F(Zombie)                                                                                                          \
+    F(Heraklios)                                                                                                       \
+    F(Maw)
+
+    // DON'T LOOK HERE, pwetty pwease OwO
+
+    enum class _EnemyType {
+#define ENEMY_TYPE_FIRST(name) name = 0,
+#define ENEMY_TYPE(name) name,
+        EACH_ENEMY(ENEMY_TYPE, ENEMY_TYPE_FIRST)
+        Size
+#undef ENEMY_TYPE_FIRST
+#undef ENEMY_TYPE
+    };
+
+    using State = std::variant<
+#define ENEMY_VARIANT_FIRST(name) name
+#define ENEMY_VARIANT(name) , name
+        EACH_ENEMY(ENEMY_VARIANT, ENEMY_VARIANT_FIRST)
+#undef ENEMY_VARIANT_FIRST
+#undef ENEMY_VARIANT
+        >;
+
+    template <_EnemyType Type> struct EnemyFromEnum;
+
+#define ENEMY_SPECIALIZE(name)                                                                                         \
+    template <> struct EnemyFromEnum<_EnemyType::name> {                                                               \
+        using Type = enemies::name;                                                                                    \
+    };
+    EACH_ENEMY(ENEMY_SPECIALIZE, ENEMY_SPECIALIZE)
+#undef ENEMY_SPECIALIZE
+
+    inline State create_enemy(_EnemyType type) {
+        switch (type) {
+#define ENEMY_CASE(name)                                                                                               \
+    case _EnemyType::name:                                                                                             \
+        return enemies::name();
+            EACH_ENEMY(ENEMY_CASE, ENEMY_CASE)
+#undef ENEMY_CASE
+            case _EnemyType::Size: assert(false && "I hate you");
+        }
+
+        std::unreachable();
+    }
+
+    static constexpr std::array<Info, static_cast<std::size_t>(_EnemyType::Size)> infos = {
+#define ENEMY_INFO(name) name::info,
+        EACH_ENEMY(ENEMY_INFO, ENEMY_INFO)
+#undef ENEMY_INFO
+    };
+
+#undef EACH_ENEMY
+
+    // Under here it's safe
+    State random_enemy(uint32_t available_cap, uint32_t& cap);
 }
 
 struct Enemy {
@@ -136,15 +194,14 @@ struct Enemy {
     // TODO: Stats are multiplied by some scaling factor and model is increased by 2x
     bool boss;
 
-    template <enemies::IsEnemy... T> using State = std::variant<T...>;
-    State<enemies::Paladin, enemies::Zombie, enemies::Heraklios, enemies::Maw> state;
+    enemies::State state;
 
     template <enemies::IsEnemy T>
     Enemy(Vector2 position, bool boss, T&& enemy)
         : model(LoadModel(T::info.model_path)), anims(LoadModelAnimations(T::info.model_path, &anim_count)),
           anim_index(T::info.default_anim), position((Vector3){position.x, T::info.y_component, position.y}),
-          movement(Vector2Zero()),
-          simple_hitbox(shapes::Circle(position, T::info.simple_hitbox_radius)), boss(boss), state(enemy) {
+          movement(Vector2Zero()), simple_hitbox(shapes::Circle(position, T::info.simple_hitbox_radius)), boss(boss),
+          state(enemy) {
         model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
         UpdateModelAnimation(model, anims[anim_index], anim_curr_frame);
 

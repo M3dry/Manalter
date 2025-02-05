@@ -3,6 +3,10 @@
 #include "rayhacks.hpp"
 
 bool _Enemies::spawn(const Vector2& player_pos) {
+    if (max_cap <= cap) return false;
+
+    auto cap_diff = max_cap - cap;
+
 
 }
 
@@ -19,11 +23,15 @@ void _Enemies::update_target(const Vector2& player_pos) {
 }
 
 void _Enemies::deal_damage(std::size_t enemy, uint32_t damage, Element element) {
-        // TODO: Elemental damage scaling
+    // TODO: Elemental damage scaling
+    if (enemies[enemy].health < damage) {
+        enemies[enemy].health = 0;
+    } else {
         enemies[enemy].health -= damage;
+    }
 
-        if (enemies[enemy].health <= 0) {
-            // NOTE: should probably do something more efficient here
-            enemies.erase(enemies.begin() + enemy);
-        }
+    if (enemies[enemy].health <= 0) {
+        // NOTE: should probably do something more efficient here
+        enemies.erase(enemies.begin() + enemy);
+    }
 }

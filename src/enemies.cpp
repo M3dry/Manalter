@@ -34,6 +34,23 @@ namespace enemies {
         return 0;
     }
 
+    State random_enemy(uint32_t available_cap, uint32_t& cap) {
+        int nth = GetRandomValue(1, static_cast<int>(_EnemyType::Size));
+        std::size_t i = 0, len = infos.size();
+
+        while (nth != 0) {
+            if (infos[i].cap_value <= available_cap) {
+                nth--;
+                if (nth == 0) {
+                    continue;
+                }
+            }
+
+            if (++i >= len) i = 0;
+        }
+
+        return create_enemy(static_cast<_EnemyType>(i));
+    }
 }
 
 void Enemy::draw() const {
