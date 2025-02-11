@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "rayhacks.hpp"
+#include "raymath.h"
 
 std::pair<float, float> project_polygon(const shapes::Polygon& poly, const Vector2& axis) {
     float min = std::numeric_limits<float>::max();
@@ -33,6 +34,11 @@ std::pair<float, float> project_cirle(const shapes::Circle& circle, const Vector
     }
 
     return {min, max};
+}
+
+float project_point(const Vector2& point, const Vector2& axis) {
+    auto projection = Vector2DotProduct(point, axis);
+    return projection;
 }
 
 namespace shapes {
@@ -132,6 +138,10 @@ bool check_collision(const shapes::Circle& circle1, const shapes::Circle& circle
     return dist_sqr < sum_radius;
 }
 
+bool check_collision(const Vector2& point1, const Vector2& point2) {
+    return point1.x == point2.x && point2.y == point2.y;
+}
+
 int find_closest_point(const shapes::Circle& circle, const shapes::Polygon& poly) {
     int closest_point = 0;
 
@@ -173,4 +183,27 @@ bool check_collision(const shapes::Polygon& poly, const shapes::Circle& circle) 
     }
 
     return true;
+}
+
+bool check_collision(const shapes::Polygon& poly, const Vector2& point) {
+    int points = poly.points.size();
+    for (int i = 0; i < points; i++) {
+        Vector2 edge = poly.points[(i + 1) % points] - poly.points[i];
+        Vector2 axis = Vector2Normalize((Vector2){-edge.y, edge.x});
+
+        auto [min_poly, max_poly] = project_polygon(poly, axis);
+        auto point_proj = project_point(point, axis);
+
+        // true if a separating axis was found => polygons do not collide
+        if (min_poly >= point_proj || point_proj >= max_poly) return false;
+    }
+
+    return true;
+}
+
+bool check_collision(const shapes::Circle& circle, const Vector2& point) {
+    float dist_sqr = Vector2DistanceSqr(circle.center, point);
+    /*float sum_radius = (circle.radius + circle2.radius) * (circle1.radius + circle2.radius);*/
+
+    return dist_sqr < circle.radius;
 }

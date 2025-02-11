@@ -1,5 +1,4 @@
-set(MANALTER_SOURCES
-    main.cpp
+set(MANALTER_LIB_SOURCES
     assets.cpp
     hitbox.cpp
     loop.cpp
@@ -10,7 +9,10 @@ set(MANALTER_SOURCES
     utility.cpp
     ringbuffer.cpp
     enemies.cpp
+    enemies_spawner.cpp
     item_drops.cpp
+    player.cpp
+    ui.cpp
 )
 
 set(HITBOX_DEMO_SOURCES
@@ -23,15 +25,16 @@ set(PLAYGROUND_SOURCES
     playground.cpp
 )
 
-add_executable(manalter ${MANALTER_SOURCES})
-target_link_libraries(manalter PRIVATE raylib)
-target_include_directories(manalter PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_definitions(manalter PRIVATE DEBUG)
+add_library(manalter_lib STATIC ${MANALTER_LIB_SOURCES})
+target_include_directories(manalter_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(manalter_lib PRIVATE raylib)
+target_compile_definitions(manalter_lib PRIVATE DEBUG)
+
+add_executable(manalter main.cpp)
+target_link_libraries(manalter PRIVATE manalter_lib)
 
 add_executable(hitbox_demo ${HITBOX_DEMO_SOURCES})
-target_link_libraries(hitbox_demo PRIVATE raylib)
-target_include_directories(hitbox_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(hitbox_demo PRIVATE manalter_lib)
 
 add_executable(plaground ${PLAYGROUND_SOURCES})
-target_link_libraries(plaground PRIVATE raylib)
-target_include_directories(plaground PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(plaground PRIVATE manalter_lib)

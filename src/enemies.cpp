@@ -1,5 +1,6 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
+#include "print"
 #include "rayhacks.hpp"
 #include "raylib.h"
 #include "raymath.h"
@@ -34,22 +35,33 @@ namespace enemies {
         return 0;
     }
 
-    State random_enemy(uint32_t available_cap, uint32_t& cap) {
+    std::optional<State> random_enemy(uint32_t available_cap, uint32_t& cap) {
         int nth = GetRandomValue(1, static_cast<int>(_EnemyType::Size));
         std::size_t i = 0, len = infos.size();
+        bool exists_in_cap = false;
 
         while (nth != 0) {
             if (infos[i].cap_value <= available_cap) {
+                exists_in_cap = true;
                 nth--;
                 if (nth == 0) {
                     continue;
                 }
             }
 
-            if (++i >= len) i = 0;
+            if (++i >= len) {
+                if (!exists_in_cap) return std::nullopt;
+                i = 0;
+            }
         }
 
         return create_enemy(static_cast<_EnemyType>(i));
+    }
+
+    Info get_info(const State& state) {
+        return std::visit([](auto&& arg) {
+            return std::decay_t<decltype(arg)>::info;
+        }, state);
     }
 }
 
@@ -72,7 +84,7 @@ void Enemy::update_target(Vector2 new_target) {
     angle = angle_from_point(new_target, (Vector2){ position.x, position.z });
 }
 
-int Enemy::tick(shapes::Circle target_hitbox) {
+uint32_t Enemy::tick(shapes::Circle target_hitbox) {
     return std::visit(
         [&](auto&& arg) {
             position.x += movement.x * speed;
@@ -111,4 +123,10 @@ int Enemy::tick(shapes::Circle target_hitbox) {
 void Enemy::take_damage(uint32_t damage, Element element) {
     // TODO: Elemental damage scaling
     health -= damage;
+}
+
+Enemy::~Enemy() {
+    std::println("Enemy Destructor");
+    UnloadModelAnimations(anims, anim_count);
+    UnloadModel(model);
 }

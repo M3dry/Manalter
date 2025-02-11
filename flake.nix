@@ -25,6 +25,7 @@
               cmake
               glfw
               libGL.dev
+              catch2_3
             ]
             ++ [raylib_patched];
           buildPhase = ''
@@ -73,6 +74,7 @@
               libGLU
               gcc14
               gdb
+              catch2_3
 
               xorg.libX11
               xorg.libXi

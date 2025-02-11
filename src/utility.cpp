@@ -35,3 +35,13 @@ std::pair<int, Vector2> max_font_size(const Font& font, float spacing, const Vec
 float angle_from_point(const Vector2& point, const Vector2& origin) {
     return std::fmod(270 - std::atan2(origin.y - point.y, origin.x - point.x) * 180 / std::numbers::pi, 360);
 }
+
+Vector2 xz_component(const Vector3& vec) {
+    return { vec.x, vec.z };
+}
+
+Vector2 mouse_xz_in_world(Ray mouse) {
+    const float x = -mouse.position.y / mouse.direction.y;
+
+    return (Vector2){mouse.position.x + x * mouse.direction.x, mouse.position.z + x * mouse.direction.z};
+}

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "enemies.hpp"
 #include "spell.hpp"
+#include "enemies_spawner.hpp"
 #include <cstddef>
 #include <raylib.h>
 

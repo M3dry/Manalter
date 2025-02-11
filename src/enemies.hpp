@@ -120,8 +120,7 @@ namespace enemies {
     enum class _EnemyType {
 #define ENEMY_TYPE_FIRST(name) name = 0,
 #define ENEMY_TYPE(name) name,
-        EACH_ENEMY(ENEMY_TYPE, ENEMY_TYPE_FIRST)
-        Size
+        EACH_ENEMY(ENEMY_TYPE, ENEMY_TYPE_FIRST) Size
 #undef ENEMY_TYPE_FIRST
 #undef ENEMY_TYPE
     };
@@ -150,7 +149,8 @@ namespace enemies {
         return enemies::name();
             EACH_ENEMY(ENEMY_CASE, ENEMY_CASE)
 #undef ENEMY_CASE
-            case _EnemyType::Size: assert(false && "I hate you");
+            case _EnemyType::Size:
+                assert(false && "I hate you");
         }
 
         std::unreachable();
@@ -165,7 +165,8 @@ namespace enemies {
 #undef EACH_ENEMY
 
     // Under here it's safe
-    State random_enemy(uint32_t available_cap, uint32_t& cap);
+    std::optional<State> random_enemy(uint32_t available_cap, uint32_t& cap);
+    Info get_info(const State& state);
 }
 
 struct Enemy {
@@ -196,30 +197,45 @@ struct Enemy {
 
     enemies::State state;
 
-    template <enemies::IsEnemy T>
-    Enemy(Vector2 position, bool boss, T&& enemy)
-        : model(LoadModel(T::info.model_path)), anims(LoadModelAnimations(T::info.model_path, &anim_count)),
-          anim_index(T::info.default_anim), position((Vector3){position.x, T::info.y_component, position.y}),
-          movement(Vector2Zero()), simple_hitbox(shapes::Circle(position, T::info.simple_hitbox_radius)), boss(boss),
-          state(enemy) {
+    Enemy(Vector2 position, bool boss, enemies::State&& enemy)
+        : model(LoadModel(get_info(enemy).model_path)),
+          anims(LoadModelAnimations(get_info(enemy).model_path, &anim_count)), anim_index(get_info(enemy).default_anim),
+          position((Vector3){position.x, get_info(enemy).y_component, position.y}), movement(Vector2Zero()),
+          simple_hitbox(shapes::Circle(position, get_info(enemy).simple_hitbox_radius)), boss(boss), state(enemy) {
         model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
         UpdateModelAnimation(model, anims[anim_index], anim_curr_frame);
 
-        health = T::info.max_health;
+        auto info = get_info(enemy);
+        health = info.max_health;
 
-        auto [min_speed, max_speed] = T::info.speed_range;
+        auto [min_speed, max_speed] = info.speed_range;
         speed = GetRandomValue(min_speed, max_speed);
 
-        auto [min_damage, max_damage] = T::info.damage_range;
+        auto [min_damage, max_damage] = info.damage_range;
         damage = GetRandomValue(min_damage, max_damage);
     }
+
+    Enemy(const Enemy&) = default;
+    Enemy(Enemy&& enemy) noexcept
+        : model(enemy.model), anims(enemy.anims), anim_count(enemy.anim_count), anim_index(enemy.anim_index),
+          anim_curr_frame(enemy.anim_curr_frame), health(enemy.health), damage(enemy.damage), speed(enemy.speed),
+          position(enemy.position), movement(enemy.movement), angle(enemy.angle),
+          simple_hitbox(std::move(enemy.simple_hitbox)), collision_state(enemy.collision_state), boss(enemy.boss),
+          state(std::move(enemy.state)) {
+        enemy.model = {0};
+        enemy.anims = nullptr;
+        enemy.anim_count = 0;
+    };
+
+    Enemy& operator=(const Enemy&) = default;
+    Enemy& operator=(Enemy&&) = default;
 
     void draw() const;
     void update_target(Vector2 new_target);
     // returned number is the amount of damage taken by the player
-    int tick(shapes::Circle target_hitbox);
+    uint32_t tick(shapes::Circle target_hitbox);
 
     void take_damage(uint32_t damage, Element element);
-};
 
-using Enemies = std::vector<Enemy>;
+    ~Enemy();
+};

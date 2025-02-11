@@ -34,9 +34,13 @@ namespace shapes {
     };
 }
 
+// TODO: better concept for this mess
 bool check_collision(const shapes::Polygon& poly1, const shapes::Polygon& poly2);
 bool check_collision(const shapes::Circle& circle1, const shapes::Circle& circle2);
+bool check_collision(const Vector2& point1, const Vector2& point2);
 bool check_collision(const shapes::Polygon& poly, const shapes::Circle& circle);
+bool check_collision(const shapes::Polygon& poly, const Vector2& point2);
+bool check_collision(const shapes::Circle& circle, const Vector2& point);
 
 template <typename T>
 concept Shape = requires (const T& shape, const shapes::Polygon& poly) {
@@ -46,3 +50,4 @@ concept Shape = requires (const T& shape, const shapes::Polygon& poly) {
 
 static_assert(Shape<shapes::Circle>);
 static_assert(Shape<shapes::Polygon>);
+static_assert(Shape<Vector2>);

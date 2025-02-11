@@ -59,7 +59,9 @@ namespace caster {
                 till_stopped--;
             }
 
-            for (auto& enemy : enemies) {
+
+            // TODO: move this to Enemy class
+            for (auto& enemy : enemies.enemies) {
                 if (check_collision(hitbox, enemy.simple_hitbox)) {
                     enemy.take_damage(spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element);
                 }
@@ -96,7 +98,8 @@ namespace caster {
                 until_max--;
             }
 
-            for (auto& enemy : enemies) {
+            // TODO: move this to Enemy class
+            for (auto& enemy : enemies.enemies) {
                 if (check_collision(enemy.simple_hitbox, hitbox)) {
                     enemy.take_damage(spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element);
                 }

@@ -1,21 +1,17 @@
 #include "loop.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cassert>
 #include <cmath>
-#include <numbers>
-#include <ranges>
-#include <string>
 
 #include <raylib.h>
 #include <raymath.h>
 
 #include "item_drops.hpp"
-#include "print"
 #include "rayhacks.hpp"
 #include "spell.hpp"
 #include "spell_caster.hpp"
+#include "ui.hpp"
 #include "utility.hpp"
 
 #ifdef PLATFORM_WEB
@@ -30,325 +26,6 @@ bool is_key_pressed(const std::vector<std::pair<int, bool>>& pressed_keys, bool 
     }
 
     return false;
-}
-
-const Vector3 Player::camera_offset = (Vector3){60.0f, 140.0f, 0.0f};
-const float Player::model_scale = 0.2f;
-
-Player::Player(Vector3 position)
-    : prev_position(position), position(position), interpolated_position(position),
-      model(LoadModel("./assets/player/player.glb")), animations(nullptr),
-      hitbox((Vector2){position.x, position.z}, 8.0f) {
-    camera.position = camera_offset;
-    camera.target = position;
-    camera.up = (Vector3){0.0f, 1.0f, 0.0f};
-    camera.fovy = 90.0f;
-    camera.projection = CAMERA_PERSPECTIVE;
-
-    BoundingBox mesh_bb = GetMeshBoundingBox(model.meshes[0]);
-    Vector3 min = Vector3Scale(mesh_bb.min, model_scale);
-    Vector3 max = Vector3Scale(mesh_bb.max, model_scale);
-
-    model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
-
-    /*hitbox =*/
-    /*    shapes::Polygon((Vector2){max.x + min.x, max.y + min.y}, {(Vector2){min.x, max.y}, (Vector2){min.x, min.y},*/
-    /*                                                              (Vector2){max.x, min.y}, (Vector2){max.x,
-     * max.y}});*/
-
-    animations = LoadModelAnimations("./assets/player/player.glb", &animationsCount);
-    UpdateModelAnimation(model, animations[animationIndex], animationCurrent);
-}
-
-void Player::update_interpolated_pos(double accum_time) {
-    interpolated_position = Vector3Lerp(prev_position, position, accum_time * TICKS);
-    prev_position = interpolated_position;
-    camera.target = interpolated_position;
-    camera.position = Vector3Lerp(camera.position, Vector3Add(camera_offset, interpolated_position), 1.0f);
-}
-
-void Player::update(Vector2 movement, float new_angle) {
-    int lastIndex = animationIndex;
-    if (movement.x == 0 && movement.y == 0) {
-        animationIndex = 0;
-    } else {
-        prev_position = position;
-        position.x += movement.x;
-        position.z += movement.y;
-        angle = new_angle;
-        hitbox.update(movement);
-
-        animationIndex = 2;
-    }
-
-    if (lastIndex != animationIndex) {
-        animationCurrent = 0;
-    } else {
-        animationCurrent = (animationCurrent + 3) % animations[animationIndex].frameCount;
-    }
-    UpdateModelAnimation(model, animations[animationIndex], animationCurrent);
-}
-
-void Player::draw_model() const {
-    DrawModelEx(model, interpolated_position, (Vector3){0.0f, 1.0f, 0.0f}, angle,
-                (Vector3){model_scale, model_scale, model_scale}, WHITE);
-
-#ifdef DEBUG
-    DrawSphere((Vector3){hitbox.center.x, 1.0f, hitbox.center.y}, 1.0f, BLUE);
-    hitbox.draw_3D(RED, 1.0f);
-#endif
-}
-
-Player::~Player() {
-    UnloadModel(model);
-    UnloadModelAnimations(animations, animationsCount);
-}
-
-PlayerStats::PlayerStats(uint32_t max_health, uint32_t health_regen, uint32_t max_mana, uint32_t mana_regen,
-                         uint8_t max_spells)
-    : max_health(max_health), health(max_health), health_regen(health_regen), max_mana(max_mana), mana(max_mana),
-      mana_regen(mana_regen), lvl(0), exp(0), exp_to_next_lvl(100), max_spells(max_spells),
-      equipped_spells(10, UINT32_MAX) {};
-
-uint32_t PlayerStats::exp_to_lvl(uint16_t lvl) {
-    return 100 * std::pow(lvl, 2);
-}
-
-void PlayerStats::add_exp(uint32_t e) {
-    exp += e;
-    if (exp >= exp_to_next_lvl) {
-        lvl++;
-        exp -= exp_to_next_lvl;
-        exp_to_next_lvl = PlayerStats::exp_to_lvl(lvl + 1);
-    }
-}
-
-std::optional<std::reference_wrapper<const Spell>> PlayerStats::get_equipped_spell(int idx) const {
-    if (idx >= 10 || idx >= max_spells || equipped_spells[idx] == UINT32_MAX) return {};
-
-    return spellbook[equipped_spells[idx]];
-}
-
-uint32_t PlayerStats::add_spell_to_spellbook(Spell&& spell) {
-    spellbook.emplace_back(std::move(spell));
-
-    return spellbook.size() - 1;
-}
-
-int PlayerStats::equip_spell(uint32_t spellbook_idx, uint8_t slot_id) {
-    if (spellbook.size() <= spellbook_idx) return -1;
-    if (max_spells <= slot_id) return -2;
-
-    equipped_spells[slot_id] = spellbook_idx;
-
-    return 0;
-}
-
-void PlayerStats::tick() {
-    if (tick_counter == TICKS) {
-        tick_counter = 0;
-        health += health_regen;
-        mana += mana_regen;
-
-        if (health > max_health) health = max_health;
-        if (mana > max_mana) mana = max_mana;
-    }
-
-    for (int i = 0; i < 10 && i < max_spells; i++) {
-        if (equipped_spells[i] == UINT32_MAX) continue;
-
-        Spell& spell = spellbook[equipped_spells[i]];
-
-        if (spell.current_cooldown == 0) continue;
-        spell.current_cooldown--;
-    }
-
-    tick_counter++;
-}
-
-void PlayerStats::cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos) {
-    if (idx >= 10 || idx >= max_spells || equipped_spells[idx] == UINT32_MAX) return;
-
-    auto spell_id = equipped_spells[idx];
-    Spell& spell = spellbook[spell_id];
-    if (mana < spell.manacost || spell.current_cooldown > 0) return;
-
-    mana -= spell.manacost;
-    spell.current_cooldown = spell.cooldown;
-
-    caster::cast(spell_id, spell, player_position, mouse_pos);
-}
-
-Vector2 mouse_xz_in_world(Ray mouse) {
-    const float x = -mouse.position.y / mouse.direction.y;
-
-    return (Vector2){mouse.position.x + x * mouse.direction.x, mouse.position.z + x * mouse.direction.z};
-}
-
-void draw_ui(assets::Store& assets, const PlayerStats& player_stats, const Vector2& screen) {
-    static const uint32_t padding = 10;
-    static const uint32_t outer_radius = 1023 / 2;
-    static const Vector2 center = (Vector2){(float)outer_radius, (float)outer_radius};
-
-    BeginTextureMode(assets[assets::CircleUI, false]);
-    ClearBackground(BLANK);
-
-    DrawCircleV(center, outer_radius, BLACK);
-
-    // EXP
-    float angle = 360.0f * (float)player_stats.exp / player_stats.exp_to_next_lvl;
-    DrawCircleV(center, outer_radius - 2 * padding, WHITE);
-    DrawCircleSector(center, outer_radius - 2 * padding, -90.0f, angle - 90.0f, 512, GREEN);
-
-    // HEALTH & MANA
-    // https://www.desmos.com/calculator/ltqvnvrd3p
-    DrawCircleSector(center, outer_radius - 6 * padding, 90.0f, 270.0f, 512, RED);
-    DrawCircleSector(center, outer_radius - 6 * padding, -90.0f, 90.0f, 512, BLUE);
-
-    float health_s = (float)player_stats.health / (float)player_stats.max_health;
-    float mana_s = (float)player_stats.mana / (float)player_stats.max_mana;
-    float health_b = (1 + std::sin(std::numbers::pi_v<double> * health_s - std::numbers::pi_v<double> / 2.0f)) / 2.0f;
-    float mana_b = (1 + std::sin(std::numbers::pi_v<double> * mana_s - std::numbers::pi_v<double> / 2.0f)) / 2.0f;
-    int health_height = 2 * (outer_radius - 6 * padding) * (1 - health_b);
-    int mana_height = 2 * (outer_radius - 6 * padding) * (1 - mana_b);
-
-    // TODO: clean up this shit
-    static const float segments = 512.0f;
-    for (int i = 0; i < segments; i++) {
-        float health_x = (outer_radius - 6.0f * padding) - (i + 1.0f) * health_height / segments;
-        float mana_x = (outer_radius - 6.0f * padding) - (i + 1.0f) * mana_height / segments;
-        if (health_x < 0.0f) health_x = (outer_radius - 6.0f * padding) - i * health_height / segments;
-        if (mana_x < 0.0f) mana_x = (outer_radius - 6.0f * padding) - i * mana_height / segments;
-        float health_width =
-            std::sqrt((outer_radius - 6.0f * padding) * (outer_radius - 6.0f * padding) - health_x * health_x);
-        float mana_width =
-            std::sqrt((outer_radius - 6.0f * padding) * (outer_radius - 6.0f * padding) - mana_x * mana_x);
-
-        DrawRectangle(center.x - health_width, 6.0f * padding + (health_height / segments) * i, health_width,
-                      health_height / segments + 1, WHITE);
-        DrawRectangle(center.x, 6.0f * padding + (mana_height / segments) * i, mana_width, mana_height / segments + 1,
-                      WHITE);
-    }
-
-    DrawRing(center, outer_radius - 6.2f * padding, outer_radius - 5 * padding, 0.0f, 360.0f, 512, BLACK);
-    DrawLineEx((Vector2){center.x, 0.0f}, (Vector2){center.y, 1022.0f - 6 * padding}, 10.0f, BLACK);
-    EndTextureMode();
-    EndTextureModeMSAA(assets[assets::CircleUI, false], assets[assets::CircleUI, true]);
-
-    // Spell Bar
-    BeginTextureMode(assets[assets::SpellBarUI, false]);
-    ClearBackground(BLANK);
-
-    DrawRectangle(0, 0, 512, 128, RED);
-
-    const int spell_dim = 128 / 2; // 2x5 spells
-
-    for (int i = 0; i < 10; i++) {
-        int row = i / 5;
-        int col = i - 5 * row;
-
-        if (i >= player_stats.max_spells) {
-            assets.draw_texture(assets::LockedSlot, (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
-                                                                (float)spell_dim, (float)spell_dim});
-            continue;
-        }
-
-        if (auto spell_opt = player_stats.get_equipped_spell(i); spell_opt) {
-            const Spell& spell = *spell_opt;
-
-            // TODO: rn ignoring the fact that the frame draws over the spell
-            // icon
-            assets.draw_texture(spell.get_spell_info().tag, (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
-                                                                        (float)spell_dim, (float)spell_dim});
-            BeginBlendMode(BLEND_ADDITIVE);
-            float cooldown_height = spell_dim * (float)spell.current_cooldown / spell.cooldown;
-            DrawRectangle(col * spell_dim, spell_dim * row + (spell_dim - cooldown_height), spell_dim, cooldown_height,
-                          {130, 130, 130, 128});
-            EndBlendMode();
-
-            assets.draw_texture(spell.rarity, (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
-                                                          (float)spell_dim, (float)spell_dim});
-        } else {
-            assets.draw_texture(assets::EmptySpellSlot, (Rectangle){(float)col * spell_dim, (float)row * spell_dim,
-                                                                    (float)spell_dim, (float)spell_dim});
-        }
-    }
-
-    // RADAR/MAP???
-    DrawRectangle(spell_dim * 5, 0, 512 - spell_dim * 5, 128, GRAY);
-    EndTextureMode();
-    EndTextureModeMSAA(assets[assets::SpellBarUI, false], assets[assets::SpellBarUI, true]);
-
-    Vector2 spellbook_dims = (Vector2){SpellBookWidth(screen), SpellBookHeight(screen)};
-    BeginTextureMode(assets[assets::SpellBookUI, true]);
-    DrawRectangle(0, 0, spellbook_dims.x, spellbook_dims.y, BLACK);
-    spellbook_dims -= 2.0f;
-    DrawRectangle(1, 1, spellbook_dims.x, spellbook_dims.y, WHITE);
-
-    spellbook_dims -= 6.0f;
-    int spell_height = spellbook_dims.x / 5.0f;
-    int i;
-    Rectangle spell_dims;
-    auto& spellbook = player_stats.spellbook;
-    int total_spells = spellbook.size();
-    int page_size = std::min((int)(spellbook_dims.y / spell_height - 1), total_spells);
-    for (i = 0; i < page_size; i++) {
-        auto rarity_color = spellbook[i].get_rarity_info().color;
-
-        // outer border
-        spell_dims = (Rectangle){4.0f, 4.0f + i * 2.0f + i * spell_height, spellbook_dims.x, (float)spell_height};
-        DrawRectangleRec(spell_dims, rarity_color);
-
-        // usable space for spell info
-        spell_dims.x += 3.0f;
-        spell_dims.y += 3.0f;
-        spell_dims.width -= 6.0f;
-        spell_dims.height -= 6.0f;
-        DrawRectangleRec(spell_dims, WHITE);
-
-        // spell icon
-        assets.draw_texture(spellbook[i].get_spell_info().tag,
-                            (Rectangle){spell_dims.x, spell_dims.y, spell_dims.height, spell_dims.height});
-        spell_dims.x += spell_dims.height;
-        spell_dims.width -= spell_dims.height + 3.0f;
-        DrawRectangle(spell_dims.x, spell_dims.y, 3.0f, spell_dims.height, rarity_color);
-        spell_dims.x += 3.0f;
-
-        // name bar
-        Rectangle name_dims = spell_dims;
-        name_dims.height = (int)(spell_dims.height / 3);
-
-        // stat bar
-        Rectangle stat_bar = spell_dims;
-        stat_bar.height = spell_dims.height - name_dims.height;
-        stat_bar.y += name_dims.height;
-
-        // element icon
-        Rectangle icon_dims = stat_bar;
-        icon_dims.width = icon_dims.height;
-        stat_bar.x += icon_dims.width;
-        stat_bar.width -= icon_dims.width;
-
-        // exp bar
-        Rectangle exp_dims = stat_bar;
-        exp_dims.height = (int)(stat_bar.height / 3);
-        stat_bar.height -= exp_dims.height;
-        stat_bar.y += exp_dims.height;
-
-        DrawRectangleRec(icon_dims, YELLOW);
-        DrawRectangleRec(exp_dims, GREEN);
-        DrawRectangleRec(stat_bar, RED);
-
-        auto spell_name = spellbook[i].get_spell_info().name;
-        auto [name_font_size, name_text_dims] =
-            max_font_size(assets[assets::Macondo], 1.0f, (Vector2){name_dims.width, name_dims.height}, spell_name);
-        name_text_dims.x = name_dims.x + name_dims.width / 2.0f - name_text_dims.x / 2.0f;
-        name_text_dims.y = name_dims.y;
-        DrawTextEx(assets[assets::Macondo], spell_name, name_text_dims, name_font_size, 1.0f, rarity_color);
-    }
-    EndTextureMode();
-    // EndTextureModeMSAA(assets[assets::SpellBookUI, false],
-    // assets[assets::SpellBookUI, true]);
 }
 
 #ifdef PLATFORM_WEB
@@ -369,7 +46,7 @@ Loop::Loop(int width, int height)
       player_stats(100, 1, 100, 10, 4), mouse_pos(Vector2Zero()), assets(screen), spellbook_open(false),
       registered_keys({KEY_N, KEY_M, KEY_B, KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN,
                        KEY_EIGHT, KEY_NINE, KEY_ZERO}),
-      enemies({}) {
+      enemies(100) {
 #ifdef PLATFORM_WEB
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, this, false, resize_handler);
 #endif
@@ -384,8 +61,6 @@ Loop::Loop(int width, int height)
     item_drops.add_item_drop((Vector2){200.0f, 200.0f}, Spell(spells::FireWall{}, Rarity::Epic, 30));
     item_drops.add_item_drop((Vector2){200.0f, 150.0f}, Spell(spells::FrostNova{}, Rarity::Epic, 30));
     /*item_drops.emplace_back((Vector2){200.0f, 100.0f}, Spell(Spell::Falling_Icicle, Rarity::Epic, 30));*/
-
-    enemies.emplace_back((Vector2){100.0f, 100.0f}, false, enemies::Paladin());
 };
 
 void Loop::operator()() {
@@ -405,11 +80,7 @@ void Loop::operator()() {
     DrawPlane((Vector3){0.0f, 0.0f, 0.0f}, (Vector2){1000.0f, 1000.0f}, GREEN);
 
     player.draw_model();
-
-    for (const auto& enemy : enemies) {
-        enemy.draw();
-    }
-
+    enemies.draw();
     item_drops.draw_item_drops();
 
 #ifdef DEBUG
@@ -430,7 +101,7 @@ void Loop::operator()() {
     // int textureLoc = GetShaderLocation(fxaa_shader, "texture0");
     // SetShaderValueTexture(fxaa_shader, textureLoc, target.texture);
 
-    draw_ui(assets, player_stats, screen);
+    hud::draw(assets, player_stats, screen);
 
     BeginDrawing();
     ClearBackground(WHITE);
@@ -438,14 +109,6 @@ void Loop::operator()() {
     // BeginShaderMode(fxaa_shader);
     assets.draw_texture(assets::Target, true, {});
     // EndShaderMode();
-    DrawText(("POS: [" + std::to_string(player.position.x) + ", " + std::to_string(player.position.z) + "]").c_str(),
-             10, 10, 20, BLACK);
-    DrawText(("INTER_POS: [" + std::to_string(player.interpolated_position.x) + ", " +
-              std::to_string(player.interpolated_position.z) + "]")
-                 .c_str(),
-             10, 30, 20, BLACK);
-    DrawText(("ANGLE: " + std::to_string(player.angle)).c_str(), 10, 50, 20, BLACK);
-    DrawText(("PAlADIN STATE: " + std::to_string(enemies[0].collision_state)).c_str(), 10, 70, 20, BLACK);
 
     float circle_ui_dim = screen.x * 1 / 8;
     static const float padding = 10;
@@ -532,9 +195,12 @@ void Loop::update() {
     }
 
     player.update((Vector2){movement.x * 5, movement.y * 5}, angle.x / angle.y);
+    if (movement.x != 0 || movement.y != 0) {
+        enemies.update_target(xz_component(player.position));
+    }
 
     {
-        auto [first, last] = std::ranges::remove_if(enemies, [this](auto& enemy) -> bool {
+        auto [first, last] = std::ranges::remove_if(enemies.enemies, [this](auto& enemy) -> bool {
             enemy.update_target((Vector2){player.position.x, player.position.z});
             if (enemy.health <= 0) {
                 return true;
@@ -549,11 +215,11 @@ void Loop::update() {
 
             return false;
         });
-        enemies.erase(first, last);
+        enemies.enemies.erase(first, last);
     }
 
     if (player_stats.health == 0) {
-        assert(false && "TODO: death -> main menu");
+        /*assert(false && "TODO: death -> main menu");*/
     }
 
     player_stats.tick();
