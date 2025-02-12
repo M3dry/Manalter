@@ -22,6 +22,8 @@ class ItemDrop {
 
     void draw_name(std::function<Vector2(Vector3)> to_screen_coords) const;
     std::string_view get_name() const;
+
+    static ItemDrop random(uint16_t level, const Vector2& pos);
 };
 
 struct ItemDrops {

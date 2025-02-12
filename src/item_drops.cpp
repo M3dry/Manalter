@@ -23,6 +23,10 @@ std::string_view ItemDrop::get_name() const {
         item);
 }
 
+ItemDrop ItemDrop::random(uint16_t level, const Vector2& pos) {
+    return ItemDrop(pos, Spell::random(level));
+}
+
 void ItemDrops::draw_item_drops() const {
     for (const auto& drop : item_drops) {
         DrawCircle3D((Vector3){drop.hitbox.center.x, 1.0f, drop.hitbox.center.y}, drop.hitbox.radius,

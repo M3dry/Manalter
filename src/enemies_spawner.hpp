@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 #include "hitbox.hpp"
+#include "item_drops.hpp"
 
 // TODO: change name to Enemies and stop using enemies.hpp::Enemies
 struct Enemies {
@@ -13,6 +14,7 @@ struct Enemies {
     uint32_t max_cap;
     uint32_t cap;
     std::vector<Enemy> enemies;
+    uint64_t killed;
     Vector2 target_pos;
 
     Enemies(uint32_t max_cap) : max_cap(max_cap), cap(0), enemies(), target_pos(Vector2Zero()) {}
@@ -48,7 +50,7 @@ struct Enemies {
         return vec;
     }
 
-    void deal_damage(std::size_t enemy, uint32_t damage, Element element);
+    std::optional<ItemDrop> deal_damage(std::size_t enemy, uint32_t damage, Element element);
 
     // TODO: use modules, else I'll fucking kms
     uint32_t tick(const shapes::Circle& target_hitbox);

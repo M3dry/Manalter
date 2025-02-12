@@ -3,6 +3,7 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
 #include "rayhacks.hpp"
+#include "utility.hpp"
 
 bool Enemies::spawn(const Vector2& player_pos) {
     if (max_cap <= cap) return false;
@@ -19,7 +20,7 @@ bool Enemies::spawn(const Vector2& player_pos) {
         enemy_pos = (Vector2){ (float)GetRandomValue(0, 1000), (float)GetRandomValue(0, 1000) };
     };
 
-    enemies.emplace_back(enemy_pos, false, std::move(enemy.value()));
+    enemies.emplace_back(enemy_pos, killed/100, false, std::move(enemy.value()));
     return true;
 }
 
@@ -35,7 +36,7 @@ void Enemies::update_target(const Vector2& pos) {
     target_pos = pos;
 }
 
-void Enemies::deal_damage(std::size_t enemy, uint32_t damage, Element element) {
+std::optional<ItemDrop> Enemies::deal_damage(std::size_t enemy, uint32_t damage, Element element) {
     // TODO: Elemental damage scaling
     if (enemies[enemy].health < damage) {
         enemies[enemy].health = 0;
@@ -44,9 +45,17 @@ void Enemies::deal_damage(std::size_t enemy, uint32_t damage, Element element) {
     }
 
     if (enemies[enemy].health <= 0) {
-        // NOTE: should probably do something more efficient here
+        auto level = enemies[enemy].level;
+        auto pos = enemies[enemy].position;
+
+        // TODO: should probably do something more efficient here
         enemies.erase(enemies.begin() + enemy);
+
+        killed++;
+        return ItemDrop::random(level, xz_component(pos));
     }
+
+    return std::nullopt;
 }
 
 uint32_t Enemies::tick(const shapes::Circle& target_hitbox) {

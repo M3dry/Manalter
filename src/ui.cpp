@@ -77,7 +77,7 @@ namespace hud {
 
                 // TODO: rn ignoring the fact that the frame draws over the spell
                 // icon
-                assets.draw_texture(spell.get_spell_info().tag, (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
+                assets.draw_texture(spell.get_spell_tag(), (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
                                                                             (float)spell_dim, (float)spell_dim});
                 BeginBlendMode(BLEND_ADDITIVE);
                 float cooldown_height = spell_dim * (float)spell.current_cooldown / spell.cooldown;
@@ -126,7 +126,7 @@ namespace hud {
             DrawRectangleRec(spell_dims, WHITE);
 
             // spell icon
-            assets.draw_texture(spellbook[i].get_spell_info().tag,
+            assets.draw_texture(spellbook[i].get_spell_tag(),
                                 (Rectangle){spell_dims.x, spell_dims.y, spell_dims.height, spell_dims.height});
             spell_dims.x += spell_dims.height;
             spell_dims.width -= spell_dims.height + 3.0f;

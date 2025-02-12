@@ -144,9 +144,7 @@ namespace enemies {
 
     inline State create_enemy(_EnemyType type) {
         switch (type) {
-#define ENEMY_CASE(name)                                                                                               \
-    case _EnemyType::name:                                                                                             \
-        return enemies::name();
+#define ENEMY_CASE(name) case _EnemyType::name: return enemies::name();
             EACH_ENEMY(ENEMY_CASE, ENEMY_CASE)
 #undef ENEMY_CASE
             case _EnemyType::Size:
@@ -185,6 +183,7 @@ struct Enemy {
     uint32_t health;
     uint32_t damage;
     uint16_t speed;
+    uint16_t level;
 
     Vector3 position;
     Vector2 movement;
@@ -197,9 +196,9 @@ struct Enemy {
 
     enemies::State state;
 
-    Enemy(Vector2 position, bool boss, enemies::State&& enemy)
+    Enemy(Vector2 position, uint16_t level, bool boss, enemies::State&& enemy)
         : model(LoadModel(get_info(enemy).model_path)),
-          anims(LoadModelAnimations(get_info(enemy).model_path, &anim_count)), anim_index(get_info(enemy).default_anim),
+          anims(LoadModelAnimations(get_info(enemy).model_path, &anim_count)), anim_index(get_info(enemy).default_anim), level(level),
           position((Vector3){position.x, get_info(enemy).y_component, position.y}), movement(Vector2Zero()),
           simple_hitbox(shapes::Circle(position, get_info(enemy).simple_hitbox_radius)), boss(boss), state(enemy) {
         model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
@@ -208,6 +207,7 @@ struct Enemy {
         auto info = get_info(enemy);
         health = info.max_health;
 
+        // TODO: scale based on `level`
         auto [min_speed, max_speed] = info.speed_range;
         speed = GetRandomValue(min_speed, max_speed);
 

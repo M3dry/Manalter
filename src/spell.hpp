@@ -2,6 +2,7 @@
 
 #include "raylib.h"
 #include <array>
+#include <cassert>
 #include <cstdint>
 #include <type_traits>
 #include <utility>
@@ -61,7 +62,6 @@ namespace spell {
 
     static const char* icon_path = "./assets/spell-icons";
     struct Info {
-        spells::Tag tag;
         const char* name;
         const char* icon;
 
@@ -78,18 +78,10 @@ concept IsSpell = requires(T s) {
     { T::info } -> std::same_as<const spell::Info&>;
 };
 
+// TODO: macro magic, same as for enemies
 namespace spells {
-    enum struct Tag {
-        FireWall,
-        FrostNova,
-        Size,
-    };
-
-    template <Tag T> struct TagToType;
-
     struct FireWall {
         static constexpr spell::Info info = {
-            .tag = Tag::FireWall,
             .name = "Fire Wall",
             .icon = "fire-wall.png",
             .movement =
@@ -109,13 +101,8 @@ namespace spells {
         };
     };
 
-    template <> struct TagToType<Tag::FireWall> {
-        using value = FireWall;
-    };
-
     struct FrostNova {
         static constexpr spell::Info info = {
-            .tag = Tag::FrostNova,
             .name = "Frost Nova",
             .icon = "frost-nova.png",
             .movement =
@@ -133,20 +120,70 @@ namespace spells {
         };
     };
 
-    template <> struct TagToType<Tag::FrostNova> {
-        using value = FrostNova;
+#define EACH_SPELL(F, G)                                                                                               \
+    G(FireWall)                                                                                                        \
+    F(FrostNova)
+
+    enum class Tag {
+#define SPELL_TAG_FIRST(name) name = 0,
+#define SPELL_TAG(name) name,
+        EACH_SPELL(SPELL_TAG, SPELL_TAG_FIRST) Size
+#undef SPELL_TAG_FIRST
+#undef SPELL_TAG_
     };
 
-    template <size_t... Is>
-    consteval std::array<spell::Info, static_cast<int>(Tag::Size)> _gen_infos_impl(std::index_sequence<Is...>) {
-        return { TagToType<static_cast<Tag>(Is)>::value::info... };
+    using Data = std::variant<
+#define SPELL_VARIANT_FIRST(name) name
+#define SPELL_VARIANT(name) , name
+        EACH_SPELL(SPELL_VARIANT, SPELL_VARIANT_FIRST)
+#undef SPELL_VARIANT_FIRST
+#undef SPELL_VARIANT
+        >;
+
+    template <Tag T> struct SpellFromTag;
+
+#define TAG_SPECIALIZE(name)                                                                                           \
+    template <> struct SpellFromTag<Tag::name> {                                                                       \
+        using Type = spells::name;                                                                                     \
+    };
+
+    EACH_SPELL(TAG_SPECIALIZE, TAG_SPECIALIZE)
+
+#undef TAG_SPECIALIZE
+
+    template <typename T> struct TagFromSpell;
+
+#define SPELL_SPECIALIZE(name)                                                                                         \
+    template <> struct TagFromSpell<name> {                                                                            \
+        static constexpr Tag tag = Tag::name;                                                                          \
+    };
+
+    EACH_SPELL(SPELL_SPECIALIZE, SPELL_SPECIALIZE)
+
+#undef SPELL_SPECIALIZE
+
+    inline Data create_spell(Tag tag) {
+        switch (tag) {
+#define SPELL_CASE(name)                                                                                               \
+    case Tag::name:                                                                                                    \
+        return spells::name();
+            EACH_SPELL(SPELL_CASE, SPELL_CASE)
+#undef SPELL_CASE
+            case Tag::Size:
+                assert(false && "I hate you");
+        }
+
+        std::unreachable();
     }
 
-    consteval std::array<spell::Info, static_cast<int>(Tag::Size)> _gen_infos() {
-        return _gen_infos_impl(std::make_index_sequence<static_cast<int>(Tag::Size)>{});
-    }
+    static constexpr std::array<spell::Info, static_cast<std::size_t>(Tag::Size)> infos = {
+#define SPELL_INFO(name) name::info,
+        EACH_SPELL(SPELL_INFO, SPELL_INFO)
+#undef SPELL_INFO
+    };
+#undef EACH_ENEMY
 
-    static constexpr std::array<spell::Info, static_cast<int>(Tag::Size)> infos = _gen_infos();
+    spell::Info get_info(const Data& data);
 }
 
 enum struct Rarity {
@@ -212,12 +249,11 @@ struct Spell {
     uint32_t manacost;
     uint64_t damage;
 
-    template <IsSpell S>
-    Spell(S&& spell, Rarity rarity, uint32_t level)
-        : spell(spell), rarity(rarity), cooldown(S::info.cooldown), current_cooldown(cooldown), level(level),
-          experience(0), manacost(S::info.base_manacost), damage(S::info.base_damage){
-                                                       // TODO: random manacost, damage
-                                                   };
+    Spell(spells::Data&& spell, Rarity rarity, uint32_t level)
+        : spell(spell), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(cooldown), level(level),
+          experience(0), manacost(get_info(spell).base_manacost), damage(get_info(spell).base_damage) {
+              // TODO: random manacost, damage
+          };
     Spell(Spell&&) noexcept = default;
     Spell& operator=(Spell&&) noexcept = default;
 
@@ -230,9 +266,20 @@ struct Spell {
             spell);
     }
 
+    spells::Tag get_spell_tag() const {
+        return std::visit(
+            [](auto&& spell) -> spells::Tag {
+                using T = std::decay_t<decltype(spell)>;
+                return spells::TagFromSpell<T>::tag;
+            },
+            spell);
+    }
+
     rarity::Info get_rarity_info() const {
         return rarity::info[static_cast<int>(rarity)];
     }
+
+    static Spell random(uint16_t max_level);
 
     ~Spell();
 };
