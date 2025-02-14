@@ -13,6 +13,7 @@ set(MANALTER_LIB_SOURCES
     item_drops.cpp
     player.cpp
     ui.cpp
+    input.cpp
 )
 
 set(HITBOX_DEMO_SOURCES

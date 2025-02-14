@@ -4,7 +4,7 @@
 #include "utility.hpp"
 
 namespace hud {
-    void draw(assets::Store& assets, const PlayerStats& player_stats, const Vector2& screen) {
+    void draw(assets::Store& assets, const Player& player, const SpellBook& spellbook, const Vector2& screen) {
         static const uint32_t padding = 10;
         static const uint32_t outer_radius = 1023 / 2;
         static const Vector2 center = (Vector2){(float)outer_radius, (float)outer_radius};
@@ -15,7 +15,7 @@ namespace hud {
         DrawCircleV(center, outer_radius, BLACK);
 
         // EXP
-        float angle = 360.0f * (float)player_stats.exp / player_stats.exp_to_next_lvl;
+        float angle = 360.0f * (float)player.exp / player.exp_to_next_lvl;
         DrawCircleV(center, outer_radius - 2 * padding, WHITE);
         DrawCircleSector(center, outer_radius - 2 * padding, -90.0f, angle - 90.0f, 512, GREEN);
 
@@ -24,8 +24,8 @@ namespace hud {
         DrawCircleSector(center, outer_radius - 6 * padding, 90.0f, 270.0f, 512, RED);
         DrawCircleSector(center, outer_radius - 6 * padding, -90.0f, 90.0f, 512, BLUE);
 
-        float health_s = (float)player_stats.health / (float)player_stats.max_health;
-        float mana_s = (float)player_stats.mana / (float)player_stats.max_mana;
+        float health_s = (float)player.health / (float)player.max_health;
+        float mana_s = (float)player.mana / (float)player.max_mana;
         float health_b = (1 + std::sin(std::numbers::pi_v<double> * health_s - std::numbers::pi_v<double> / 2.0f)) / 2.0f;
         float mana_b = (1 + std::sin(std::numbers::pi_v<double> * mana_s - std::numbers::pi_v<double> / 2.0f)) / 2.0f;
         int health_height = 2 * (outer_radius - 6 * padding) * (1 - health_b);
@@ -66,13 +66,13 @@ namespace hud {
             int row = i / 5;
             int col = i - 5 * row;
 
-            if (i >= player_stats.max_spells) {
+            if (i >= player.max_spells) {
                 assets.draw_texture(assets::LockedSlot, (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
                                                                     (float)spell_dim, (float)spell_dim});
                 continue;
             }
 
-            if (auto spell_opt = player_stats.get_equipped_spell(i); spell_opt) {
+            if (auto spell_opt = player.get_equipped_spell(i, spellbook); spell_opt) {
                 const Spell& spell = *spell_opt;
 
                 // TODO: rn ignoring the fact that the frame draws over the spell
@@ -108,7 +108,6 @@ namespace hud {
         int spell_height = spellbook_dims.x / 5.0f;
         int i;
         Rectangle spell_dims;
-        auto& spellbook = player_stats.spellbook;
         int total_spells = spellbook.size();
         int page_size = std::min((int)(spellbook_dims.y / spell_height - 1), total_spells);
         for (i = 0; i < page_size; i++) {
