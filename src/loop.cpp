@@ -6,8 +6,10 @@
 
 #include <raylib.h>
 #include <raymath.h>
+#include <utility>
 
 #include "item_drops.hpp"
+#include "print"
 #include "rayhacks.hpp"
 #include "spell.hpp"
 #include "spell_caster.hpp"
@@ -32,10 +34,29 @@ bool resize_handler(int event_type, const EmscriptenUiEvent* e, void* data_ptr) 
 }
 #endif
 
-Arena::Arena() : player({0.0f, 10.0f, 0.0f}), enemies(100), spellbook_open(false), paused(false) {
+Arena::Arena(Keys& keys) : player({0.0f, 10.0f, 0.0f}), enemies(100), spellbook_open(false), paused(false) {
     item_drops.add_item_drop((Vector2){200.0f, 200.0f}, Spell(spells::FireWall{}, Rarity::Epic, 30));
     item_drops.add_item_drop((Vector2){200.0f, 150.0f}, Spell(spells::FrostNova{}, Rarity::Epic, 30));
     /*item_drops.emplace_back((Vector2){200.0f, 100.0f}, Spell(Spell::Falling_Icicle, Rarity::Epic, 30));*/
+
+    keys.register_key(KEY_N);
+    keys.register_key(KEY_M);
+    keys.register_key(KEY_B);
+    keys.register_key(KEY_ONE);
+    keys.register_key(KEY_TWO);
+    keys.register_key(KEY_FOUR);
+    keys.register_key(KEY_FIVE);
+    keys.register_key(KEY_SIX);
+    keys.register_key(KEY_SEVEN);
+    keys.register_key(KEY_EIGHT);
+    keys.register_key(KEY_NINE);
+    keys.register_key(KEY_ZERO);
+
+    std::println("Arena constructor");
+}
+
+Arena::~Arena() {
+    std::println("Arena destructor");
 }
 
 void Arena::draw(Loop& loop) {
@@ -149,6 +170,7 @@ void Arena::update(Loop& loop) {
         enemies.update_target(xz_component(player.position));
     }
 
+    enemies.tick(player.hitbox);
     {
         auto [first, last] = std::ranges::remove_if(enemies.enemies, [&](auto& enemy) -> bool {
             enemy.update_target((Vector2){player.position.x, player.position.z});
@@ -180,9 +202,14 @@ void Arena::update(Loop& loop) {
     });
 
     if (player.health == 0) {
-        loop.scene = Hub();
+        loop.scene.emplace(std::in_place_type<Hub>, loop.keys);
         return;
     }
+}
+
+Hub::Hub(Keys& keys) {
+    keys.register_key(KEY_SPACE);
+    keys.register_key(KEY_ESCAPE);
 }
 
 void Hub::draw(Loop& loop) {
@@ -197,12 +224,12 @@ void Hub::update(Loop& loop) {
     loop.keys.tick([&](auto key) {
         switch (key) {
             case KEY_SPACE:
-                loop.scene = Arena();
-                break;
+                loop.scene.emplace(std::in_place_type<Arena>, loop.keys);
+                return;
             case KEY_ESCAPE:
                 loop.scene = std::nullopt;
                 loop.player_stats = std::nullopt;
-                break;
+                return;
         }
     });
 }
@@ -215,6 +242,8 @@ Loop::Loop(int width, int height)
     // TODO: register keys
     /*registered_keys({KEY_N, KEY_M, KEY_B, KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN,*/
     /*                       KEY_EIGHT, KEY_NINE, KEY_ZERO}),*/
+    keys.register_key(KEY_SPACE);
+    keys.register_key(KEY_ESCAPE);
 };
 
 void Loop::operator()() {
@@ -259,7 +288,7 @@ void Loop::update() {
         switch (key) {
             case KEY_SPACE:
                 load_player();
-                scene = Hub();
+                scene.emplace(std::in_place_type<Hub>, keys);
                 break;
             case KEY_ESCAPE:
                 // TEST: should I do some other clean up?

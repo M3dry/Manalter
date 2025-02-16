@@ -45,6 +45,13 @@ using Player = struct Player {
     uint8_t tick_counter = 0;
 
     Player(Vector3 position);
+
+    Player(Player&) = delete;
+    Player& operator=(Player&) = delete;
+
+    Player(Player&&) noexcept = default;
+    Player& operator=(Player&&) noexcept = default;
+
     void update_interpolated_pos(double mili_accum);
     void draw_model() const;
 

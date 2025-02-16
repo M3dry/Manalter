@@ -18,7 +18,14 @@ using Arena = struct Arena {
     bool spellbook_open;
     bool paused;
 
-    Arena();
+    Arena(Keys& keys);
+    ~Arena();
+
+    Arena(Arena&) = delete;
+    Arena& operator=(Arena&) = delete;
+
+    Arena(Arena&&) noexcept = default;
+    Arena& operator=(Arena&&) noexcept = default;
 
     void draw(Loop& loop);
     void update(Loop& loop);
@@ -27,6 +34,8 @@ using Arena = struct Arena {
 using Hub = struct Hub {
     void draw(Loop& loop);
     void update(Loop& loop);
+
+    Hub(Keys& keys);
 };
 
 using Loop = struct Loop {
