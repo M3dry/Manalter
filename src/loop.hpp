@@ -1,5 +1,6 @@
 #pragma once
 
+#include "enemies.hpp"
 #include "input.hpp"
 #include "raylib.h"
 
@@ -18,8 +19,7 @@ using Arena = struct Arena {
     bool spellbook_open;
     bool paused;
 
-    Arena(Keys& keys);
-    ~Arena();
+    Arena(Keys& keys, assets::Store& assets);
 
     Arena(Arena&) = delete;
     Arena& operator=(Arena&) = delete;
@@ -27,12 +27,12 @@ using Arena = struct Arena {
     Arena(Arena&&) noexcept = default;
     Arena& operator=(Arena&&) noexcept = default;
 
-    void draw(Loop& loop);
+    void draw(assets::Store& assets, Loop& loop);
     void update(Loop& loop);
 };
 
 using Hub = struct Hub {
-    void draw(Loop& loop);
+    void draw(assets::Store& assets, Loop& loop);
     void update(Loop& loop);
 
     Hub(Keys& keys);
@@ -43,6 +43,7 @@ using Loop = struct Loop {
     Vector2 mouse_pos;
     Keys keys;
     assets::Store assets;
+    EnemyModels enemy_models;
 
     // nullopt - main menu, player_stats also are nullopt
     // scene has value -> player_stats has value

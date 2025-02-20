@@ -9,7 +9,6 @@
 #include <utility>
 
 #include "item_drops.hpp"
-#include "print"
 #include "rayhacks.hpp"
 #include "spell.hpp"
 #include "spell_caster.hpp"
@@ -34,7 +33,7 @@ bool resize_handler(int event_type, const EmscriptenUiEvent* e, void* data_ptr) 
 }
 #endif
 
-Arena::Arena(Keys& keys) : player({0.0f, 10.0f, 0.0f}), enemies(100), spellbook_open(false), paused(false) {
+Arena::Arena(Keys& keys, assets::Store& assets) : player({0.0f, 10.0f, 0.0f}, assets), enemies(100), spellbook_open(false), paused(false) {
     item_drops.add_item_drop((Vector2){200.0f, 200.0f}, Spell(spells::FireWall{}, Rarity::Epic, 30));
     item_drops.add_item_drop((Vector2){200.0f, 150.0f}, Spell(spells::FrostNova{}, Rarity::Epic, 30));
     /*item_drops.emplace_back((Vector2){200.0f, 100.0f}, Spell(Spell::Falling_Icicle, Rarity::Epic, 30));*/
@@ -51,15 +50,9 @@ Arena::Arena(Keys& keys) : player({0.0f, 10.0f, 0.0f}), enemies(100), spellbook_
     keys.register_key(KEY_EIGHT);
     keys.register_key(KEY_NINE);
     keys.register_key(KEY_ZERO);
-
-    std::println("Arena constructor");
 }
 
-Arena::~Arena() {
-    std::println("Arena destructor");
-}
-
-void Arena::draw(Loop& loop) {
+void Arena::draw(assets::Store& assets, Loop& loop) {
     player.update_interpolated_pos(loop.accum_time);
     loop.mouse_pos = mouse_xz_in_world(GetMouseRay(GetMousePosition(), player.camera));
 
@@ -70,8 +63,12 @@ void Arena::draw(Loop& loop) {
     // DrawModel(plane_model, Vector3Zero(), 1.0f, WHITE);
     DrawPlane((Vector3){0.0f, 0.0f, 0.0f}, (Vector2){1000.0f, 1000.0f}, GREEN);
 
-    player.draw_model();
-    enemies.draw();
+    DrawPlane((Vector3){1000.0f, 0.0f, 1000.0f}, (Vector2){1000.0f, 1000.0f}, BLUE);
+    DrawPlane((Vector3){1000.0f, 0.0f, 0.0f}, (Vector2){1000.0f, 1000.0f}, BLUE);
+    DrawPlane((Vector3){-1000.0f, 0.0f, 0.0f}, (Vector2){1000.0f, 1000.0f}, BLUE);
+
+    player.draw_model(assets);
+    enemies.draw(loop.enemy_models);
     item_drops.draw_item_drops();
 
 #ifdef DEBUG
@@ -170,7 +167,7 @@ void Arena::update(Loop& loop) {
         enemies.update_target(xz_component(player.position));
     }
 
-    enemies.tick(player.hitbox);
+    enemies.tick(player.hitbox, loop.enemy_models);
     {
         auto [first, last] = std::ranges::remove_if(enemies.enemies, [&](auto& enemy) -> bool {
             enemy.update_target((Vector2){player.position.x, player.position.z});
@@ -179,7 +176,7 @@ void Arena::update(Loop& loop) {
             }
 
             if (player.health != 0) {
-                auto damage = enemy.tick(player.hitbox);
+                auto damage = enemy.tick(player.hitbox, loop.enemy_models);
 
                 if (damage >= player.health)
                     player.health = 0;
@@ -191,7 +188,7 @@ void Arena::update(Loop& loop) {
         });
         enemies.enemies.erase(first, last);
     }
-    caster::tick(loop.player_stats->spellbook, enemies);
+    caster::tick(loop.player_stats->spellbook, enemies, item_drops.item_drops);
 
     item_drops.pickup(player.hitbox, [&](auto&& arg) {
         using Item = std::decay_t<decltype(arg)>;
@@ -212,7 +209,7 @@ Hub::Hub(Keys& keys) {
     keys.register_key(KEY_ESCAPE);
 }
 
-void Hub::draw(Loop& loop) {
+void Hub::draw(assets::Store& assets, Loop& loop) {
     BeginDrawing();
 
     ClearBackground(BLUE);
@@ -224,7 +221,7 @@ void Hub::update(Loop& loop) {
     loop.keys.tick([&](auto key) {
         switch (key) {
             case KEY_SPACE:
-                loop.scene.emplace(std::in_place_type<Arena>, loop.keys);
+                loop.scene.emplace(std::in_place_type<Arena>, loop.keys, loop.assets);
                 return;
             case KEY_ESCAPE:
                 loop.scene = std::nullopt;
@@ -239,9 +236,6 @@ Loop::Loop(int width, int height)
 #ifdef PLATFORM_WEB
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, this, false, resize_handler);
 #endif
-    // TODO: register keys
-    /*registered_keys({KEY_N, KEY_M, KEY_B, KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX, KEY_SEVEN,*/
-    /*                       KEY_EIGHT, KEY_NINE, KEY_ZERO}),*/
     keys.register_key(KEY_SPACE);
     keys.register_key(KEY_ESCAPE);
 };
@@ -253,7 +247,7 @@ void Loop::operator()() {
     accum_time += delta_time;
 
     if (scene) {
-        std::visit([&](auto&& arg) { arg.draw(*this); }, *scene);
+        std::visit([&](auto&& arg) { arg.draw(assets, *this); }, *scene);
     } else {
         BeginDrawing();
         ClearBackground(YELLOW);

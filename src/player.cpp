@@ -5,9 +5,9 @@
 const Vector3 Player::camera_offset = (Vector3){60.0f, 140.0f, 0.0f};
 const float Player::model_scale = 0.2f;
 
-Player::Player(Vector3 position)
+Player::Player(Vector3 position, assets::Store& assets)
     : prev_position(position), position(position), interpolated_position(position),
-      model(LoadModel("./assets/player/player.glb")), animations(nullptr),
+      animations(nullptr),
       hitbox((Vector2){position.x, position.z}, 8.0f), equipped_spells(10, UINT32_MAX) {
     camera.position = camera_offset;
     camera.target = position;
@@ -15,11 +15,7 @@ Player::Player(Vector3 position)
     camera.fovy = 90.0f;
     camera.projection = CAMERA_PERSPECTIVE;
 
-    BoundingBox mesh_bb = GetMeshBoundingBox(model.meshes[0]);
-    Vector3 min = Vector3Scale(mesh_bb.min, model_scale);
-    Vector3 max = Vector3Scale(mesh_bb.max, model_scale);
-
-    model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
+    auto model = assets[assets::Player];
 
     animations = LoadModelAnimations("./assets/player/player.glb", &animationsCount);
     UpdateModelAnimation(model, animations[animationIndex], animationCurrent);
@@ -32,8 +28,9 @@ void Player::update_interpolated_pos(double accum_time) {
     camera.position = Vector3Lerp(camera.position, Vector3Add(camera_offset, interpolated_position), 1.0f);
 }
 
-void Player::draw_model() const {
-    DrawModelEx(model, interpolated_position, (Vector3){0.0f, 1.0f, 0.0f}, angle,
+void Player::draw_model(assets::Store& assets) const {
+    UpdateModelAnimation(assets[assets::Player], animations[animationIndex], animationCurrent);
+    DrawModelEx(assets[assets::Player], interpolated_position, (Vector3){0.0f, 1.0f, 0.0f}, angle,
                 (Vector3){model_scale, model_scale, model_scale}, WHITE);
 
 #ifdef DEBUG
@@ -79,6 +76,12 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
         position.x += movement.x;
         position.z += movement.y;
         this->angle = angle;
+
+        /*if (position.x > 500) position.x -= 1000;*/
+        /*if (position.y > 500) position.y -= 1000;*/
+        /*if (position.x < -500) position.x += 1000;*/
+        /*if (position.y > -500) position.y += 1000;*/
+
         hitbox.update(movement);
 
         animationIndex = 2;
@@ -89,7 +92,6 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
     } else {
         animationCurrent = (animationCurrent + 3) % animations[animationIndex].frameCount;
     }
-    UpdateModelAnimation(model, animations[animationIndex], animationCurrent);
 
     if (tick_counter == TICKS) {
         tick_counter = 0;
@@ -126,7 +128,6 @@ void Player::cast_equipped(int idx, const Vector2& player_position, const Vector
 }
 
 Player::~Player() {
-    UnloadModel(model);
     UnloadModelAnimations(animations, animationsCount);
 }
 

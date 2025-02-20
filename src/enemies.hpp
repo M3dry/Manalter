@@ -110,10 +110,10 @@ namespace enemies {
     };
 
 #define EACH_ENEMY(F, G)                                                                                               \
-    G(Paladin)                                                                                                         \
-    F(Zombie)                                                                                                          \
-    F(Heraklios)                                                                                                       \
-    F(Maw)
+    G(Paladin)                                                                                                         //\
+    /*F(Zombie)                                                                                                          \*/
+    /*F(Heraklios)                                                                                                       \*/
+    /*F(Maw)*/
 
     // DON'T LOOK HERE, pwetty pwease OwO
 
@@ -135,16 +135,38 @@ namespace enemies {
 
     template <_EnemyType Type> struct EnemyFromEnum;
 
-#define ENEMY_SPECIALIZE(name)                                                                                         \
+#define TAG_SPECIALIZE(name)                                                                                         \
     template <> struct EnemyFromEnum<_EnemyType::name> {                                                               \
         using Type = enemies::name;                                                                                    \
     };
+    EACH_ENEMY(TAG_SPECIALIZE, TAG_SPECIALIZE)
+#undef TAG_SPECIALIZE
+
+    template <typename E> struct EnumFromEnemy;
+
+#define ENEMY_SPECIALIZE(name) \
+    template <> struct EnumFromEnemy<name> { \
+        static constexpr _EnemyType type = _EnemyType::name; \
+    };
+
     EACH_ENEMY(ENEMY_SPECIALIZE, ENEMY_SPECIALIZE)
 #undef ENEMY_SPECIALIZE
 
     inline State create_enemy(_EnemyType type) {
         switch (type) {
 #define ENEMY_CASE(name) case _EnemyType::name: return enemies::name();
+            EACH_ENEMY(ENEMY_CASE, ENEMY_CASE)
+#undef ENEMY_CASE
+            case _EnemyType::Size:
+                assert(false && "I hate you");
+        }
+
+        std::unreachable();
+    }
+
+    inline Info get_info(const _EnemyType& type) {
+        switch (type) {
+#define ENEMY_CASE(name) case _EnemyType::name: return enemies::name::info;
             EACH_ENEMY(ENEMY_CASE, ENEMY_CASE)
 #undef ENEMY_CASE
             case _EnemyType::Size:
@@ -165,7 +187,26 @@ namespace enemies {
     // Under here it's safe
     std::optional<State> random_enemy(uint32_t available_cap, uint32_t& cap);
     Info get_info(const State& state);
+    _EnemyType get_type(const State& state);
 }
+
+class EnemyModels {
+  public:
+    struct Animation {
+        ModelAnimation* animations;
+        int count;
+    };
+
+    EnemyModels();
+    EnemyModels(EnemyModels&) = delete;
+
+    std::pair<Model, Animation> operator[](const enemies::State& state);
+
+    ~EnemyModels();
+
+  private:
+    std::array<std::pair<Model, Animation>, static_cast<int>(enemies::_EnemyType::Size)> models;
+};
 
 struct Enemy {
     enum CollisionState {
@@ -174,9 +215,6 @@ struct Enemy {
         Unchanged,
     };
 
-    Model model;
-    ModelAnimation* anims;
-    int anim_count;
     int anim_index = 0;
     int anim_curr_frame = 0;
 
@@ -197,13 +235,9 @@ struct Enemy {
     enemies::State state;
 
     Enemy(Vector2 position, uint16_t level, bool boss, enemies::State&& enemy)
-        : model(LoadModel(get_info(enemy).model_path)),
-          anims(LoadModelAnimations(get_info(enemy).model_path, &anim_count)), anim_index(get_info(enemy).default_anim), level(level),
+        : anim_index(get_info(enemy).default_anim), level(level),
           position((Vector3){position.x, get_info(enemy).y_component, position.y}), movement(Vector2Zero()),
           simple_hitbox(shapes::Circle(position, get_info(enemy).simple_hitbox_radius)), boss(boss), state(enemy) {
-        model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
-        UpdateModelAnimation(model, anims[anim_index], anim_curr_frame);
-
         auto info = get_info(enemy);
         health = info.max_health;
 
@@ -217,25 +251,20 @@ struct Enemy {
 
     Enemy(const Enemy&) = default;
     Enemy(Enemy&& enemy) noexcept
-        : model(enemy.model), anims(enemy.anims), anim_count(enemy.anim_count), anim_index(enemy.anim_index),
+        : anim_index(enemy.anim_index),
           anim_curr_frame(enemy.anim_curr_frame), health(enemy.health), damage(enemy.damage), speed(enemy.speed),
           position(enemy.position), movement(enemy.movement), angle(enemy.angle),
           simple_hitbox(std::move(enemy.simple_hitbox)), collision_state(enemy.collision_state), boss(enemy.boss),
           state(std::move(enemy.state)) {
-        enemy.model = {0};
-        enemy.anims = nullptr;
-        enemy.anim_count = 0;
     };
 
     Enemy& operator=(const Enemy&) = default;
     Enemy& operator=(Enemy&&) = default;
 
-    void draw() const;
+    void draw(EnemyModels& enemy_models) const;
     void update_target(Vector2 new_target);
     // returned number is the amount of damage taken by the player
-    uint32_t tick(shapes::Circle target_hitbox);
+    uint32_t tick(shapes::Circle target_hitbox, EnemyModels& enemy_models);
 
-    void take_damage(uint32_t damage, Element element);
-
-    ~Enemy();
+    bool take_damage(uint32_t damage, Element element);
 };

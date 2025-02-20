@@ -99,6 +99,7 @@ namespace assets {
         add_textures();
         add_render_textures(screen);
         add_fonts();
+        add_models();
     };
 
     Store::~Store() {
@@ -112,6 +113,10 @@ namespace assets {
 
         for (auto& font : font_map) {
             UnloadFont(font);
+        }
+
+        for (auto& model : model_map) {
+            UnloadModel(model);
         }
     };
 
@@ -142,6 +147,10 @@ namespace assets {
         return font_map[id];
     }
 
+    Model Store::operator[](ModelId id) {
+        return model_map[id];
+    }
+
     void Store::update_target_size(Vector2 screen) {
         UnloadRenderTexture((*this)[Target, true]);
         UnloadRenderTexture((*this)[Target, false]);
@@ -151,7 +160,7 @@ namespace assets {
         UnloadRenderTexture((*this)[SpellBarUI, true]);
         UnloadRenderTexture((*this)[SpellBarUI, false]);
         index_render_map(SpellBarUI, false) =
-            CreateRenderTextureMSAA(SpellBookWidth(screen), SpellBookHeight(screen), MSAA);
+        CreateRenderTextureMSAA(SpellBookWidth(screen), SpellBookHeight(screen), MSAA);
         index_render_map(SpellBarUI, true) = LoadRenderTexture(SpellBookWidth(screen), SpellBookHeight(screen));
     }
 
@@ -212,5 +221,10 @@ namespace assets {
 
     void Store::add_fonts() {
         font_map[Macondo] = LoadFontEx("./assets/Macondo/Macondo-Regular.ttf", 64, nullptr, 0);
+    }
+
+    void Store::add_models() {
+        model_map[Player] = LoadModel("./assets/player/player.glb");
+        model_map[Player].transform = MatrixMultiply(model_map[Player].transform, MatrixRotateX(std::numbers::pi / 2.0f));
     }
 }

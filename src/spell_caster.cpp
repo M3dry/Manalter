@@ -47,7 +47,7 @@ namespace caster {
         }
 
         // when true spell finished
-        bool tick(const SpellBook& spellbook, Enemies& enemies) {
+        bool tick(const SpellBook& spellbook, Enemies& enemies, std::vector<ItemDrop>& item_drops) {
             if (till_stopped > 0) {
                 if (create_segments > 0) {
                     hitbox.points[0] += movement;
@@ -60,12 +60,13 @@ namespace caster {
             }
 
 
-            // TODO: move this to Enemy class
-            for (auto& enemy : enemies.enemies) {
-                if (check_collision(hitbox, enemy.simple_hitbox)) {
-                    enemy.take_damage(spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element);
-                }
-            }
+            enemies.deal_damage(hitbox, spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element, item_drops);
+            /*// TODO: move this to Enemy class*/
+            /*for (auto& enemy : enemies.enemies) {*/
+            /*    if (check_collision(hitbox, enemy.simple_hitbox)) {*/
+            /*        enemy.take_damage(spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element);*/
+            /*    }*/
+            /*}*/
 
             if (till_stopped <= 0) return till_removal-- == 0;
             else return false;
@@ -92,7 +93,7 @@ namespace caster {
               radius_increase((float)(info.maximal_radius - info.initial_radius) / info.speed), wait(info.duration) {
         }
 
-        bool tick(const SpellBook& spellbook, Enemies& enemies) {
+        bool tick(const SpellBook& spellbook, Enemies& enemies, std::vector<ItemDrop>& item_drops) {
             if (until_max > 0) {
                 hitbox.radius += radius_increase;
                 until_max--;
@@ -104,6 +105,8 @@ namespace caster {
                     enemy.take_damage(spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element);
                 }
             }
+
+            enemies.deal_damage(hitbox, spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element, item_drops);
 
             if (until_max == 0) return wait-- == 0;
             return false;
@@ -157,16 +160,16 @@ namespace caster {
             spell.get_spell_info().movement);
     }
 
-    void tick(const SpellBook& spellbook, Enemies& enemies) {
+    void tick(const SpellBook& spellbook, Enemies& enemies, std::vector<ItemDrop>& item_drops) {
         {
             auto [first, last] = std::ranges::remove_if(
-                circle_spells, [&spellbook, &enemies](auto& circle) { return circle.tick(spellbook, enemies); });
+                circle_spells, [&spellbook, &enemies, &item_drops](auto& circle) { return circle.tick(spellbook, enemies, item_drops); });
             circle_spells.erase(first, last);
         }
 
         {
             auto [first, last] = std::ranges::remove_if(
-                moving_spells, [&spellbook, &enemies](auto& moving) { return moving.tick(spellbook, enemies); });
+                moving_spells, [&spellbook, &enemies, &item_drops](auto& moving) { return moving.tick(spellbook, enemies, item_drops); });
             moving_spells.erase(first, last);
         }
     }

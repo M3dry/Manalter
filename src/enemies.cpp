@@ -1,6 +1,5 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
-#include "print"
 #include "rayhacks.hpp"
 #include "raylib.h"
 #include "raymath.h"
@@ -59,13 +58,44 @@ namespace enemies {
     }
 
     Info get_info(const State& state) {
-        return std::visit([](auto&& arg) {
-            return std::decay_t<decltype(arg)>::info;
-        }, state);
+        return std::visit([](auto&& arg) { return std::decay_t<decltype(arg)>::info; }, state);
+    }
+
+    _EnemyType get_type(const State& state) {
+        return std::visit(
+            [](auto&& arg) { return EnumFromEnemy<std::remove_const_t<std::decay_t<decltype(arg)>>>::type; }, state);
     }
 }
 
-void Enemy::draw() const {
+EnemyModels::EnemyModels() {
+    for (int i = 0; i < static_cast<int>(enemies::_EnemyType::Size); i++) {
+        auto type = static_cast<enemies::_EnemyType>(i);
+        auto model_path = get_info(type).model_path;
+
+        Animation anim;
+        anim.animations = LoadModelAnimations(model_path, &anim.count);
+
+        auto model = LoadModel(model_path);
+        model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
+
+        models[i] = { model, anim };
+    }
+}
+
+std::pair<Model, EnemyModels::Animation> EnemyModels::operator[](const enemies::State& state) {
+    return models[static_cast<int>(enemies::get_type(state))];
+}
+
+EnemyModels::~EnemyModels() {
+    for (auto& [model, animation] : models) {
+        UnloadModel(model);
+        UnloadModelAnimations(animation.animations, animation.count);
+    }
+}
+
+void Enemy::draw(EnemyModels& enemy_models) const {
+    auto [model, animation] = enemy_models[state];
+    UpdateModelAnimation(model, animation.animations[anim_index], anim_curr_frame);
     DrawModelEx(model, position, (Vector3){0.0f, 1.0f, 0.0f}, angle,
                 std::visit(
                     [](auto&& arg) -> Vector3 {
@@ -81,10 +111,10 @@ void Enemy::draw() const {
 
 void Enemy::update_target(Vector2 new_target) {
     movement = Vector2Normalize(new_target - (Vector2){position.x, position.z});
-    angle = angle_from_point(new_target, (Vector2){ position.x, position.z });
+    angle = angle_from_point(new_target, (Vector2){position.x, position.z});
 }
 
-uint32_t Enemy::tick(shapes::Circle target_hitbox) {
+uint32_t Enemy::tick(shapes::Circle target_hitbox, EnemyModels& enemy_models) {
     return std::visit(
         [&](auto&& arg) {
             position.x += movement.x * speed;
@@ -93,8 +123,8 @@ uint32_t Enemy::tick(shapes::Circle target_hitbox) {
             simple_hitbox.center.x = position.x;
             simple_hitbox.center.y = position.z;
 
-            anim_curr_frame = (anim_curr_frame + 3) % anims[anim_index].frameCount;
-            UpdateModelAnimation(model, anims[anim_index], anim_curr_frame);
+            auto [_, animation] = enemy_models[state];
+            anim_curr_frame = (anim_curr_frame + 3) % animation.animations[anim_index].frameCount;
 
             if (check_collision(target_hitbox, simple_hitbox)) {
                 switch (collision_state) {
@@ -119,14 +149,13 @@ uint32_t Enemy::tick(shapes::Circle target_hitbox) {
         state);
 }
 
-
-void Enemy::take_damage(uint32_t damage, Element element) {
+bool Enemy::take_damage(uint32_t damage, Element element) {
     // TODO: Elemental damage scaling
-    health -= damage;
-}
+    if (health <= damage) {
+        health = 0;
+        return true;
+    }
 
-Enemy::~Enemy() {
-    std::println("Enemy Destructor");
-    UnloadModelAnimations(anims, anim_count);
-    UnloadModel(model);
+    health -= damage;
+    return false;
 }

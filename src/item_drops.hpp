@@ -16,6 +16,7 @@ class ItemDrop {
     shapes::Circle hitbox;
 
     ItemDrop(Vector2 center, Spell&& spell);
+    ItemDrop(uint16_t level, const Vector2& pos);
 
     ItemDrop(ItemDrop&&) noexcept = default;
     ItemDrop& operator=(ItemDrop&&) noexcept = default;

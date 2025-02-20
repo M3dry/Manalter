@@ -5,8 +5,8 @@
 #include <vector>
 #include "hitbox.hpp"
 #include "item_drops.hpp"
+#include "utility.hpp"
 
-// TODO: change name to Enemies and stop using enemies.hpp::Enemies
 struct Enemies {
     // enemies can't spawn inside this circle, centered at player
     static constexpr float player_radious = 20.0f;
@@ -25,36 +25,27 @@ struct Enemies {
 
     void update_target(const Vector2& player_pos);
 
-    // std::null_opt - no collision detected
-    // n - index of enemy that was first detected as a collision
-    std::optional<std::size_t> collides_with_any(const Shape auto& shape) const {
-        for (std::size_t i = 0; i < enemies.size(); i++) {
-            if (check_collision(enemies[i].simple_hitbox, shape)) {
-                return i;
+    void deal_damage(const Shape auto& shape, uint32_t damage, Element element, std::vector<ItemDrop>& item_drop_pusher) {
+        auto [first, last] = std::ranges::remove_if(enemies, [&](auto& enemy) -> bool {
+            bool dead = false;
+
+            if (check_collision(shape, enemy.simple_hitbox)) {
+                dead = enemy.take_damage(damage, element);
             }
-        }
 
-        return std::nullopt;
-    }
-
-    // indexes of all enemies for which a collision was detected
-    std::vector<std::size_t> all_collisions(const Shape auto& shape) const {
-        std::vector<std::size_t> vec;
-
-        for (std::size_t i = 0; i < enemies.size(); i++) {
-            if (check_collision(enemies[i].simple_hitbox, shape)) {
-                vec.emplace_back(i);
+            if (dead) {
+                item_drop_pusher.emplace_back(enemy.level, xz_component(enemy.position));
+                killed++;
             }
-        }
 
-        return vec;
+            return dead;
+        });
+        enemies.erase(first, last);
     }
-
-    std::optional<ItemDrop> deal_damage(std::size_t enemy, uint32_t damage, Element element);
 
     // TODO: use modules, else I'll fucking kms
-    uint32_t tick(const shapes::Circle& target_hitbox);
+    uint32_t tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models);
 
     // TODO: deferred drawing
-    void draw() const;
+    void draw(EnemyModels& enemy_models) const;
 };

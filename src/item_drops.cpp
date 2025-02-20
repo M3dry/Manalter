@@ -5,6 +5,9 @@
 ItemDrop::ItemDrop(Vector2 center, Spell&& spell) : hitbox(center, hitbox_radius), item(std::move(spell)) {
 }
 
+ItemDrop::ItemDrop(uint16_t level, const Vector2& pos) : hitbox(pos, hitbox_radius), item(Spell::random(level)) {
+}
+
 void ItemDrop::draw_name(std::function<Vector2(Vector3)> to_screen_coords) const {
     Vector2 pos = to_screen_coords((Vector3){hitbox.center.x, 0.0f, hitbox.center.y});
     auto name = get_name().data();

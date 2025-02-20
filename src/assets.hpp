@@ -15,7 +15,7 @@
 
 #include "spell.hpp"
 
-// TODO: make this a config variable
+// TODO: make this a runtime variable
 #define MSAA 16
 
 #define SpellBookWidth(screen) (screen.x * 0.25f)
@@ -51,6 +51,11 @@ namespace assets {
         FontSize,
     };
 
+    enum ModelId {
+        Player,
+        ModelSize,
+    };
+
     class Store {
       public:
         Store(Vector2 screen);
@@ -71,6 +76,7 @@ namespace assets {
         Texture2D operator[](Rarity id);
         RenderTexture2D operator[](RenderId id, bool resolved);
         Font operator[](FontId id);
+        Model operator[](ModelId id);
 
         void update_target_size(Vector2 screen);
 
@@ -81,6 +87,7 @@ namespace assets {
             texture_map;
         std::array<RenderTexture2D, RenderIdSize * 2> render_map;
         std::array<Font, FontSize> font_map;
+        std::array<Model, ModelSize> model_map;
 
         RenderTexture2D& index_render_map(RenderId id, bool resolved);
 
@@ -91,5 +98,6 @@ namespace assets {
         void add_textures();
         void add_render_textures(Vector2 screen);
         void add_fonts();
+        void add_models();
     };
 }

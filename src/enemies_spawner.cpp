@@ -36,34 +36,12 @@ void Enemies::update_target(const Vector2& pos) {
     target_pos = pos;
 }
 
-std::optional<ItemDrop> Enemies::deal_damage(std::size_t enemy, uint32_t damage, Element element) {
-    // TODO: Elemental damage scaling
-    if (enemies[enemy].health < damage) {
-        enemies[enemy].health = 0;
-    } else {
-        enemies[enemy].health -= damage;
-    }
-
-    if (enemies[enemy].health <= 0) {
-        auto level = enemies[enemy].level;
-        auto pos = enemies[enemy].position;
-
-        // TODO: should probably do something more efficient here
-        enemies.erase(enemies.begin() + enemy);
-
-        killed++;
-        return ItemDrop::random(level, xz_component(pos));
-    }
-
-    return std::nullopt;
-}
-
-uint32_t Enemies::tick(const shapes::Circle& target_hitbox) {
+uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models) {
     static uint8_t tick_count = 0;
 
     uint32_t acc = 0;
     for (auto& enemy : enemies) {
-        acc += enemy.tick(target_hitbox);
+        acc += enemy.tick(target_hitbox, enemy_models);
     }
 
     if (++tick_count == 20) {
@@ -74,8 +52,8 @@ uint32_t Enemies::tick(const shapes::Circle& target_hitbox) {
     return acc;
 }
 
-void Enemies::draw() const {
+void Enemies::draw(EnemyModels& enemy_models) const {
     for (const auto& enemy : enemies) {
-        enemy.draw();
+        enemy.draw(enemy_models);
     }
 }

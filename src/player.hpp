@@ -3,6 +3,7 @@
 #include "raylib.h"
 #include "hitbox.hpp"
 #include "spell.hpp"
+#include "assets.hpp"
 #include <cstdint>
 
 using Player = struct Player {
@@ -11,7 +12,6 @@ using Player = struct Player {
     Vector3 interpolated_position;
     float angle = 0.0f;
 
-    Model model;
     ModelAnimation* animations;
     int animationsCount;
     int animationCurrent = 0;
@@ -44,7 +44,7 @@ using Player = struct Player {
     std::vector<uint32_t> equipped_spells;
     uint8_t tick_counter = 0;
 
-    Player(Vector3 position);
+    Player(Vector3 position, assets::Store& assets);
 
     Player(Player&) = delete;
     Player& operator=(Player&) = delete;
@@ -53,7 +53,7 @@ using Player = struct Player {
     Player& operator=(Player&&) noexcept = default;
 
     void update_interpolated_pos(double mili_accum);
-    void draw_model() const;
+    void draw_model(assets::Store& assets) const;
 
     // Returns how much exp is required to level up from `lvl - 1` to `lvl`
     static uint32_t exp_to_lvl(uint16_t lvl);
