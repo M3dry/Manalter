@@ -6,6 +6,8 @@
 #include <raylib.h>
 
 #define TICKS 20
+#define ARENA_WIDTH 1000
+#define ARENA_HEIGHT 1000
 
 std::pair<int, Vector2> max_font_size(const Font& font, float spacing, const Vector2& max_dims, std::string_view text);
 

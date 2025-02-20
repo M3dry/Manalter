@@ -77,10 +77,10 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
         position.z += movement.y;
         this->angle = angle;
 
-        /*if (position.x > 500) position.x -= 1000;*/
-        /*if (position.y > 500) position.y -= 1000;*/
-        /*if (position.x < -500) position.x += 1000;*/
-        /*if (position.y > -500) position.y += 1000;*/
+        if (position.x > 500) position.x -= 1000;
+        if (position.z > 500) position.z -= 1000;
+        if (position.x < -500) position.x += 1000;
+        if (position.z < -500) position.z += 1000;
 
         hitbox.update(movement);
 

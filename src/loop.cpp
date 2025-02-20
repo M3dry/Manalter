@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 
+#include <format>
 #include <raylib.h>
 #include <raymath.h>
 #include <utility>
@@ -60,12 +61,25 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     ClearBackground(WHITE);
 
     BeginMode3D(player.camera);
-    // DrawModel(plane_model, Vector3Zero(), 1.0f, WHITE);
-    DrawPlane((Vector3){0.0f, 0.0f, 0.0f}, (Vector2){1000.0f, 1000.0f}, GREEN);
 
-    DrawPlane((Vector3){1000.0f, 0.0f, 1000.0f}, (Vector2){1000.0f, 1000.0f}, BLUE);
-    DrawPlane((Vector3){1000.0f, 0.0f, 0.0f}, (Vector2){1000.0f, 1000.0f}, BLUE);
-    DrawPlane((Vector3){-1000.0f, 0.0f, 0.0f}, (Vector2){1000.0f, 1000.0f}, BLUE);
+    DrawPlane((Vector3){0.0f, 0.0f, 0.0f }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
+
+    // UP
+    DrawPlane((Vector3){-ARENA_WIDTH, 0.0f, 0.0f }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
+    // DOWN
+    DrawPlane((Vector3){ARENA_WIDTH, 0.0f, 0.0f}, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
+    // LEFT
+    DrawPlane((Vector3){0.0f, 0.0f, ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
+    // RIGHT
+    DrawPlane((Vector3){0.0f, 0.0f, -ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
+    // LEFT-DOWN
+    DrawPlane((Vector3){ARENA_WIDTH, 0.0f, ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
+    // RIGHT-DOWN
+    DrawPlane((Vector3){ARENA_WIDTH, 0.0f, -ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
+    // LEFT-UP
+    DrawPlane((Vector3){-ARENA_WIDTH, 0.0f, ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
+    // RIGHT-UP
+    DrawPlane((Vector3){-ARENA_WIDTH, 0.0f, -ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
 
     player.draw_model(assets);
     enemies.draw(loop.enemy_models);
@@ -115,6 +129,9 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
         loop.assets.draw_texture(assets::SpellBookUI, true,
                                  (Rectangle){5.0f, 10.0f, SpellBookWidth(loop.screen), SpellBookHeight(loop.screen)});
     }
+
+    DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
+
     EndDrawing();
 }
 
@@ -162,7 +179,7 @@ void Arena::update(Loop& loop) {
         }
     });
 
-    player.tick((Vector2){movement.x * 5, movement.y * 5}, angle.x / angle.y, loop.player_stats->spellbook);
+    player.tick((Vector2){movement.x * 20, movement.y * 20}, angle.x / angle.y, loop.player_stats->spellbook);
     if (movement.x != 0 || movement.y != 0) {
         enemies.update_target(xz_component(player.position));
     }
