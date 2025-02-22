@@ -47,3 +47,7 @@ void Keys::tick(std::function<void(const int&)> key_handler) {
         }
     }
 }
+
+void Mouse::poll() {
+    GetMousePosition();
+}

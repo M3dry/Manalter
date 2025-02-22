@@ -1,6 +1,8 @@
 #pragma once
 
 #include <functional>
+#include <optional>
+#include <raylib.h>
 #include <vector>
 
 class Keys {
@@ -17,4 +19,22 @@ class Keys {
 
     void poll();
     void tick(std::function<void(const int&)> key_handler);
+};
+
+class Mouse {
+    enum struct Button {
+        Left,
+        Right,
+    };
+
+    struct State {
+        Button state;
+        Vector2 pressed_at;
+        std::optional<Vector2> released_at;
+    };
+
+    Vector2 mouse_pos;
+    std::optional<State> keypress;
+
+    void poll();
 };

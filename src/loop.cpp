@@ -39,6 +39,7 @@ Arena::Arena(Keys& keys, assets::Store& assets) : player({0.0f, 10.0f, 0.0f}, as
     item_drops.add_item_drop((Vector2){200.0f, 150.0f}, Spell(spells::FrostNova{}, Rarity::Epic, 30));
     /*item_drops.emplace_back((Vector2){200.0f, 100.0f}, Spell(Spell::Falling_Icicle, Rarity::Epic, 30));*/
 
+    keys.unregister_all();
     keys.register_key(KEY_N);
     keys.register_key(KEY_M);
     keys.register_key(KEY_B);
@@ -51,6 +52,9 @@ Arena::Arena(Keys& keys, assets::Store& assets) : player({0.0f, 10.0f, 0.0f}, as
     keys.register_key(KEY_EIGHT);
     keys.register_key(KEY_NINE);
     keys.register_key(KEY_ZERO);
+
+    player.equipped_spells[0] = 0;
+    player.equipped_spells[1] = 1;
 }
 
 void Arena::draw(assets::Store& assets, Loop& loop) {
@@ -222,6 +226,7 @@ void Arena::update(Loop& loop) {
 }
 
 Hub::Hub(Keys& keys) {
+    keys.unregister_all();
     keys.register_key(KEY_SPACE);
     keys.register_key(KEY_ESCAPE);
 }
@@ -253,6 +258,7 @@ Loop::Loop(int width, int height)
 #ifdef PLATFORM_WEB
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, this, false, resize_handler);
 #endif
+    keys.unregister_all();
     keys.register_key(KEY_SPACE);
     keys.register_key(KEY_ESCAPE);
 };
