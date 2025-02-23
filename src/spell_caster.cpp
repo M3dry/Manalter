@@ -54,7 +54,7 @@ namespace caster {
                     hitbox.points[1] += movement;
                     create_segments--;
                 } else {
-                    hitbox.update(movement);
+                    hitbox.translate(movement);
                 }
                 till_stopped--;
             }
@@ -89,8 +89,8 @@ namespace caster {
 
     struct Circle {
         Circle(std::size_t spell_id, Vector2 center, spell::movement::Circle info)
-            : spell_id(spell_id), hitbox(center, info.initial_radius), until_max(info.speed),
-              radius_increase((float)(info.maximal_radius - info.initial_radius) / info.speed), wait(info.duration) {
+            : spell_id(spell_id), hitbox(center, info.initial_radius), until_max(info.increase_duration),
+              radius_increase((float)(info.maximal_radius - info.initial_radius) / info.increase_duration), wait(info.duration) {
         }
 
         bool tick(const SpellBook& spellbook, Enemies& enemies, std::vector<ItemDrop>& item_drops) {

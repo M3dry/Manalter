@@ -45,8 +45,17 @@ namespace shapes {
     Polygon::Polygon(std::vector<Vector2> points) : center(std::nullopt), points(points) {
         assert(points.size() > 2);
     }
+
     Polygon::Polygon(Vector2 center, std::vector<Vector2> points) : center(center), points(points) {
         assert(points.size() > 2);
+    }
+
+    Polygon::Polygon(const Rectangle& rec)
+        : center({rec.x + rec.width / 2.0f, rec.y + rec.height / 2.0f}),
+          points({{rec.x, rec.y},
+                  {rec.x + rec.width, rec.y},
+                  {rec.x + rec.width, rec.y + rec.height},
+                  {rec.x, rec.y + rec.height}}) {
     }
 
     void Polygon::draw_lines_2D(Color color) const {
@@ -77,7 +86,7 @@ namespace shapes {
         }
     }
 
-    void Polygon::update(const Vector2& movement) {
+    void Polygon::translate(const Vector2& movement) {
         if (center) *center += movement;
 
         for (auto& p : points) {

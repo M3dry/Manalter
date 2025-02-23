@@ -47,5 +47,5 @@ struct Enemies {
     uint32_t tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models);
 
     // TODO: deferred drawing
-    void draw(EnemyModels& enemy_models) const;
+    void draw(EnemyModels& enemy_models, const Vector3& offset) const;
 };

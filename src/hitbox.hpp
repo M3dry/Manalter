@@ -13,13 +13,17 @@ namespace shapes {
 
         Polygon(std::vector<Vector2> points);
         Polygon(Vector2 center, std::vector<Vector2> points);
+        Polygon(const Rectangle& rec);
+
+        Polygon(Polygon&&) noexcept = default;
+        Polygon& operator=(Polygon&&) noexcept = default;
 
         void draw_lines_2D(Color color) const;
         void draw_lines_3D(Color color, float y) const;
         // angle in degrees, counterclockwise
         // does nothing if center is nullopt
         void rotate(float angle);
-        void update(const Vector2& movement);
+        void translate(const Vector2& movement);
     };
 
     using Circle = struct Circle {

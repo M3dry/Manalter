@@ -40,7 +40,7 @@ int main(void) {
         } else if (IsKeyPressed(KEY_RIGHT)) {
             poly_control->rotate(5.0f);
         }
-        poly_control->update(movement);
+        poly_control->translate(movement);
 
         BeginDrawing();
         ClearBackground(WHITE);

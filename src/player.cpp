@@ -82,7 +82,7 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
         if (position.x < -500) position.x += 1000;
         if (position.z < -500) position.z += 1000;
 
-        hitbox.update(movement);
+        hitbox.center = xz_component(position);
 
         animationIndex = 2;
     }

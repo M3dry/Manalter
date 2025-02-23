@@ -34,7 +34,7 @@ struct ItemDrops {
         item_drops.emplace_back(std::forward<Args>(args)...);
     }
 
-    void draw_item_drops() const;
+    void draw_item_drops(const Vector3& offset) const;
 
     void pickup(const Shape auto& shape, auto handler) {
         auto [first, last] = std::ranges::remove_if(item_drops, [&](auto& drop) -> bool {

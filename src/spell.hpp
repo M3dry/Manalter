@@ -49,11 +49,11 @@ namespace spell {
 
         struct Circle {
             Point center;
-            uint8_t initial_radius;
+            uint8_t initial_radius = 0;
             uint16_t maximal_radius;
-            uint8_t speed;
+            uint8_t increase_duration = 0;
             // ticks to wait after reaching `maximal_radius`
-            uint16_t duration;
+            uint16_t duration = 0;
         };
 
         template <movement::Type T> using _Movement = std::conditional_t<T == Type::Beam, Beam, Circle>;
@@ -110,19 +110,90 @@ namespace spells {
                     .center = spell::movement::Mouse,
                     .initial_radius = 0,
                     .maximal_radius = 15,
-                    .speed = 5,
+                    .increase_duration = 5,
                     .duration = 0,
                 },
             .element = Element::Ice,
             .cooldown = 20,
             .base_manacost = 20,
-            .base_damage = 10,
+            .base_damage = 5,
+        };
+    };
+
+    struct FallingIcicile {
+        static constexpr spell::Info info = {
+            .name = "Falling Icicle",
+            .icon = "faling-icicle.png",
+            .movement =
+                (spell::movement::Circle){
+                    .center = spell::movement::Mouse,
+                    .initial_radius = 3,
+                    .maximal_radius = 3,
+                },
+            .element = Element::Ice,
+            .cooldown = 10,
+            .base_manacost = 50,
+            .base_damage = 20,
+        };
+    };
+
+    struct LightningStrike {
+        static constexpr spell::Info info = {
+            .name = "Lightning Strike",
+            .icon = "lightning-strike.png",
+            .movement =
+                (spell::movement::Circle){
+                    .center = spell::movement::ClosestEnemy,
+                    .initial_radius = 1,
+                    .maximal_radius = 1,
+                },
+            .element = Element::Light,
+            .cooldown = 15,
+            .base_manacost = 50,
+            .base_damage = 30,
+        };
+    };
+
+    struct VoidImplosion {
+        static constexpr spell::Info info = {
+            .name = "Void Implosion",
+            .icon = "void-implosion.png",
+            .movement =
+                (spell::movement::Circle){
+                    .center = spell::movement::ClosestEnemy,
+                    .maximal_radius = 5,
+                    .increase_duration = 2,
+                },
+            .element = Element::Shadow,
+            .cooldown = 40,
+            .base_manacost = 75,
+            .base_damage = 50,
+        };
+    };
+
+    struct ManaDetonation {
+        static constexpr spell::Info info = {
+            .name = "Mana Detonation",
+            .icon = "mana-detonation.png",
+            .movement =
+                (spell::movement::Circle){
+                    .center = spell::movement::Player,
+                    .maximal_radius = 20,
+                    .increase_duration = 4,
+                },
+            .element = Element::Light,
+            .cooldown = 40,
+            .base_manacost = 60,
+            .base_damage = 30,
         };
     };
 
 #define EACH_SPELL(F, G)                                                                                               \
     G(FireWall)                                                                                                        \
-    F(FrostNova)
+    F(FrostNova)                                                                                                       \
+    F(FallingIcicile)                                                                                                  \
+    F(LightningStrike)                                                                                                 \
+    F(VoidImplosion)
 
     enum class Tag {
 #define SPELL_TAG_FIRST(name) name = 0,
@@ -234,10 +305,7 @@ namespace rarity {
 }
 
 struct Spell {
-    template <IsSpell... Ss> using SpellData = std::variant<Ss...>;
-
-    SpellData<spells::FireWall, spells::FrostNova> spell;
-    /*Texture2D texture;*/
+    spells::Data spell;
 
     Rarity rarity;
     uint16_t cooldown;
@@ -280,8 +348,6 @@ struct Spell {
     }
 
     static Spell random(uint16_t max_level);
-
-    ~Spell();
 };
 
 using SpellBook = std::vector<Spell>;

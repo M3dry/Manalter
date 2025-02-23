@@ -93,10 +93,10 @@ EnemyModels::~EnemyModels() {
     }
 }
 
-void Enemy::draw(EnemyModels& enemy_models) const {
+void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) const {
     auto [model, animation] = enemy_models[state];
     UpdateModelAnimation(model, animation.animations[anim_index], anim_curr_frame);
-    DrawModelEx(model, position, (Vector3){0.0f, 1.0f, 0.0f}, angle,
+    DrawModelEx(model, Vector3Add(position, offset), (Vector3){0.0f, 1.0f, 0.0f}, angle,
                 std::visit(
                     [](auto&& arg) -> Vector3 {
                         auto scale = std::decay_t<decltype(arg)>::info.model_scale;

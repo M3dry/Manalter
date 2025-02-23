@@ -1,9 +1,52 @@
 #include "ui.hpp"
 
+#include "raylib.h"
+
+#include "hitbox.hpp"
 #include "rayhacks.hpp"
 #include "utility.hpp"
 
+namespace ui {
+    Button::Button(shapes::Polygon&& poly, std::function<void(State)> draw) : draw(draw), hitbox(std::move(poly)) {
+    }
+
+    bool Button::update(Mouse& mouse) {
+        auto collision = check_collision(hitbox, mouse.mouse_pos);
+
+        draw(collision ? Hover : Normal);
+
+        return mouse.button_press && mouse.button_press->released_at &&
+                   check_collision(hitbox, mouse.button_press->pressed_at),
+               check_collision(hitbox, *mouse.button_press->released_at) &&
+                   mouse.button_press->button == Mouse::Button::Left;
+    }
+
+    Draggable::Draggable(Vector2 origin, shapes::Polygon&& poly, std::function<void(Vector2)> draw)
+        : draw(draw), origin(origin), hitbox(std::move(poly)) {
+    }
+
+    std::optional<Vector2> Draggable::update(Mouse& mouse) {
+        if (mouse.button_press && mouse.button_press->button == Mouse::Button::Left) {
+            if (mouse.button_press->released_at) return *mouse.button_press->released_at;
+
+            draw(origin + (mouse.mouse_pos - mouse.button_press->pressed_at));
+        } else {
+            draw(origin);
+        }
+
+        return std::nullopt;
+    }
+}
+
 namespace hud {
+    void SpellBookUI::draw(assets::Store& assets, const SpellBook& spellbook) {
+
+    }
+
+    void SpellBookUI::update(Mouse& mouse, std::optional<Vector2> screen_update) {
+
+    }
+
     void draw(assets::Store& assets, const Player& player, const SpellBook& spellbook, const Vector2& screen) {
         static const uint32_t padding = 10;
         static const uint32_t outer_radius = 1023 / 2;
@@ -26,7 +69,8 @@ namespace hud {
 
         float health_s = (float)player.health / (float)player.max_health;
         float mana_s = (float)player.mana / (float)player.max_mana;
-        float health_b = (1 + std::sin(std::numbers::pi_v<double> * health_s - std::numbers::pi_v<double> / 2.0f)) / 2.0f;
+        float health_b =
+            (1 + std::sin(std::numbers::pi_v<double> * health_s - std::numbers::pi_v<double> / 2.0f)) / 2.0f;
         float mana_b = (1 + std::sin(std::numbers::pi_v<double> * mana_s - std::numbers::pi_v<double> / 2.0f)) / 2.0f;
         int health_height = 2 * (outer_radius - 6 * padding) * (1 - health_b);
         int mana_height = 2 * (outer_radius - 6 * padding) * (1 - mana_b);
@@ -45,8 +89,8 @@ namespace hud {
 
             DrawRectangle(center.x - health_width, 6.0f * padding + (health_height / segments) * i, health_width,
                           health_height / segments + 1, WHITE);
-            DrawRectangle(center.x, 6.0f * padding + (mana_height / segments) * i, mana_width, mana_height / segments + 1,
-                          WHITE);
+            DrawRectangle(center.x, 6.0f * padding + (mana_height / segments) * i, mana_width,
+                          mana_height / segments + 1, WHITE);
         }
 
         DrawRing(center, outer_radius - 6.2f * padding, outer_radius - 5 * padding, 0.0f, 360.0f, 512, BLACK);
@@ -78,11 +122,11 @@ namespace hud {
                 // TODO: rn ignoring the fact that the frame draws over the spell
                 // icon
                 assets.draw_texture(spell.get_spell_tag(), (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
-                                                                            (float)spell_dim, (float)spell_dim});
+                                                                       (float)spell_dim, (float)spell_dim});
                 BeginBlendMode(BLEND_ADDITIVE);
                 float cooldown_height = spell_dim * (float)spell.current_cooldown / spell.cooldown;
-                DrawRectangle(col * spell_dim, spell_dim * row + (spell_dim - cooldown_height), spell_dim, cooldown_height,
-                              {130, 130, 130, 128});
+                DrawRectangle(col * spell_dim, spell_dim * row + (spell_dim - cooldown_height), spell_dim,
+                              cooldown_height, {130, 130, 130, 128});
                 EndBlendMode();
 
                 assets.draw_texture(spell.rarity, (Rectangle){(float)col * spell_dim, (float)spell_dim * row,

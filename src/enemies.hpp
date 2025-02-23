@@ -261,7 +261,7 @@ struct Enemy {
     Enemy& operator=(const Enemy&) = default;
     Enemy& operator=(Enemy&&) = default;
 
-    void draw(EnemyModels& enemy_models) const;
+    void draw(EnemyModels& enemy_models, const Vector3& offset) const;
     void update_target(Vector2 new_target);
     // returned number is the amount of damage taken by the player
     uint32_t tick(shapes::Circle target_hitbox, EnemyModels& enemy_models);

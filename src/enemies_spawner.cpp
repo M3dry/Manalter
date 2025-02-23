@@ -3,7 +3,6 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
 #include "rayhacks.hpp"
-#include "utility.hpp"
 
 bool Enemies::spawn(const Vector2& player_pos) {
     if (max_cap <= cap) return false;
@@ -52,8 +51,8 @@ uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_m
     return acc;
 }
 
-void Enemies::draw(EnemyModels& enemy_models) const {
+void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset) const {
     for (const auto& enemy : enemies) {
-        enemy.draw(enemy_models);
+        enemy.draw(enemy_models, offset);
     }
 }

@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "item_drops.hpp"
+#include "player.hpp"
 #include "rayhacks.hpp"
 #include "spell.hpp"
 #include "spell_caster.hpp"
@@ -34,7 +35,7 @@ bool resize_handler(int event_type, const EmscriptenUiEvent* e, void* data_ptr) 
 }
 #endif
 
-Arena::Arena(Keys& keys, assets::Store& assets) : player({0.0f, 10.0f, 0.0f}, assets), enemies(100), spellbook_open(false), paused(false) {
+Arena::Arena(Keys& keys, assets::Store& assets) : player({0.0f, 10.0f, 0.0f}, assets), enemies(100), paused(false) {
     item_drops.add_item_drop((Vector2){200.0f, 200.0f}, Spell(spells::FireWall{}, Rarity::Epic, 30));
     item_drops.add_item_drop((Vector2){200.0f, 150.0f}, Spell(spells::FrostNova{}, Rarity::Epic, 30));
     /*item_drops.emplace_back((Vector2){200.0f, 100.0f}, Spell(Spell::Falling_Icicle, Rarity::Epic, 30));*/
@@ -59,35 +60,39 @@ Arena::Arena(Keys& keys, assets::Store& assets) : player({0.0f, 10.0f, 0.0f}, as
 
 void Arena::draw(assets::Store& assets, Loop& loop) {
     player.update_interpolated_pos(loop.accum_time);
-    loop.mouse_pos = mouse_xz_in_world(GetMouseRay(GetMousePosition(), player.camera));
+    mouse_xz = mouse_xz_in_world(GetMouseRay(loop.mouse.mouse_pos, player.camera));
 
     BeginTextureMode(loop.assets[assets::Target, false]);
     ClearBackground(WHITE);
 
     BeginMode3D(player.camera);
 
-    DrawPlane((Vector3){0.0f, 0.0f, 0.0f }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
-
-    // UP
-    DrawPlane((Vector3){-ARENA_WIDTH, 0.0f, 0.0f }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
-    // DOWN
-    DrawPlane((Vector3){ARENA_WIDTH, 0.0f, 0.0f}, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
-    // LEFT
-    DrawPlane((Vector3){0.0f, 0.0f, ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
-    // RIGHT
-    DrawPlane((Vector3){0.0f, 0.0f, -ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
-    // LEFT-DOWN
-    DrawPlane((Vector3){ARENA_WIDTH, 0.0f, ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
-    // RIGHT-DOWN
-    DrawPlane((Vector3){ARENA_WIDTH, 0.0f, -ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
-    // LEFT-UP
-    DrawPlane((Vector3){-ARENA_WIDTH, 0.0f, ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
-    // RIGHT-UP
-    DrawPlane((Vector3){-ARENA_WIDTH, 0.0f, -ARENA_HEIGHT }, (Vector2){ ARENA_WIDTH, ARENA_HEIGHT }, GREEN);
+    auto vs = {
+        Vector3Zero(),
+        // UP
+        (Vector3){-ARENA_WIDTH, 0.0f, 0.0f},
+        // DOWN
+        (Vector3){ARENA_WIDTH, 0.0f, 0.0f},
+        // LEFT
+        (Vector3){0.0f, 0.0f, ARENA_HEIGHT},
+        // RIGHT
+        (Vector3){0.0f, 0.0f, -ARENA_HEIGHT},
+        // LEFT-DOWN
+        (Vector3){ARENA_WIDTH, 0.0f, ARENA_HEIGHT},
+        // RIGHT-DOWN
+        (Vector3){ARENA_WIDTH, 0.0f, -ARENA_HEIGHT},
+        // LEFT-UP
+        (Vector3){-ARENA_WIDTH, 0.0f, ARENA_HEIGHT},
+        // RIGHT-UP
+        (Vector3){-ARENA_WIDTH, 0.0f, -ARENA_HEIGHT},
+    };
+    for (const auto& v : vs) {
+        DrawPlane(v, (Vector2){ARENA_WIDTH, ARENA_HEIGHT}, GREEN);
+    }
+    enemies.draw(loop.enemy_models, Vector3Zero());
+    item_drops.draw_item_drops(Vector3Zero());
 
     player.draw_model(assets);
-    enemies.draw(loop.enemy_models);
-    item_drops.draw_item_drops();
 
 #ifdef DEBUG
     caster::draw_hitbox(1.0f);
@@ -129,7 +134,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
                              (Rectangle){(loop.screen.x - spell_bar_width) / 2.0f, loop.screen.y - spell_bar_height,
                                          spell_bar_width, spell_bar_height});
 
-    if (spellbook_open) {
+    if (spellbook_ui) {
         loop.assets.draw_texture(assets::SpellBookUI, true,
                                  (Rectangle){5.0f, 10.0f, SpellBookWidth(loop.screen), SpellBookHeight(loop.screen)});
     }
@@ -170,13 +175,16 @@ void Arena::update(Loop& loop) {
                 player.mana += 1;
                 break;
             case KEY_B:
-                spellbook_open = !spellbook_open;
+                if (spellbook_ui)
+                    spellbook_ui = std::nullopt;
+                else
+                    spellbook_ui = hud::SpellBookUI();
                 break;
         }
 
         for (const auto& [k, num] : spell_keys) {
             if (k == key) {
-                player.cast_equipped(num, (Vector2){player.position.x, player.position.z}, loop.mouse_pos,
+                player.cast_equipped(num, (Vector2){player.position.x, player.position.z}, mouse_xz,
                                      loop.player_stats->spellbook);
                 break;
             }
@@ -220,7 +228,7 @@ void Arena::update(Loop& loop) {
     });
 
     if (player.health == 0) {
-        loop.scene.emplace(std::in_place_type<Hub>, loop.keys);
+        loop.scene.emplace<Hub>(loop.keys);
         return;
     }
 }
@@ -243,24 +251,82 @@ void Hub::update(Loop& loop) {
     loop.keys.tick([&](auto key) {
         switch (key) {
             case KEY_SPACE:
-                loop.scene.emplace(std::in_place_type<Arena>, loop.keys, loop.assets);
+                loop.scene.emplace<Arena>(loop.keys, loop.assets);
                 return;
             case KEY_ESCAPE:
-                loop.scene = std::nullopt;
+                loop.scene.emplace<Main>(loop.keys, loop.screen);
                 loop.player_stats = std::nullopt;
                 return;
         }
     });
 }
 
-Loop::Loop(int width, int height)
-    : screen((Vector2){(float)width, (float)height}), mouse_pos(Vector2Zero()), assets(screen) {
-#ifdef PLATFORM_WEB
-    emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, this, false, resize_handler);
-#endif
+Main::Main(Keys& keys, Vector2 screen) : last_screen(screen) {
+    auto play_rec = (Rectangle){
+        .x = screen.x * 3.0f / 4.0f,
+        .y = screen.y / 3.0f,
+        .width = screen.x / 5.0f,
+        .height = screen.y / 7.0f,
+    };
+    play_button.emplace(play_rec, [play_rec](auto state) {
+        switch (state) {
+            case ui::Button::State::Normal:
+                DrawRectangleRec(play_rec, BLACK);
+                break;
+            case ui::Button::State::Hover:
+                DrawRectangleRec(play_rec, RED);
+                break;
+        }
+    });
+
     keys.unregister_all();
     keys.register_key(KEY_SPACE);
     keys.register_key(KEY_ESCAPE);
+}
+
+void Main::draw(assets::Store& assets, Loop& loop) {
+    BeginDrawing();
+    ClearBackground(WHITE);
+
+    if (play_button->update(loop.mouse)) {
+        loop.player_stats = PlayerStats();
+        loop.scene.emplace<Hub>(loop.keys);
+
+        loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Rare, 5));
+        loop.player_stats->add_spell_to_spellbook(Spell(spells::FireWall{}, Rarity::Epic, 10));
+    }
+
+    EndDrawing();
+}
+
+void Main::update(Loop& loop) {
+    loop.keys.tick([&](auto key) {
+        switch (key) {
+            case KEY_SPACE: {
+                loop.player_stats = PlayerStats();
+                loop.scene.emplace<Hub>(loop.keys);
+
+                loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Rare, 5));
+                loop.player_stats->add_spell_to_spellbook(Spell(spells::FireWall{}, Rarity::Epic, 10));
+                break;
+            }
+            case KEY_ESCAPE:
+                // TEST: should I do some other clean up?
+                CloseWindow();
+                exit(0);
+        }
+    });
+
+    if (loop.screen != last_screen) {
+        *this = Main(loop.keys, loop.screen);
+    }
+}
+
+Loop::Loop(int width, int height)
+    : screen((Vector2){(float)width, (float)height}), assets(screen), scene(Main(keys, screen)) {
+#ifdef PLATFORM_WEB
+    emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, this, false, resize_handler);
+#endif
 };
 
 void Loop::operator()() {
@@ -269,17 +335,12 @@ void Loop::operator()() {
     prev_time = current_time;
     accum_time += delta_time;
 
-    if (scene) {
-        std::visit([&](auto&& arg) { arg.draw(assets, *this); }, *scene);
-    } else {
-        BeginDrawing();
-        ClearBackground(YELLOW);
-        EndDrawing();
-    }
-
-    SwapScreenBuffer();
     PollInputEvents();
     keys.poll();
+    mouse.poll();
+
+    std::visit([&](auto&& arg) { arg.draw(assets, *this); }, scene);
+    SwapScreenBuffer();
 
     while (accum_time >= (1.0f / TICKS)) {
         update();
@@ -295,34 +356,5 @@ void Loop::update() {
     }
 #endif
 
-    if (scene) {
-        std::visit([&](auto&& arg) { arg.update(*this); }, *scene);
-
-        return;
-    }
-
-    keys.tick([&](auto key) {
-        switch (key) {
-            case KEY_SPACE:
-                load_player();
-                scene.emplace(std::in_place_type<Hub>, keys);
-                break;
-            case KEY_ESCAPE:
-                // TEST: should I do some other clean up?
-                CloseWindow();
-                exit(0);
-        }
-    });
-}
-
-void Loop::load_player() {
-    player_stats = PlayerStats();
-
-    auto frost_nove_idx = player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Rare, 5));
-    auto fire_wall = player_stats->add_spell_to_spellbook(Spell(spells::FireWall{}, Rarity::Epic, 10));
-    /*auto void_implosion = player_stats.add_spell_to_spellbook(Spell(Spell::Void_Implosion, Rarity::Epic, 20));*/
-
-    /*player_stats->equip_spell(frost_nove_idx, 0);*/
-    /*player_stats->equip_spell(fire_wall, 1);*/
-    /*player_stats.equip_spell(void_implosion, 3);*/
+    std::visit([&](auto&& arg) { arg.update(*this); }, scene);
 }

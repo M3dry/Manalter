@@ -21,20 +21,23 @@ class Keys {
     void tick(std::function<void(const int&)> key_handler);
 };
 
-class Mouse {
+struct Mouse {
     enum struct Button {
         Left,
         Right,
     };
 
     struct State {
-        Button state;
+        Button button;
         Vector2 pressed_at;
         std::optional<Vector2> released_at;
     };
 
+    std::optional<State> button_press;
     Vector2 mouse_pos;
-    std::optional<State> keypress;
+    float wheel_movement;
+
+    Mouse();
 
     void poll();
 };
