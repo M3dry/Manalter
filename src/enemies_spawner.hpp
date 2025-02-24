@@ -43,6 +43,8 @@ struct Enemies {
         enemies.erase(first, last);
     }
 
+    std::optional<std::reference_wrapper<const Enemy>> closest_to(const Vector2& point) const;
+
     // TODO: use modules, else I'll fucking kms
     uint32_t tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models);
 

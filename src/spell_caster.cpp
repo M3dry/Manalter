@@ -59,17 +59,13 @@ namespace caster {
                 till_stopped--;
             }
 
+            enemies.deal_damage(hitbox, spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element,
+                                item_drops);
 
-            enemies.deal_damage(hitbox, spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element, item_drops);
-            /*// TODO: move this to Enemy class*/
-            /*for (auto& enemy : enemies.enemies) {*/
-            /*    if (check_collision(hitbox, enemy.simple_hitbox)) {*/
-            /*        enemy.take_damage(spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element);*/
-            /*    }*/
-            /*}*/
-
-            if (till_stopped <= 0) return till_removal-- == 0;
-            else return false;
+            if (till_stopped <= 0)
+                return till_removal-- == 0;
+            else
+                return false;
         }
 
         uint16_t segment_length;
@@ -90,7 +86,8 @@ namespace caster {
     struct Circle {
         Circle(std::size_t spell_id, Vector2 center, spell::movement::Circle info)
             : spell_id(spell_id), hitbox(center, info.initial_radius), until_max(info.increase_duration),
-              radius_increase((float)(info.maximal_radius - info.initial_radius) / info.increase_duration), wait(info.duration) {
+              radius_increase((float)(info.maximal_radius - info.initial_radius) / info.increase_duration),
+              wait(info.duration) {
         }
 
         bool tick(const SpellBook& spellbook, Enemies& enemies, std::vector<ItemDrop>& item_drops) {
@@ -99,14 +96,8 @@ namespace caster {
                 until_max--;
             }
 
-            // TODO: move this to Enemy class
-            for (auto& enemy : enemies.enemies) {
-                if (check_collision(enemy.simple_hitbox, hitbox)) {
-                    enemy.take_damage(spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element);
-                }
-            }
-
-            enemies.deal_damage(hitbox, spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element, item_drops);
+            enemies.deal_damage(hitbox, spellbook[spell_id].damage, spellbook[spell_id].get_spell_info().element,
+                                item_drops);
 
             if (until_max == 0) return wait-- == 0;
             return false;
@@ -122,14 +113,15 @@ namespace caster {
     std::vector<Moving> moving_spells = {};
     std::vector<Circle> circle_spells = {};
 
-    Vector2 point(spell::movement::Point point, Vector2 mouse, Vector2 player) {
+    std::optional<Vector2> point(spell::movement::Point point, Vector2 mouse, Vector2 player, const Enemies& enemies) {
         switch (point) {
             case spell::movement::Mouse:
                 return mouse;
             case spell::movement::Player:
                 return player;
             case spell::movement::ClosestEnemy:
-                assert(false && "Not implemented");
+                if (auto enemy = enemies.closest_to(player); enemy) return xz_component(enemy->get().position);
+                return std::nullopt;
         }
     }
 
@@ -141,35 +133,45 @@ namespace caster {
         circle_spells.shrink_to_fit();
     }
 
-    void cast(std::size_t spell_id, const Spell& spell, const Vector2& player_position, const Vector2& mouse_position) {
-        std::visit(
-            [&](auto&& arg) {
+    bool cast(std::size_t spell_id, const Spell& spell, const Vector2& player_position, const Vector2& mouse_position,
+              const Enemies& enemies) {
+        return std::visit(
+            [&](auto&& arg) -> bool {
                 using T = std::decay_t<decltype(arg)>;
 
                 if constexpr (std::is_same_v<T, spell::movement::Circle>) {
-                    Vector2 center = point(arg.center, mouse_position, player_position);
+                    auto center = point(arg.center, mouse_position, player_position, enemies);
+                    if (!center) return false;
 
-                    circle_spells.emplace_back(spell_id, center, arg);
+                    circle_spells.emplace_back(spell_id, *center, arg);
                 } else if constexpr (std::is_same_v<T, spell::movement::Beam>) {
-                    Vector2 movement =
-                        Vector2Normalize(point(arg.dest, mouse_position, player_position) - point(arg.origin, mouse_position, player_position));
+                    auto origin = point(arg.origin, mouse_position, player_position, enemies);
+                    auto dest = point(arg.dest, mouse_position, player_position, enemies);
+                    if (!origin || !dest) return false;
 
-                    moving_spells.emplace_back(spell_id, arg, movement, player_position, mouse_position);
+                    moving_spells.emplace_back(spell_id, arg, Vector2Normalize(*dest - *origin), player_position,
+                                               mouse_position);
                 }
+
+                return true;
             },
             spell.get_spell_info().movement);
     }
 
     void tick(const SpellBook& spellbook, Enemies& enemies, std::vector<ItemDrop>& item_drops) {
         {
-            auto [first, last] = std::ranges::remove_if(
-                circle_spells, [&spellbook, &enemies, &item_drops](auto& circle) { return circle.tick(spellbook, enemies, item_drops); });
+            auto [first, last] =
+                std::ranges::remove_if(circle_spells, [&spellbook, &enemies, &item_drops](auto& circle) {
+                    return circle.tick(spellbook, enemies, item_drops);
+                });
             circle_spells.erase(first, last);
         }
 
         {
-            auto [first, last] = std::ranges::remove_if(
-                moving_spells, [&spellbook, &enemies, &item_drops](auto& moving) { return moving.tick(spellbook, enemies, item_drops); });
+            auto [first, last] =
+                std::ranges::remove_if(moving_spells, [&spellbook, &enemies, &item_drops](auto& moving) {
+                    return moving.tick(spellbook, enemies, item_drops);
+                });
             moving_spells.erase(first, last);
         }
     }

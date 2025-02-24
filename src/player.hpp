@@ -1,9 +1,10 @@
 #pragma once
 
-#include "raylib.h"
-#include "hitbox.hpp"
-#include "spell.hpp"
 #include "assets.hpp"
+#include "enemies_spawner.hpp"
+#include "hitbox.hpp"
+#include "raylib.h"
+#include "spell.hpp"
 #include <cstdint>
 
 using Player = struct Player {
@@ -65,7 +66,8 @@ using Player = struct Player {
     // 0 - ok
     int equip_spell(uint32_t spellbook_idx, uint8_t slot_id, const SpellBook& spellbook);
     void tick(Vector2 movement, float angle, SpellBook& spellbook);
-    void cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook);
+    void cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook,
+                       const Enemies& enemies);
 
     ~Player();
 };

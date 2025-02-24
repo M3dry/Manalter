@@ -40,11 +40,13 @@ namespace ui {
 
 namespace hud {
     struct SpellBookUI {
+        std::size_t page_size;
         std::vector<std::pair<std::size_t, ui::Draggable>> spells;
 
+        SpellBookUI(const SpellBook& spellbook, const Vector2& screen);
+
         // doesn't assume where to draw, just a bunch of draw calls
-        void draw(assets::Store& assets, const SpellBook& spellbook);
-        void update(Mouse& mouse, std::optional<Vector2> screen_update);
+        void update(assets::Store& assets, const SpellBook& spellbook, std::optional<Vector2> screen);
     };
 
     void draw(assets::Store& assets, const Player& player, const SpellBook& spellbook, const Vector2& screen);

@@ -114,17 +114,17 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
     tick_counter++;
 }
 
-void Player::cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook) {
+void Player::cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook, const Enemies& enemies) {
     if (idx >= 10 || idx >= max_spells || equipped_spells[idx] == UINT32_MAX) return;
 
     auto spell_id = equipped_spells[idx];
     Spell& spell = spellbook[spell_id];
     if (mana < spell.manacost || spell.current_cooldown > 0) return;
 
-    mana -= spell.manacost;
-    spell.current_cooldown = spell.cooldown;
-
-    caster::cast(spell_id, spell, player_position, mouse_pos);
+    if (caster::cast(spell_id, spell, player_position, mouse_pos, enemies)) {
+        mana -= spell.manacost;
+        spell.current_cooldown = spell.cooldown;
+    }
 }
 
 Player::~Player() {

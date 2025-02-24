@@ -178,14 +178,14 @@ void Arena::update(Loop& loop) {
                 if (spellbook_ui)
                     spellbook_ui = std::nullopt;
                 else
-                    spellbook_ui = hud::SpellBookUI();
+                    spellbook_ui = hud::SpellBookUI(loop.player_stats->spellbook, loop.screen);
                 break;
         }
 
         for (const auto& [k, num] : spell_keys) {
             if (k == key) {
                 player.cast_equipped(num, (Vector2){player.position.x, player.position.z}, mouse_xz,
-                                     loop.player_stats->spellbook);
+                                     loop.player_stats->spellbook, enemies);
                 break;
             }
         }

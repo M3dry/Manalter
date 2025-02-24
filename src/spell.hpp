@@ -123,7 +123,7 @@ namespace spells {
     struct FallingIcicile {
         static constexpr spell::Info info = {
             .name = "Falling Icicle",
-            .icon = "faling-icicle.png",
+            .icon = "falling-icicle.png",
             .movement =
                 (spell::movement::Circle){
                     .center = spell::movement::Mouse,

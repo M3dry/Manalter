@@ -3,6 +3,9 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
 #include "rayhacks.hpp"
+#include "utility.hpp"
+#include <ranges>
+#include <raymath.h>
 
 bool Enemies::spawn(const Vector2& player_pos) {
     if (max_cap <= cap) return false;
@@ -33,6 +36,26 @@ void Enemies::update_target(const Vector2& pos) {
     }
 
     target_pos = pos;
+}
+
+std::optional<std::reference_wrapper<const Enemy>> Enemies::closest_to(const Vector2& point) const {
+    if (enemies.size() == 0) return std::nullopt;
+
+    std::size_t closest = 0;
+    float sqr_dist = Vector2DistanceSqr(point, xz_component(enemies[closest].position));
+
+    if (sqr_dist == 0) return enemies[closest];
+
+    for (std::size_t i = 1; i < enemies.size(); i++) {
+        if (auto tmp = Vector2DistanceSqr(point, xz_component(enemies[i].position)); tmp < sqr_dist) {
+            sqr_dist = tmp;
+            closest = i;
+
+            if (sqr_dist == 0) break;
+        }
+    }
+
+    return enemies[closest];
 }
 
 uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models) {

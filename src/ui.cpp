@@ -39,11 +39,10 @@ namespace ui {
 }
 
 namespace hud {
-    void SpellBookUI::draw(assets::Store& assets, const SpellBook& spellbook) {
-
+    SpellBookUI::SpellBookUI(const SpellBook& spellbook, const Vector2& screen) {
     }
 
-    void SpellBookUI::update(Mouse& mouse, std::optional<Vector2> screen_update) {
+    void SpellBookUI::update(assets::Store& assets, const SpellBook& spellbook, std::optional<Vector2> screen) {
 
     }
 
