@@ -35,7 +35,7 @@ bool resize_handler(int event_type, const EmscriptenUiEvent* e, void* data_ptr) 
 }
 #endif
 
-Arena::Arena(Keys& keys, assets::Store& assets) : player({0.0f, 10.0f, 0.0f}, assets), enemies(100), paused(false) {
+Arena::Arena(Keys& keys, assets::Store& assets) : player({0.0f, 10.0f, 0.0f}, assets), enemies(30), paused(false) {
     item_drops.add_item_drop((Vector2){200.0f, 200.0f}, Spell(spells::FireWall{}, Rarity::Epic, 30));
     item_drops.add_item_drop((Vector2){200.0f, 150.0f}, Spell(spells::FrostNova{}, Rarity::Epic, 30));
     /*item_drops.emplace_back((Vector2){200.0f, 100.0f}, Spell(Spell::Falling_Icicle, Rarity::Epic, 30));*/
@@ -67,6 +67,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
 
     BeginMode3D(player.camera);
 
+    auto circle = shapes::Circle(xz_component(player.position) + Player::visibility_center_offset, Player::visibility_radius);
     auto vs = {
         Vector3Zero(),
         // UP
@@ -88,13 +89,14 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     };
     for (const auto& v : vs) {
         DrawPlane(v, (Vector2){ARENA_WIDTH, ARENA_HEIGHT}, GREEN);
+        enemies.draw(loop.enemy_models, v, circle);
+        item_drops.draw_item_drops(v);
     }
-    enemies.draw(loop.enemy_models, Vector3Zero());
-    item_drops.draw_item_drops(Vector3Zero());
-
     player.draw_model(assets);
 
 #ifdef DEBUG
+    circle.draw_3D(BLUE, 1.0f);
+    DrawSphere({ circle.center.x, 0.0f, circle.center.y }, 3.0f, BLUE);
     caster::draw_hitbox(1.0f);
 #endif
 
@@ -197,6 +199,7 @@ void Arena::update(Loop& loop) {
     }
 
     enemies.tick(player.hitbox, loop.enemy_models);
+    // TODO: move to `enemies_spawner.hpp`
     {
         auto [first, last] = std::ranges::remove_if(enemies.enemies, [&](auto& enemy) -> bool {
             enemy.update_target((Vector2){player.position.x, player.position.z});

@@ -4,10 +4,12 @@
 #include "hitbox.hpp"
 #include "rayhacks.hpp"
 #include "utility.hpp"
-#include <ranges>
 #include <raymath.h>
 
 bool Enemies::spawn(const Vector2& player_pos) {
+    static constexpr float arena_width = ARENA_WIDTH / 2.0f;
+    static constexpr float arena_height = ARENA_HEIGHT / 2.0f;
+
     if (max_cap <= cap) return false;
 
     auto cap_diff = max_cap - cap;
@@ -15,14 +17,16 @@ bool Enemies::spawn(const Vector2& player_pos) {
     auto enemy = enemies::random_enemy(cap_diff, cap);
     if (!enemy.has_value()) return false;
 
-    auto enemy_pos = (Vector2){ (float)GetRandomValue(0, 1000), (float)GetRandomValue(0, 1000) };
+    auto enemy_pos =
+        (Vector2){(float)GetRandomValue(-arena_width, arena_width), (float)GetRandomValue(-arena_height, arena_height)};
     auto player_radious_shape = shapes::Circle(player_pos, player_radious);
 
     while (check_collision(player_radious_shape, enemy_pos)) {
-        enemy_pos = (Vector2){ (float)GetRandomValue(0, 1000), (float)GetRandomValue(0, 1000) };
+        enemy_pos = (Vector2){(float)GetRandomValue(-arena_width, arena_width),
+                              (float)GetRandomValue(-arena_height, arena_height)};
     };
 
-    enemies.emplace_back(enemy_pos, killed/100, false, std::move(enemy.value()));
+    enemies.emplace_back(enemy_pos, killed / 100, false, std::move(enemy.value()));
     return true;
 }
 
@@ -74,8 +78,8 @@ uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_m
     return acc;
 }
 
-void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset) const {
+void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset, shapes::Circle visibility_circle) const {
     for (const auto& enemy : enemies) {
-        enemy.draw(enemy_models, offset);
+        if (check_collision(visibility_circle, xz_component(Vector3Add(enemy.position, offset)))) enemy.draw(enemy_models, offset);
     }
 }

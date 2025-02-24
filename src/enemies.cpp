@@ -12,10 +12,12 @@ namespace enemies {
             case Enemy::Collision:
                 data.anim_index = 0;
                 data.anim_curr_frame = 0;
+                data.movement = Vector2Zero();
                 return data.damage;
             case Enemy::Uncollision:
                 data.anim_index = 1;
                 data.anim_curr_frame = 0;
+                data.update_target(target_hitbox.center);
                 return 0;
             case Enemy::Unchanged:
                 return 0;
@@ -54,7 +56,9 @@ namespace enemies {
             }
         }
 
-        return create_enemy(static_cast<_EnemyType>(i));
+        auto type = static_cast<_EnemyType>(i);
+        cap += enemies::get_info(type).cap_value;
+        return create_enemy(type);
     }
 
     Info get_info(const State& state) {

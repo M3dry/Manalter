@@ -6,8 +6,7 @@ const Vector3 Player::camera_offset = (Vector3){60.0f, 140.0f, 0.0f};
 const float Player::model_scale = 0.2f;
 
 Player::Player(Vector3 position, assets::Store& assets)
-    : prev_position(position), position(position), interpolated_position(position),
-      animations(nullptr),
+    : prev_position(position), position(position), interpolated_position(position), animations(nullptr),
       hitbox((Vector2){position.x, position.z}, 8.0f), equipped_spells(10, UINT32_MAX) {
     camera.position = camera_offset;
     camera.target = position;
@@ -52,7 +51,8 @@ void Player::add_exp(uint32_t e) {
     }
 }
 
-std::optional<std::reference_wrapper<const Spell>> Player::get_equipped_spell(int idx, const SpellBook& spellbook) const {
+std::optional<std::reference_wrapper<const Spell>> Player::get_equipped_spell(int idx,
+                                                                              const SpellBook& spellbook) const {
     if (idx >= 10 || idx >= max_spells || equipped_spells[idx] == UINT32_MAX) return {};
 
     return spellbook[equipped_spells[idx]];
@@ -114,7 +114,8 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
     tick_counter++;
 }
 
-void Player::cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook, const Enemies& enemies) {
+void Player::cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook,
+                           const Enemies& enemies) {
     if (idx >= 10 || idx >= max_spells || equipped_spells[idx] == UINT32_MAX) return;
 
     auto spell_id = equipped_spells[idx];

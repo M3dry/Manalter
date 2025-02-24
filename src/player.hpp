@@ -8,6 +8,10 @@
 #include <cstdint>
 
 using Player = struct Player {
+    static constexpr float visibility_radius = 450.0f;
+    // for some reason .x moves on the y axis and .y moves on the x axis.... fuck me
+    static constexpr Vector2 visibility_center_offset = { -280.0f, 0.0f };
+
     Vector3 prev_position;
     Vector3 position;
     Vector3 interpolated_position;
@@ -18,8 +22,6 @@ using Player = struct Player {
     int animationCurrent = 0;
     int animationIndex = 0;
 
-    // screw c++, this has to be here :(
-    // can assume this is always a value
     shapes::Circle hitbox;
     Camera3D camera = {0};
 

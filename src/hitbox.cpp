@@ -214,5 +214,5 @@ bool check_collision(const shapes::Circle& circle, const Vector2& point) {
     float dist_sqr = Vector2DistanceSqr(circle.center, point);
     /*float sum_radius = (circle.radius + circle2.radius) * (circle1.radius + circle2.radius);*/
 
-    return dist_sqr < circle.radius;
+    return dist_sqr < circle.radius*circle.radius;
 }
