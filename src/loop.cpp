@@ -142,6 +142,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     }
 
     DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
+    DrawText(std::format("ENEMIES: {}", enemies.enemies.size()).c_str(), 10, 30, 20, BLACK);
 
     EndDrawing();
 }
@@ -202,7 +203,6 @@ void Arena::update(Loop& loop) {
     // TODO: move to `enemies_spawner.hpp`
     {
         auto [first, last] = std::ranges::remove_if(enemies.enemies, [&](auto& enemy) -> bool {
-            enemy.update_target((Vector2){player.position.x, player.position.z});
             if (enemy.health <= 0) {
                 return true;
             }

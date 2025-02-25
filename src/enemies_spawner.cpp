@@ -78,7 +78,7 @@ uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_m
     return acc;
 }
 
-void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset, shapes::Circle visibility_circle) const {
+void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle) const {
     for (const auto& enemy : enemies) {
         if (check_collision(visibility_circle, xz_component(Vector3Add(enemy.position, offset)))) enemy.draw(enemy_models, offset);
     }
