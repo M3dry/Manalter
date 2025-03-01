@@ -1,10 +1,14 @@
 #pragma once
 
+#include "hitbox.hpp"
 #include "input.hpp"
 #include "raylib.h"
-
+#include "rayhacks.hpp"
 #include "assets.hpp"
 #include "player.hpp"
+#include "spell.hpp"
+
+#include <vector>
 
 namespace ui {
     struct Button {
@@ -22,31 +26,52 @@ namespace ui {
         bool update(Mouse& mouse);
     };
 
+    template <typename... Opts>
     struct Draggable {
-        std::function<void(Vector2)> draw;
+        std::function<void(Vector2, Opts...)> draw;
         // default origin
         Vector2 origin;
 
         // doesn't move, only initiates the dragging
         shapes::Polygon hitbox;
 
-        Draggable(Vector2 origin, shapes::Polygon&& poly, std::function<void(Vector2)> draw);
+        Draggable(Vector2 origin, shapes::Polygon&& poly, std::function<void(Vector2, Opts...)> draw) : draw(draw), origin(origin), hitbox(std::move(poly)) {
+        }
 
         // returns a mouse position at which the component was dropped
         // doesn't call draw if it returns a Vector2
-        std::optional<Vector2> update(Mouse& mouse);
+        std::optional<Vector2> update(Mouse& mouse, Opts... opts) {
+            if (!mouse.button_press || mouse.button_press->button != Mouse::Button::Left || !check_collision(hitbox, mouse.button_press->pressed_at)) {
+                draw(origin, opts...);
+                return std::nullopt;
+            }
+
+            if (mouse.button_press->released_at) return *mouse.button_press->released_at;
+
+            draw(origin + (mouse.mouse_pos - mouse.button_press->pressed_at), opts...);
+            return std::nullopt;
+        }
     };
 }
 
 namespace hud {
     struct SpellBookUI {
-        std::size_t page_size;
-        std::vector<std::pair<std::size_t, ui::Draggable>> spells;
+        static constexpr std::size_t page_size = 15;
+
+        std::vector<ui::Draggable<const SpellBook&, const SpellBookUI&>> hitboxes;
+        // [first, second)
+        std::pair<std::size_t, std::size_t> spells;
+
+        Rectangle area;
+        Vector2 spell_dims;
 
         SpellBookUI(const SpellBook& spellbook, const Vector2& screen);
 
         // doesn't assume where to draw, just a bunch of draw calls
-        void update(assets::Store& assets, const SpellBook& spellbook, std::optional<Vector2> screen);
+        // returns the coords of where the spell was dropped
+        std::optional<std::pair<std::size_t, Vector2>> update(assets::Store& assets, const SpellBook& spellbook, Mouse& mouse, std::optional<Vector2> screen);
+
+        void draw_spell(Vector2 origin, std::size_t id, const SpellBook& spellbook) const;
     };
 
     void draw(assets::Store& assets, const Player& player, const SpellBook& spellbook, const Vector2& screen);

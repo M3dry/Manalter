@@ -1,10 +1,9 @@
 #include "ui.hpp"
 
-#include "raylib.h"
-
 #include "hitbox.hpp"
-#include "rayhacks.hpp"
+#include "raylib.h"
 #include "utility.hpp"
+#include <format>
 
 namespace ui {
     Button::Button(shapes::Polygon&& poly, std::function<void(State)> draw) : draw(draw), hitbox(std::move(poly)) {
@@ -20,30 +19,51 @@ namespace ui {
                check_collision(hitbox, *mouse.button_press->released_at) &&
                    mouse.button_press->button == Mouse::Button::Left;
     }
-
-    Draggable::Draggable(Vector2 origin, shapes::Polygon&& poly, std::function<void(Vector2)> draw)
-        : draw(draw), origin(origin), hitbox(std::move(poly)) {
-    }
-
-    std::optional<Vector2> Draggable::update(Mouse& mouse) {
-        if (mouse.button_press && mouse.button_press->button == Mouse::Button::Left) {
-            if (mouse.button_press->released_at) return *mouse.button_press->released_at;
-
-            draw(origin + (mouse.mouse_pos - mouse.button_press->pressed_at));
-        } else {
-            draw(origin);
-        }
-
-        return std::nullopt;
-    }
 }
 
 namespace hud {
-    SpellBookUI::SpellBookUI(const SpellBook& spellbook, const Vector2& screen) {
+    SpellBookUI::SpellBookUI(const SpellBook& spellbook, const Vector2& screen)
+        : spells(0, std::min(page_size, spellbook.size())) {
+        area.width = screen.x * 0.3;
+        area.height = screen.y * 0.9;
+        area.x = screen.x * 0.01f;
+        area.y = (screen.y - area.height) * 0.5f;
+
+        spell_dims.x = area.width;
+        spell_dims.y = area.height / page_size;
+
+        hitboxes.reserve(page_size);
+        for (std::size_t i = 0; i < page_size; i++) {
+            hitboxes.emplace_back(ui::Draggable<const SpellBook&, const SpellBookUI&>(
+                {area.x, area.y + i * spell_dims.y},
+                (Rectangle){area.x, area.y + i * spell_dims.y, area.width, spell_dims.y},
+                [i](auto origin, const SpellBook& spellbook, const auto& ui) {
+                    return ui.draw_spell(origin, i, spellbook);
+                }));
+        }
     }
 
-    void SpellBookUI::update(assets::Store& assets, const SpellBook& spellbook, std::optional<Vector2> screen) {
+    std::optional<std::pair<std::size_t, Vector2>> SpellBookUI::update(assets::Store& assets,
+                                                                       const SpellBook& spellbook, Mouse& mouse,
+                                                                       std::optional<Vector2> screen) {
+        DrawRectangleRec(area, WHITE);
 
+        std::optional<std::pair<std::size_t, Vector2>> ret;
+        for (std::size_t i = spells.first; i < spells.second; i++) {
+            if (auto vec = hitboxes[i].update(mouse, spellbook, *this); vec) {
+                assert(!ret && "the impossible happened"); // shouldn't be possible to drag two things at once
+                ret = {i, *vec};
+            }
+        }
+
+        return ret;
+    }
+
+    void SpellBookUI::draw_spell(Vector2 origin, std::size_t id, const SpellBook& spellbook) const {
+        DrawRectangle(origin.x, origin.y, spell_dims.x, spell_dims.y, BLACK);
+        DrawText(std::format("ORDER: {}", id).c_str(), origin.x + spell_dims.x / 2.0f,
+                 origin.y + spell_dims.y / 2.0f, 10, BLACK);
+        hitboxes[id].hitbox.draw_lines_2D(RED);
     }
 
     void draw(assets::Store& assets, const Player& player, const SpellBook& spellbook, const Vector2& screen) {

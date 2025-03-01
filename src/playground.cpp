@@ -9,9 +9,13 @@
 int main(void) {
     InitWindow(0, 0, "Sigma sigma on the wall");
 
-    ui::Draggable draggable_square({30.0f, 30.0f}, (Rectangle){30.0f, 30.0f, 200.0f, 50.0f}, [](auto origin) {
+    ui::Draggable<> draggable_square({30.0f, 30.0f}, (Rectangle){30.0f, 30.0f, 200.0f, 50.0f}, [](auto origin) {
         DrawRectangle(origin.x, origin.y, 200.0f, 50.0f, BLACK);
     });
+    ui::Draggable<> draggable_square2({100.0f, 100.0f}, (Rectangle){100.0f, 100.0f, 200.0f, 50.0f}, [](auto origin) {
+        DrawRectangle(origin.x, origin.y, 200.0f, 50.0f, BLACK);
+    });
+
     Mouse mouse;
     Rectangle dropoff = {
         .x = 500.0f,
@@ -32,6 +36,10 @@ int main(void) {
         DrawText(std::format("Dropped: {}", dropped_counter).c_str(), 10, 10, 20, BLACK);
 
         if (auto dropped_at = draggable_square.update(mouse); dropped_at && check_collision(dropoff_poly, *dropped_at)) {
+            dropped_counter++;
+        }
+
+        if (auto dropped_at = draggable_square2.update(mouse); dropped_at && check_collision(dropoff_poly, *dropped_at)) {
             dropped_counter++;
         }
 

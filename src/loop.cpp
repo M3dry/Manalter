@@ -137,8 +137,9 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
                                          spell_bar_width, spell_bar_height});
 
     if (spellbook_ui) {
-        loop.assets.draw_texture(assets::SpellBookUI, true,
-                                 (Rectangle){5.0f, 10.0f, SpellBookWidth(loop.screen), SpellBookHeight(loop.screen)});
+        spellbook_ui->update(assets, loop.player_stats->spellbook, loop.mouse, std::nullopt);
+        /*loop.assets.draw_texture(assets::SpellBookUI, true,*/
+        /*                         (Rectangle){5.0f, 10.0f, SpellBookWidth(loop.screen), SpellBookHeight(loop.screen)});*/
     }
 
     DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
