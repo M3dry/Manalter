@@ -56,7 +56,7 @@ namespace ui {
 
 namespace hud {
     struct SpellBookUI {
-        static constexpr std::size_t page_size = 15;
+        static constexpr std::size_t page_size = 12;
 
         std::vector<ui::Draggable<const SpellBook&, const SpellBookUI&>> hitboxes;
         // [first, second)

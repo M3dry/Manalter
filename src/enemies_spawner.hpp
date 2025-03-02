@@ -1,11 +1,11 @@
 #pragma once
 
 #include "enemies.hpp"
-#include <cstdint>
-#include <vector>
 #include "hitbox.hpp"
 #include "item_drops.hpp"
 #include "utility.hpp"
+#include <cstdint>
+#include <vector>
 
 struct Enemies {
     // enemies can't spawn inside this circle, centered at player
@@ -17,7 +17,8 @@ struct Enemies {
     uint64_t killed;
     Vector2 target_pos;
 
-    Enemies(uint32_t max_cap) : max_cap(max_cap), cap(0), enemies(), target_pos(Vector2Zero()) {}
+    Enemies(uint32_t max_cap) : max_cap(max_cap), cap(0), enemies(), target_pos(Vector2Zero()) {
+    }
 
     // true - enemy spawned
     // false - cap is maxed out
@@ -25,7 +26,8 @@ struct Enemies {
 
     void update_target(const Vector2& player_pos);
 
-    void deal_damage(const Shape auto& shape, uint32_t damage, Element element, std::vector<ItemDrop>& item_drop_pusher) {
+    void deal_damage(const Shape auto& shape, uint32_t damage, Element element,
+                     std::vector<ItemDrop>& item_drop_pusher) {
         auto [first, last] = std::ranges::remove_if(enemies, [&](auto& enemy) -> bool {
             bool dead = false;
 
@@ -35,6 +37,11 @@ struct Enemies {
 
             if (dead) {
                 item_drop_pusher.emplace_back(enemy.level, xz_component(enemy.position));
+                if (auto enemy_cap = enemies::get_info(enemy.state).cap_value; enemy_cap < cap) {
+                    cap -= enemy_cap;
+                } else {
+                    cap = 0;
+                }
                 killed++;
             }
 
