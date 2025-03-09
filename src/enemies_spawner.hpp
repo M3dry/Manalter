@@ -3,6 +3,7 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
 #include "item_drops.hpp"
+#include "rayhacks.hpp"
 #include "utility.hpp"
 #include <cstdint>
 #include <vector>
@@ -26,13 +27,21 @@ struct Enemies {
 
     void update_target(const Vector2& player_pos);
 
-    void deal_damage(const Shape auto& shape, uint32_t damage, Element element,
-                     std::vector<ItemDrop>& item_drop_pusher) {
+    template <Shape S>
+    void deal_damage(S shape, uint32_t damage, Element element, std::vector<ItemDrop>& item_drop_pusher) {
         auto [first, last] = std::ranges::remove_if(enemies, [&](auto& enemy) -> bool {
             bool dead = false;
 
-            if (check_collision(shape, enemy.simple_hitbox)) {
-                dead = enemy.take_damage(damage, element);
+            for (const auto& origin :
+                 {Vector2Zero(), arena::top_origin, arena::right_origin, arena::bottom_origin, arena::left_origin}) {
+                shape.translate(origin);
+                if (check_collision(shape, enemy.simple_hitbox)) {
+                    dead = enemy.take_damage(damage, element);
+                    shape.translate(-origin);
+                    break;
+                } else {
+                    shape.translate(-origin);
+                }
             }
 
             if (dead) {

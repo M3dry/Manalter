@@ -95,7 +95,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     player.draw_model(assets);
 
 #ifdef DEBUG
-    circle.draw_3D(BLUE, 1.0f);
+    circle.draw_3D(BLUE, 1.0f, Vector2Zero());
     DrawSphere({ circle.center.x, 0.0f, circle.center.y }, 3.0f, BLUE);
     caster::draw_hitbox(1.0f);
 #endif

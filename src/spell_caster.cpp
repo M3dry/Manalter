@@ -179,7 +179,7 @@ namespace caster {
 #ifdef DEBUG
     void draw_hitbox(float y) {
         for (const auto& circle : circle_spells) {
-            circle.hitbox.draw_3D(RED, y);
+            circle.hitbox.draw_3D(RED, y, Vector2Zero());
         }
 
         for (const auto& moving : moving_spells) {

@@ -13,6 +13,10 @@ Vector2 operator-(const Vector2& x, const Vector2& y) {
     return (Vector2){x.x - y.x, x.y - y.y};
 }
 
+Vector2 operator-(const Vector2& x) {
+    return (Vector2){ -x.x, -x.y };
+}
+
 Vector2& operator+=(Vector2& lhs, const Vector2& rhs) {
     lhs.x += rhs.x;
     lhs.y += rhs.y;

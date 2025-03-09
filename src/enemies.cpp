@@ -109,13 +109,23 @@ void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) const {
                     state),
                 WHITE);
 #ifdef DEBUG
-    simple_hitbox.draw_3D(RED, 1.0f);
+    simple_hitbox.draw_3D(RED, 1.0f, xz_component(offset));
 #endif
 }
 
 void Enemy::update_target(Vector2 new_target) {
-    movement = Vector2Normalize(new_target - (Vector2){position.x, position.z});
-    angle = angle_from_point(new_target, (Vector2){position.x, position.z});
+    // get delta
+    movement.x = new_target.x - position.x;
+    movement.y = new_target.y - position.z;
+    // wrap around
+    movement.x = wrap((movement.x + ARENA_WIDTH/2.0f), ARENA_WIDTH) - ARENA_WIDTH/2.0f;
+    movement.y = wrap((movement.y + ARENA_WIDTH/2.0f), ARENA_WIDTH) - ARENA_WIDTH/2.0f;
+
+    if (movement.x * movement.x + movement.y * movement.y > 1e-6f) {
+        movement = Vector2Normalize(movement);
+    }
+
+    angle = std::fmod(270 - std::atan2(-movement.y, -movement.x) * 180.0f / std::numbers::pi, 360);
 }
 
 uint32_t Enemy::tick(shapes::Circle target_hitbox, EnemyModels& enemy_models) {
@@ -123,6 +133,7 @@ uint32_t Enemy::tick(shapes::Circle target_hitbox, EnemyModels& enemy_models) {
         [&](auto&& arg) {
             position.x += movement.x * speed;
             position.z += movement.y * speed;
+            arena::loop_around(position.x, position.z);
 
             simple_hitbox.center.x = position.x;
             simple_hitbox.center.y = position.z;

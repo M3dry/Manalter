@@ -45,3 +45,14 @@ Vector2 mouse_xz_in_world(Ray mouse) {
 
     return (Vector2){mouse.position.x + x * mouse.direction.x, mouse.position.z + x * mouse.direction.z};
 }
+
+float wrap(float value, float modulus) {
+    return value - modulus * std::floor(value / modulus);
+}
+
+void arena::loop_around(float& x, float& y) {
+    if (x > ARENA_WIDTH/2.0f) x -= ARENA_WIDTH;
+    if (y > ARENA_HEIGHT/2.0f) y -= ARENA_HEIGHT;
+    if (x < -ARENA_HEIGHT/2.0f) x += ARENA_WIDTH;
+    if (y < -ARENA_HEIGHT/2.0f) y += ARENA_HEIGHT;
+}

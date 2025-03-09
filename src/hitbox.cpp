@@ -97,12 +97,12 @@ namespace shapes {
     Circle::Circle(Vector2 center, float radius) : center(center), radius(radius) {
     }
 
-    void Circle::update(const Vector2& movement) {
+    void Circle::translate(const Vector2& movement) {
         center += movement;
     }
 
-    void Circle::draw_3D(Color color, float y) const {
-        DrawCircle3D((Vector3){center.x, y, center.y}, radius,
+    void Circle::draw_3D(Color color, float y, const Vector2& offset) const {
+        DrawCircle3D((Vector3){center.x + offset.x, y, center.y + offset.y}, radius,
                      (Vector3){
                          1.0f,
                          0.0f,
@@ -215,4 +215,17 @@ bool check_collision(const shapes::Circle& circle, const Vector2& point) {
     /*float sum_radius = (circle.radius + circle2.radius) * (circle1.radius + circle2.radius);*/
 
     return dist_sqr < circle.radius*circle.radius;
+}
+
+void translate(shapes::Polygon& poly, const Vector2& vec) {
+    poly.translate(vec);
+}
+
+void translate(shapes::Circle& circle, const Vector2& vec) {
+    circle.translate(vec);
+}
+
+void translate(Vector2& point, const Vector2& vec) {
+    point.x += vec.x;
+    point.y += vec.y;
 }

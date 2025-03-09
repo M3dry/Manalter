@@ -34,7 +34,7 @@ void Player::draw_model(assets::Store& assets) const {
 
 #ifdef DEBUG
     DrawSphere((Vector3){hitbox.center.x, 1.0f, hitbox.center.y}, 1.0f, BLUE);
-    hitbox.draw_3D(RED, 1.0f);
+    hitbox.draw_3D(RED, 1.0f, Vector2Zero());
 #endif
 }
 
@@ -77,10 +77,7 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
         position.z += movement.y;
         this->angle = angle;
 
-        if (position.x > 500) position.x -= 1000;
-        if (position.z > 500) position.z -= 1000;
-        if (position.x < -500) position.x += 1000;
-        if (position.z < -500) position.z += 1000;
+        arena::loop_around(position.x, position.z);
 
         hitbox.center = xz_component(position);
 
