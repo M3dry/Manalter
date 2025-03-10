@@ -1,52 +1,20 @@
-#include "hitbox.hpp"
-#include "input.hpp"
-#include "ui.hpp"
-
-#include <format>
-#include <raylib.h>
-#include <raymath.h>
+#include "quadtree.hpp"
 
 int main(void) {
-    InitWindow(0, 0, "Sigma sigma on the wall");
-
-    ui::Draggable<> draggable_square({30.0f, 30.0f}, (Rectangle){30.0f, 30.0f, 200.0f, 50.0f}, [](auto origin) {
-        DrawRectangle(origin.x, origin.y, 200.0f, 50.0f, BLACK);
-    });
-    ui::Draggable<> draggable_square2({100.0f, 100.0f}, (Rectangle){100.0f, 100.0f, 200.0f, 50.0f}, [](auto origin) {
-        DrawRectangle(origin.x, origin.y, 200.0f, 50.0f, BLACK);
-    });
-
-    Mouse mouse;
-    Rectangle dropoff = {
-        .x = 500.0f,
-        .y = 500.0f,
-        .width = 50.0f,
-        .height = 50.0f,
+    auto printer = [](const auto& str, const auto& padding) {
+        std::println("{}{}", padding, str);
     };
-    shapes::Polygon dropoff_poly = dropoff;
-    int dropped_counter = 0;
 
-    while (!WindowShouldClose()) {
-        mouse.poll();
-
-        BeginDrawing();
-        ClearBackground(WHITE);
-
-        DrawRectangleRec(dropoff, RED);
-        DrawText(std::format("Dropped: {}", dropped_counter).c_str(), 10, 10, 20, BLACK);
-
-        if (auto dropped_at = draggable_square.update(mouse); dropped_at && check_collision(dropoff_poly, *dropped_at)) {
-            dropped_counter++;
-        }
-
-        if (auto dropped_at = draggable_square2.update(mouse); dropped_at && check_collision(dropoff_poly, *dropped_at)) {
-            dropped_counter++;
-        }
-
-        EndDrawing();
-    }
-
-    CloseWindow();
+    quadtree::QuadTree<4, const char*> quadtree(quadtree::Box{
+        .min = {0, 0},
+        .max = {100, 100},
+    });
+    quadtree.insert(Vector2{ 20, 30 }, "point1");
+    quadtree.insert(Vector2{ 20, 70 }, "point2");
+    quadtree.insert(Vector2{ 70, 30 }, "point3");
+    quadtree.insert(Vector2{ 70, 70 }, "point4");
+    quadtree.insert(Vector2{ 30, 40 }, "point5");
+    quadtree.print(printer); // [point1, point5], [point2], [point3], [point4]
 
     return 0;
 }
