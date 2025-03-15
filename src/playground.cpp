@@ -13,8 +13,8 @@ int main(void) {
     quadtree.print(printer); // [point1, point5], [point2], [point3], [point4]
 
     std::println("\nLook up:");
-    quadtree.in_box(quadtree::Box({ 30, 30 }, { 60, 60 }), [](auto ix, auto id) {
-        std::println("\tIX: {}, ID: {}", ix, id);
+    quadtree.in_box(quadtree::Box({ 30, 30 }, { 60, 60 }), [](auto ix) {
+        std::println("\tIX: {}", ix);
     });
 
 

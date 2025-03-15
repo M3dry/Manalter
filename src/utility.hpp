@@ -25,6 +25,8 @@ namespace arena {
         }
     }
 
+    constexpr Rectangle arena_rec = Rectangle{ .x = -ARENA_WIDTH/2.0f, .y = -ARENA_HEIGHT/2.0f, .width = ARENA_WIDTH, .height = ARENA_HEIGHT };
+
     const shapes::Polygon center(_impl::plane_to_rectangle({ 0.0f, 0.0f }, ARENA_WIDTH, ARENA_HEIGHT));
     constexpr Vector2 center_origin = { 0.0f, 0.0f };
 

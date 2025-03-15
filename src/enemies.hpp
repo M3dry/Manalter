@@ -4,6 +4,7 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "spell.hpp"
+#include "utility.hpp"
 #include <cassert>
 #include <cstdint>
 #include <variant>
@@ -223,7 +224,7 @@ struct Enemy {
     uint16_t speed;
     uint16_t level;
 
-    Vector3 position;
+    Vector3 pos;
     Vector2 movement;
     float angle;
     shapes::Circle simple_hitbox;
@@ -236,7 +237,7 @@ struct Enemy {
 
     Enemy(Vector2 position, uint16_t level, bool boss, enemies::State&& enemy)
         : anim_index(get_info(enemy).default_anim), level(level),
-          position((Vector3){position.x, get_info(enemy).y_component, position.y}), movement(Vector2Zero()),
+          pos((Vector3){position.x, get_info(enemy).y_component, position.y}), movement(Vector2Zero()),
           simple_hitbox(shapes::Circle(position, get_info(enemy).simple_hitbox_radius)), boss(boss), state(enemy) {
         auto info = get_info(enemy);
         health = info.max_health;
@@ -253,7 +254,7 @@ struct Enemy {
     Enemy(Enemy&& enemy) noexcept
         : anim_index(enemy.anim_index),
           anim_curr_frame(enemy.anim_curr_frame), health(enemy.health), damage(enemy.damage), speed(enemy.speed),
-          position(enemy.position), movement(enemy.movement), angle(enemy.angle),
+          pos(enemy.pos), movement(enemy.movement), angle(enemy.angle),
           simple_hitbox(std::move(enemy.simple_hitbox)), collision_state(enemy.collision_state), boss(enemy.boss),
           state(std::move(enemy.state)) {
     };
@@ -267,4 +268,8 @@ struct Enemy {
     uint32_t tick(shapes::Circle target_hitbox, EnemyModels& enemy_models);
 
     bool take_damage(uint32_t damage, Element element);
+
+    Vector2 position() const {
+        return xz_component(pos);
+    }
 };

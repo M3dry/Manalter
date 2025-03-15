@@ -3,6 +3,7 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
 #include "item_drops.hpp"
+#include "quadtree.hpp"
 #include "rayhacks.hpp"
 #include "utility.hpp"
 #include <cstdint>
@@ -14,11 +15,11 @@ struct Enemies {
 
     uint32_t max_cap;
     uint32_t cap;
-    std::vector<Enemy> enemies;
+    quadtree::QuadTree<10, Enemy> enemies;
     uint64_t killed;
     Vector2 target_pos;
 
-    Enemies(uint32_t max_cap) : max_cap(max_cap), cap(0), enemies(), target_pos(Vector2Zero()) {
+    Enemies(uint32_t max_cap) : max_cap(max_cap), cap(0), enemies(arena::arena_rec), target_pos(Vector2Zero()) {
     }
 
     // true - enemy spawned
@@ -29,39 +30,56 @@ struct Enemies {
 
     template <Shape S>
     void deal_damage(S shape, uint32_t damage, Element element, std::vector<ItemDrop>& item_drop_pusher) {
-        auto [first, last] = std::ranges::remove_if(enemies, [&](auto& enemy) -> bool {
-            bool dead = false;
+        enemies.search_by(
+            [&shape](const quadtree::Box& bbox) -> bool {
+                shapes::Polygon rec = Rectangle{.x = bbox.min.x,
+                                     .y = bbox.min.y,
+                                     .width = bbox.max.x - bbox.min.x,
+                                     .height = bbox.max.y - bbox.min.y};
 
-            for (const auto& origin :
-                 {Vector2Zero(), arena::top_origin, arena::right_origin, arena::bottom_origin, arena::left_origin}) {
-                shape.translate(origin);
-                if (check_collision(shape, enemy.simple_hitbox)) {
-                    dead = enemy.take_damage(damage, element);
-                    shape.translate(-origin);
-                    break;
-                } else {
+                for (const auto& origin : {Vector2Zero(), arena::top_origin, arena::right_origin, arena::bottom_origin,
+                                           arena::left_origin}) {
+                    shape.translate(origin);
+                    if (check_collision(rec, shape)) {
+                        return true;
+                        shape.translate(-origin);
+                    }
                     shape.translate(-origin);
                 }
-            }
 
-            if (dead) {
-                item_drop_pusher.emplace_back(enemy.level, xz_component(enemy.position));
+                return false;
+            },
+            [&](const Vector2& p, auto ix) {
+                auto& hitbox = enemies.data[ix].val.simple_hitbox;
+
+                for (const auto& origin : {Vector2Zero(), arena::top_origin, arena::right_origin, arena::bottom_origin,
+                                           arena::left_origin}) {
+                    shape.translate(origin);
+                    if (check_collision(shape, hitbox)) {
+                        return true;
+                        shape.translate(-origin);
+                    }
+                    shape.translate(-origin);
+                }
+
+                return false;
+            },
+            [&](auto ix) {
+                auto& enemy = enemies.data[ix].val;
+                if (!enemy.take_damage(damage, element)) return;
+
+                item_drop_pusher.emplace_back(enemy.level, xz_component(enemy.pos));
                 if (auto enemy_cap = enemies::get_info(enemy.state).cap_value; enemy_cap < cap) {
                     cap -= enemy_cap;
                 } else {
                     cap = 0;
                 }
                 killed++;
-            }
-
-            return dead;
-        });
-        enemies.erase(first, last);
+            });
     }
 
     std::optional<std::reference_wrapper<const Enemy>> closest_to(const Vector2& point) const;
 
-    // TODO: use modules, else I'll fucking kms
     uint32_t tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models);
 
     // TODO: deferred drawing

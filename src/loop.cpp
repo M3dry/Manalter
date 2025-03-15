@@ -143,7 +143,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     }
 
     DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
-    DrawText(std::format("ENEMIES: {}", enemies.enemies.size()).c_str(), 10, 30, 20, BLACK);
+    DrawText(std::format("ENEMIES: {}", enemies.enemies.data.size()).c_str(), 10, 30, 20, BLACK);
 
     EndDrawing();
 }
@@ -202,25 +202,25 @@ void Arena::update(Loop& loop) {
 
     enemies.tick(player.hitbox, loop.enemy_models);
     // TODO: move to `enemies_spawner.hpp`
-    {
-        auto [first, last] = std::ranges::remove_if(enemies.enemies, [&](auto& enemy) -> bool {
-            if (enemy.health <= 0) {
-                return true;
-            }
+    // {
+    //     auto [first, last] = std::ranges::remove_if(enemies.enemies, [&](auto& enemy) -> bool {
+    //         if (enemy.health <= 0) {
+    //             return true;
+    //         }
 
-            if (player.health != 0) {
-                auto damage = enemy.tick(player.hitbox, loop.enemy_models);
+    //         if (player.health != 0) {
+    //             auto damage = enemy.tick(player.hitbox, loop.enemy_models);
 
-                if (damage >= player.health)
-                    player.health = 0;
-                else
-                    player.health -= damage;
-            }
+    //             if (damage >= player.health)
+    //                 player.health = 0;
+    //             else
+    //                 player.health -= damage;
+    //         }
 
-            return false;
-        });
-        enemies.enemies.erase(first, last);
-    }
+    //         return false;
+    //     });
+    //     enemies.enemies.erase(first, last);
+    // }
     caster::tick(loop.player_stats->spellbook, enemies, item_drops.item_drops);
 
     item_drops.pickup(player.hitbox, [&](auto&& arg) {

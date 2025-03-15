@@ -135,7 +135,7 @@ namespace quadtree {
             if (data_ix >= size) return;
 
             if (data_ix != size - 1) {
-                std::swap(data[data_ix], data[data.size() - 1]);
+                std::swap(data[data_ix], data[size - 1]);
             }
 
             data.pop_back();
@@ -145,8 +145,17 @@ namespace quadtree {
             if (lookup(data, data_ix, data_id)) remove(data_ix);
         }
 
-        void in_box(const Box& bbox, std::function<void(node_ix, uint64_t)> f) {
-            in_box(bbox, 0, f);
+        void search_by(std::function<bool(const Box&)> check_box, std::function<bool(const Vector2&, std::size_t)> check_point, std::function<void(std::size_t)> f) {
+            search_by(0, check_box, check_point, f);
+        }
+
+        void in_box(const Box& bbox, std::function<void(std::size_t)> f) {
+            search_by([&bbox](const Box& other) { return bbox.intersect(other); },
+                      [&bbox](const Vector2& p, auto _) { return bbox.collides(p); }, f);
+        }
+
+        void delete_by(std::function<bool(T&)> f) {
+            delete_by(0, f);
         }
 
         // NOTE: don't think I'll need pruning, but this should be a good starting point
@@ -297,17 +306,18 @@ namespace quadtree {
         /*}*/
 
         // assumes `ix` is valid
-        void in_box(const Box& bbox, node_ix ix, std::function<void(node_ix, uint64_t)> f) {
+        void search_by(node_ix ix, std::function<bool(const Box&)> check_box,
+                       std::function<bool(const Vector2&, std::size_t)> check_point, std::function<void(std::size_t)> f) {
             auto& node = nodes[ix].val;
 
-            if (!node.bbox.intersect(bbox)) return;
+            if (!check_box(node.bbox)) return;
 
             if (!node.subdivided) {
-                for (auto& [ix, id] : node.data_ixs_ided) {
-                    if (!lookup(data, ix, id)) continue;
+                for (auto& [data_ix, data_id] : node.data_ixs_ided) {
+                    if (!lookup(data, data_ix, data_id)) continue;
 
-                    if (bbox.collides(data[ix].val.position())) {
-                        f(ix, id);
+                    if (check_point(data[data_ix].val.position(), data_ix)) {
+                        f(data_ix);
                     }
                 }
                 return;
@@ -320,7 +330,40 @@ namespace quadtree {
                         assert(false && "A subdivided node should always have values");
                     }
 
-                    in_box(bbox, child_ix, f);
+                    search_by(child_ix, check_box, check_point, f);
+                }
+            }
+        }
+
+        void delete_by(node_ix ix, std::function<bool(T&)> f) {
+            auto& node = nodes[ix].val;
+
+            if (!node.subdivided) {
+                int i = 0;
+                auto size = node.data_ixs_ided.size();
+                while (i < size) {
+                    auto& [data_ix, data_id] = node.data_ixs_ided[i];
+                    // remove the already removed element from data_ixs
+                    if (!lookup(data, data_ix, data_id)) {
+                        std::swap(node.data_ixs_ided[i], node.data_ixs_ided[size - 1]);
+                        size--;
+                        node.data_ixs_ided.pop_back();
+
+                        continue;
+                    }
+
+                    if (f(data[data_ix].val)) {
+                        std::swap(data[data_ix], data[data.size() - 1]);
+                        data.pop_back();
+
+                        std::swap(node.data_ixs_ided[i], node.data_ixs_ided[size - 1]);
+                        size--;
+                        node.data_ixs_ided.pop_back();
+
+                        continue;
+                    }
+
+                    i++;
                 }
             }
         }

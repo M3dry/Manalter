@@ -1,6 +1,5 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
-#include "rayhacks.hpp"
 #include "raylib.h"
 #include "raymath.h"
 #include "utility.hpp"
@@ -100,7 +99,7 @@ EnemyModels::~EnemyModels() {
 void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) const {
     auto [model, animation] = enemy_models[state];
     UpdateModelAnimation(model, animation.animations[anim_index], anim_curr_frame);
-    DrawModelEx(model, Vector3Add(position, offset), (Vector3){0.0f, 1.0f, 0.0f}, angle,
+    DrawModelEx(model, Vector3Add(pos, offset), (Vector3){0.0f, 1.0f, 0.0f}, angle,
                 std::visit(
                     [](auto&& arg) -> Vector3 {
                         auto scale = std::decay_t<decltype(arg)>::info.model_scale;
@@ -115,8 +114,8 @@ void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) const {
 
 void Enemy::update_target(Vector2 new_target) {
     // get delta
-    movement.x = new_target.x - position.x;
-    movement.y = new_target.y - position.z;
+    movement.x = new_target.x - pos.x;
+    movement.y = new_target.y - pos.z;
     // wrap around
     movement.x = wrap((movement.x + ARENA_WIDTH/2.0f), ARENA_WIDTH) - ARENA_WIDTH/2.0f;
     movement.y = wrap((movement.y + ARENA_WIDTH/2.0f), ARENA_WIDTH) - ARENA_WIDTH/2.0f;
@@ -131,12 +130,12 @@ void Enemy::update_target(Vector2 new_target) {
 uint32_t Enemy::tick(shapes::Circle target_hitbox, EnemyModels& enemy_models) {
     return std::visit(
         [&](auto&& arg) {
-            position.x += movement.x * speed;
-            position.z += movement.y * speed;
-            arena::loop_around(position.x, position.z);
+            pos.x += movement.x * speed;
+            pos.z += movement.y * speed;
+            arena::loop_around(pos.x, pos.z);
 
-            simple_hitbox.center.x = position.x;
-            simple_hitbox.center.y = position.z;
+            simple_hitbox.center.x = pos.x;
+            simple_hitbox.center.y = pos.z;
 
             auto [_, animation] = enemy_models[state];
             anim_curr_frame = (anim_curr_frame + 3) % animation.animations[anim_index].frameCount;
