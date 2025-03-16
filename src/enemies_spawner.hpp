@@ -32,10 +32,7 @@ struct Enemies {
     void deal_damage(S shape, uint32_t damage, Element element, std::vector<ItemDrop>& item_drop_pusher) {
         enemies.search_by(
             [&shape](const quadtree::Box& bbox) -> bool {
-                shapes::Polygon rec = Rectangle{.x = bbox.min.x,
-                                     .y = bbox.min.y,
-                                     .width = bbox.max.x - bbox.min.x,
-                                     .height = bbox.max.y - bbox.min.y};
+                shapes::Polygon rec = (Rectangle)bbox;
 
                 for (const auto& origin : {Vector2Zero(), arena::top_origin, arena::right_origin, arena::bottom_origin,
                                            arena::left_origin}) {
@@ -49,8 +46,8 @@ struct Enemies {
 
                 return false;
             },
-            [&](const Vector2& p, auto ix) {
-                auto& hitbox = enemies.data[ix].val.simple_hitbox;
+            [&](const auto& enemy) {
+                auto& hitbox = enemy.simple_hitbox;
 
                 for (const auto& origin : {Vector2Zero(), arena::top_origin, arena::right_origin, arena::bottom_origin,
                                            arena::left_origin}) {
@@ -64,8 +61,7 @@ struct Enemies {
 
                 return false;
             },
-            [&](auto ix) {
-                auto& enemy = enemies.data[ix].val;
+            [&](auto& enemy, auto ix) {
                 if (!enemy.take_damage(damage, element)) return;
 
                 item_drop_pusher.emplace_back(enemy.level, xz_component(enemy.pos));
@@ -74,13 +70,16 @@ struct Enemies {
                 } else {
                     cap = 0;
                 }
+
                 killed++;
+
+                enemies.remove(ix);
             });
     }
 
-    std::optional<std::reference_wrapper<const Enemy>> closest_to(const Vector2& point) const;
+    std::optional<std::size_t> closest_to(const Vector2& point) const;
 
-    uint32_t tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models);
+    uint32_t tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models, const Vector2& target_pos);
 
     // TODO: deferred drawing
     void draw(EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle) const;

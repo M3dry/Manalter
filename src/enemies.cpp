@@ -127,7 +127,7 @@ void Enemy::update_target(Vector2 new_target) {
     angle = std::fmod(270 - std::atan2(-movement.y, -movement.x) * 180.0f / std::numbers::pi, 360);
 }
 
-uint32_t Enemy::tick(shapes::Circle target_hitbox, EnemyModels& enemy_models) {
+uint32_t Enemy::tick(shapes::Circle target_hitbox, EnemyModels& enemy_models, std::optional<Vector2> target) {
     return std::visit(
         [&](auto&& arg) {
             pos.x += movement.x * speed;

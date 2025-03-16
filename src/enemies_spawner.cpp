@@ -42,8 +42,8 @@ void Enemies::update_target(const Vector2& pos) {
     target_pos = pos;
 }
 
-std::optional<std::reference_wrapper<const Enemy>> Enemies::closest_to(const Vector2& point) const {
-    /*if (enemies.size() == 0) return std::nullopt;*/
+std::optional<std::size_t> Enemies::closest_to(const Vector2& point) const {
+    if (enemies.data.size() == 0) return std::nullopt;
     /**/
     /*std::size_t closest = 0;*/
     /*float sqr_dist = Vector2DistanceSqr(point, xz_component(enemies[closest].position));*/
@@ -62,13 +62,18 @@ std::optional<std::reference_wrapper<const Enemy>> Enemies::closest_to(const Vec
     /*return enemies[closest];*/
 }
 
-uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models) {
+uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models, const Vector2& new_target) {
     static uint8_t tick_count = 0;
 
     uint32_t acc = 0;
     for (auto& enemy : enemies.data) {
-        acc += enemy.val.tick(target_hitbox, enemy_models);
+        acc += enemy.val.tick(target_hitbox, enemy_models,
+                              target_pos == new_target ? std::nullopt : std::optional(target_pos));
     }
+
+    enemies.rebuild();
+
+    target_pos = new_target;
 
     if (++tick_count == 20) {
         spawn(target_pos);
@@ -80,6 +85,7 @@ uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_m
 
 void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle) const {
     for (const auto& enemy : enemies.data) {
-        if (check_collision(visibility_circle, xz_component(Vector3Add(enemy.val.pos, offset)))) enemy.val.draw(enemy_models, offset);
+        if (check_collision(visibility_circle, xz_component(Vector3Add(enemy.val.pos, offset))))
+            enemy.val.draw(enemy_models, offset);
     }
 }

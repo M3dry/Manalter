@@ -7,7 +7,6 @@ set(MANALTER_LIB_SOURCES
     spell.cpp
     spell_caster.cpp
     utility.cpp
-    ringbuffer.cpp
     enemies.cpp
     enemies_spawner.cpp
     item_drops.cpp

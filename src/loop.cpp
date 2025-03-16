@@ -196,31 +196,14 @@ void Arena::update(Loop& loop) {
     });
 
     player.tick((Vector2){movement.x * 20, movement.y * 20}, angle.x / angle.y, loop.player_stats->spellbook);
-    if (movement.x != 0 || movement.y != 0) {
-        enemies.update_target(xz_component(player.position));
+
+    auto damage_done = enemies.tick(player.hitbox, loop.enemy_models, xz_component(player.position));
+    if (player.health <= damage_done) {
+        player.health = 0;
+    } else {
+        player.health -= damage_done;
     }
 
-    enemies.tick(player.hitbox, loop.enemy_models);
-    // TODO: move to `enemies_spawner.hpp`
-    // {
-    //     auto [first, last] = std::ranges::remove_if(enemies.enemies, [&](auto& enemy) -> bool {
-    //         if (enemy.health <= 0) {
-    //             return true;
-    //         }
-
-    //         if (player.health != 0) {
-    //             auto damage = enemy.tick(player.hitbox, loop.enemy_models);
-
-    //             if (damage >= player.health)
-    //                 player.health = 0;
-    //             else
-    //                 player.health -= damage;
-    //         }
-
-    //         return false;
-    //     });
-    //     enemies.enemies.erase(first, last);
-    // }
     caster::tick(loop.player_stats->spellbook, enemies, item_drops.item_drops);
 
     item_drops.pickup(player.hitbox, [&](auto&& arg) {

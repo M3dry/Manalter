@@ -120,7 +120,8 @@ namespace caster {
             case spell::movement::Player:
                 return player;
             case spell::movement::ClosestEnemy:
-                if (auto enemy = enemies.closest_to(player); enemy) return xz_component(enemy->get().pos);
+                if (auto enemy_ix = enemies.closest_to(player); enemy_ix)
+                    return xz_component(enemies.enemies.data[*enemy_ix].val.pos);
                 return std::nullopt;
         }
     }
