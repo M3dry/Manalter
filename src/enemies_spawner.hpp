@@ -17,6 +17,7 @@ struct Enemies {
     uint32_t cap;
     quadtree::QuadTree<10, Enemy> enemies;
     uint64_t killed;
+    uint32_t stored_exp;
     Vector2 target_pos;
 
     Enemies(uint32_t max_cap) : max_cap(max_cap), cap(0), enemies(arena::arena_rec), target_pos(Vector2Zero()) {
@@ -62,7 +63,8 @@ struct Enemies {
                 return false;
             },
             [&](auto& enemy, auto ix) {
-                if (!enemy.take_damage(damage, element)) return;
+                auto exp = enemy.take_damage(damage, element);
+                if (!exp) return;
 
                 item_drop_pusher.emplace_back(enemy.level, xz_component(enemy.pos));
                 if (auto enemy_cap = enemies::get_info(enemy.state).cap_value; enemy_cap < cap) {
@@ -72,15 +74,15 @@ struct Enemies {
                 }
 
                 killed++;
-
+                stored_exp += *exp;
                 enemies.remove(ix);
             });
     }
-
-    std::optional<std::size_t> closest_to(const Vector2& point) const;
 
     uint32_t tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models, const Vector2& target_pos);
 
     // TODO: deferred drawing
     void draw(EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle) const;
+
+    uint32_t take_exp();
 };

@@ -78,7 +78,6 @@ concept IsSpell = requires(T s) {
     { T::info } -> std::same_as<const spell::Info&>;
 };
 
-// TODO: macro magic, same as for enemies
 namespace spells {
     struct FireWall {
         static constexpr spell::Info info = {

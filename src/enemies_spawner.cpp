@@ -42,26 +42,6 @@ void Enemies::update_target(const Vector2& pos) {
     target_pos = pos;
 }
 
-std::optional<std::size_t> Enemies::closest_to(const Vector2& point) const {
-    if (enemies.data.size() == 0) return std::nullopt;
-    /**/
-    /*std::size_t closest = 0;*/
-    /*float sqr_dist = Vector2DistanceSqr(point, xz_component(enemies[closest].position));*/
-    /**/
-    /*if (sqr_dist == 0) return enemies[closest];*/
-    /**/
-    /*for (std::size_t i = 1; i < enemies.size(); i++) {*/
-    /*    if (auto tmp = Vector2DistanceSqr(point, xz_component(enemies[i].position)); tmp < sqr_dist) {*/
-    /*        sqr_dist = tmp;*/
-    /*        closest = i;*/
-    /**/
-    /*        if (sqr_dist == 0) break;*/
-    /*    }*/
-    /*}*/
-    /**/
-    /*return enemies[closest];*/
-}
-
 uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models, const Vector2& new_target) {
     static uint8_t tick_count = 0;
 
@@ -72,6 +52,7 @@ uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_m
     }
 
     enemies.rebuild();
+    enemies.resolve_collisions();
 
     target_pos = new_target;
 
@@ -88,4 +69,10 @@ void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset, const shape
         if (check_collision(visibility_circle, xz_component(Vector3Add(enemy.val.pos, offset))))
             enemy.val.draw(enemy_models, offset);
     }
+}
+
+uint32_t Enemies::take_exp() {
+    auto exp = stored_exp;
+    stored_exp = 0;
+    return exp;
 }

@@ -81,7 +81,7 @@ EnemyModels::EnemyModels() {
         auto model = LoadModel(model_path);
         model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
 
-        models[i] = { model, anim };
+        models[i] = {model, anim};
     }
 }
 
@@ -117,8 +117,8 @@ void Enemy::update_target(Vector2 new_target) {
     movement.x = new_target.x - pos.x;
     movement.y = new_target.y - pos.z;
     // wrap around
-    movement.x = wrap((movement.x + ARENA_WIDTH/2.0f), ARENA_WIDTH) - ARENA_WIDTH/2.0f;
-    movement.y = wrap((movement.y + ARENA_WIDTH/2.0f), ARENA_WIDTH) - ARENA_WIDTH/2.0f;
+    movement.x = wrap((movement.x + ARENA_WIDTH / 2.0f), ARENA_WIDTH) - ARENA_WIDTH / 2.0f;
+    movement.y = wrap((movement.y + ARENA_WIDTH / 2.0f), ARENA_WIDTH) - ARENA_WIDTH / 2.0f;
 
     if (movement.x * movement.x + movement.y * movement.y > 1e-6f) {
         movement = Vector2Normalize(movement);
@@ -163,7 +163,7 @@ uint32_t Enemy::tick(shapes::Circle target_hitbox, EnemyModels& enemy_models, st
         state);
 }
 
-bool Enemy::take_damage(uint32_t damage, Element element) {
+std::optional<uint32_t> Enemy::take_damage(uint32_t damage, Element element) {
     // TODO: Elemental damage scaling
     if (health <= damage) {
         health = 0;
@@ -171,5 +171,15 @@ bool Enemy::take_damage(uint32_t damage, Element element) {
     }
 
     health -= damage;
-    return false;
+    return std::nullopt;
+}
+
+Vector2 Enemy::position() const {
+    return xz_component(pos);
+}
+
+uint32_t Enemy::dropped_exp() const {
+    auto info = enemies::get_info(state);
+
+    return info.base_exp_dropped * level * (boss ? 10 : 1);
 }

@@ -4,7 +4,6 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "spell.hpp"
-#include "utility.hpp"
 #include <cassert>
 #include <cstdint>
 #include <variant>
@@ -30,6 +29,7 @@ namespace enemies {
         std::pair<uint32_t, uint32_t> speed_range;
         uint32_t max_health;
         float simple_hitbox_radius;
+        uint32_t base_exp_dropped;
     };
 
     struct Paladin {
@@ -51,6 +51,7 @@ namespace enemies {
             .speed_range = {2.5, 2.5},
             .max_health = 100,
             .simple_hitbox_radius = 10.0f,
+            .base_exp_dropped = 20,
         };
     };
 
@@ -66,6 +67,7 @@ namespace enemies {
             .speed_range = {1, 3},
             .max_health = 50,
             .simple_hitbox_radius = 5.0f,
+            .base_exp_dropped = 10,
         };
     };
 
@@ -83,6 +85,7 @@ namespace enemies {
             .speed_range = {5, 10},
             .max_health = 300,
             .simple_hitbox_radius = 5.0f,
+            .base_exp_dropped = 100,
         };
     };
 
@@ -100,6 +103,7 @@ namespace enemies {
             .speed_range = {4, 7},
             .max_health = 500,
             .simple_hitbox_radius = 10.0f,
+            .base_exp_dropped = 200,
         };
     };
 
@@ -267,9 +271,9 @@ struct Enemy {
     // returned number is the amount of damage taken by the player
     uint32_t tick(shapes::Circle target_hitbox, EnemyModels& enemy_models, std::optional<Vector2> target);
 
-    bool take_damage(uint32_t damage, Element element);
+    // if not nullopt, then the enemy is dead and dropped uint32_t amount of exp
+    std::optional<uint32_t> take_damage(uint32_t damage, Element element);
 
-    Vector2 position() const {
-        return xz_component(pos);
-    }
+    Vector2 position() const;
+    uint32_t dropped_exp() const;
 };

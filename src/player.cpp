@@ -42,13 +42,16 @@ uint32_t Player::exp_to_lvl(uint16_t lvl) {
     return 100 * std::pow(lvl, 2);
 }
 
-void Player::add_exp(uint32_t e) {
+bool Player::add_exp(uint32_t e) {
     exp += e;
     if (exp >= exp_to_next_lvl) {
         lvl++;
         exp -= exp_to_next_lvl;
         exp_to_next_lvl = Player::exp_to_lvl(lvl + 1);
+        return true;
     }
+
+    return false;
 }
 
 std::optional<std::reference_wrapper<const Spell>> Player::get_equipped_spell(int idx,

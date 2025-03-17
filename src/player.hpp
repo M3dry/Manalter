@@ -10,7 +10,7 @@
 using Player = struct Player {
     static constexpr float visibility_radius = 450.0f;
     // for some reason .x moves on the y axis and .y moves on the x axis.... fuck me
-    static constexpr Vector2 visibility_center_offset = { -280.0f, 0.0f };
+    static constexpr Vector2 visibility_center_offset = {-280.0f, 0.0f};
 
     Vector3 prev_position;
     Vector3 position;
@@ -58,9 +58,10 @@ using Player = struct Player {
     void update_interpolated_pos(double mili_accum);
     void draw_model(assets::Store& assets) const;
 
-    // Returns how much exp is required to level up from `lvl - 1` to `lvl`
+    // returns how much exp is required to level up from `lvl - 1` to `lvl`
     static uint32_t exp_to_lvl(uint16_t lvl);
-    void add_exp(uint32_t e);
+    // returns if the player leveled up
+    bool add_exp(uint32_t e);
     std::optional<std::reference_wrapper<const Spell>> get_equipped_spell(int idx, const SpellBook& spellbook) const;
 
     // -2 - slot out of range

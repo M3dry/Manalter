@@ -9,16 +9,35 @@
 #include "item_drops.hpp"
 #include "player.hpp"
 #include "ui.hpp"
+#include <variant>
 
 struct Loop;
 
 struct Arena {
+    struct Playing {
+        Playing(Keys& keys);
+    };
+
+    struct PowerUpSelection {
+        PowerUpSelection(Keys& keys);
+
+        void draw(assets::Store& assets, Loop& loop);
+        void update(Arena& arena, Loop& loop);
+    };
+
+    struct Paused {
+        Paused(Keys& keys);
+
+        void draw(assets::Store& assets, Loop& loop);
+        void update(Arena& arena, Loop& loop);
+    };
+
+    std::variant<Playing, PowerUpSelection, Paused> state;
     Player player;
     Enemies enemies;
     ItemDrops item_drops;
 
     std::optional<hud::SpellBookUI> spellbook_ui;
-    bool paused;
 
     Vector2 mouse_xz;
 
@@ -32,6 +51,11 @@ struct Arena {
 
     void draw(assets::Store& assets, Loop& loop);
     void update(Loop& loop);
+
+    template <typename T>
+    bool curr_state() const {
+        return std::holds_alternative<T>(state);
+    }
 };
 
 struct Hub {
