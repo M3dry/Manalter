@@ -10,13 +10,12 @@ int main(void) {
     quadtree.insert({Vector2{70, 70}, "point4"});
     auto [ix, id] = quadtree.insert({Vector2{30, 40}, "point5"});
     /*quadtree.remove(ix, id);*/
+
+    quadtree.rebuild();
+    quadtree.resolve_collisions([](const auto& p, const auto& p2) -> std::optional<Vector2> {
+        return std::nullopt;
+    }, 5);
     quadtree.print(printer); // [point1, point5], [point2], [point3], [point4]
-
-    std::println("\nLook up:");
-    quadtree.in_box(quadtree::Box({ 30, 30 }, { 60, 60 }), [](const auto& _, auto ix) {
-        std::println("\tIX: {}", ix);
-    });
-
 
     return 0;
 }

@@ -275,5 +275,6 @@ struct Enemy {
     std::optional<uint32_t> take_damage(uint32_t damage, Element element);
 
     Vector2 position() const;
+    void set_position(const Vector2& p);
     uint32_t dropped_exp() const;
 };

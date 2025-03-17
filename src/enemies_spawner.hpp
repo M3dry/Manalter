@@ -15,9 +15,9 @@ struct Enemies {
 
     uint32_t max_cap;
     uint32_t cap;
-    quadtree::QuadTree<10, Enemy> enemies;
-    uint64_t killed;
-    uint32_t stored_exp;
+    quadtree::QuadTree<5, Enemy> enemies;
+    uint64_t killed = 0;
+    uint32_t stored_exp = 0;
     Vector2 target_pos;
 
     Enemies(uint32_t max_cap) : max_cap(max_cap), cap(0), enemies(arena::arena_rec), target_pos(Vector2Zero()) {

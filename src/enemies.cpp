@@ -130,12 +130,7 @@ void Enemy::update_target(Vector2 new_target) {
 uint32_t Enemy::tick(shapes::Circle target_hitbox, EnemyModels& enemy_models, std::optional<Vector2> target) {
     return std::visit(
         [&](auto&& arg) {
-            pos.x += movement.x * speed;
-            pos.z += movement.y * speed;
-            arena::loop_around(pos.x, pos.z);
-
-            simple_hitbox.center.x = pos.x;
-            simple_hitbox.center.y = pos.z;
+            set_position({ movement.x * speed, movement.y * speed });
 
             auto [_, animation] = enemy_models[state];
             anim_curr_frame = (anim_curr_frame + 3) % animation.animations[anim_index].frameCount;
@@ -176,6 +171,15 @@ std::optional<uint32_t> Enemy::take_damage(uint32_t damage, Element element) {
 
 Vector2 Enemy::position() const {
     return xz_component(pos);
+}
+
+void Enemy::set_position(const Vector2& p) {
+    pos.x += p.x;
+    pos.z += p.y;
+    arena::loop_around(pos.x, pos.z);
+
+    simple_hitbox.center.x = pos.x;
+    simple_hitbox.center.y = pos.z;
 }
 
 uint32_t Enemy::dropped_exp() const {

@@ -52,7 +52,22 @@ uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_m
     }
 
     enemies.rebuild();
-    enemies.resolve_collisions();
+    enemies.resolve_collisions([](const auto& e1, const auto& e2) -> std::optional<Vector2> {
+        auto dist_sqr = Vector2DistanceSqr(e1.position(), e2.position());
+
+#define SQR(x) ((x)*(x))
+        if (dist_sqr <= SQR(e1.simple_hitbox.radius + e2.simple_hitbox.radius)) {
+            if (dist_sqr == 0) {
+                return Vector2Scale({ 1, 0 }, e1.simple_hitbox.radius);
+            }
+
+            auto collision_normal = Vector2Scale((e1.position() - e2.position()), std::sqrt(dist_sqr));
+            return collision_normal * ((e1.simple_hitbox.radius + e2.simple_hitbox.radius) - std::sqrt(dist_sqr));
+        }
+#undef SQR
+
+        return std::nullopt;
+    }, 5);
 
     target_pos = new_target;
 
