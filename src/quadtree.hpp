@@ -401,6 +401,9 @@ namespace quadtree {
                         root_bbox.wrap_around(pos1);
                         root_bbox.wrap_around(pos2);
 
+                        data[data_ix].val.set_position(pos1);
+                        data[data_ix2].val.set_position(pos2);
+
                         if (!node.bbox.contains(pos1)) to_remove.insert(data_ix);
                         if (!node.bbox.contains(pos2)) to_remove.insert(data_ix2);
                     }

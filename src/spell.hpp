@@ -9,10 +9,6 @@
 #include <variant>
 #include <vector>
 
-namespace spells {
-    enum struct Tag;
-}
-
 enum struct Element {
     Fire = 0,
     Ice,
