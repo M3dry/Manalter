@@ -99,6 +99,8 @@ Arena::Arena(Keys& keys, assets::Store& assets)
 
     player.equipped_spells[0] = 0;
     player.equipped_spells[1] = 1;
+
+    player.exp = 90;
 }
 
 void Arena::draw(assets::Store& assets, Loop& loop) {
@@ -343,8 +345,8 @@ void Main::draw(assets::Store& assets, Loop& loop) {
         loop.player_stats = PlayerStats();
         loop.scene.emplace<Hub>(loop.keys);
 
-        loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Rare, 5));
-        loop.player_stats->add_spell_to_spellbook(Spell(spells::FireWall{}, Rarity::Epic, 10));
+        loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Legendary, 100));
+        loop.player_stats->add_spell_to_spellbook(Spell(spells::FireWall{}, Rarity::Legendary, 100));
     }
 
     EndDrawing();
@@ -357,8 +359,8 @@ void Main::update(Loop& loop) {
                 loop.player_stats = PlayerStats();
                 loop.scene.emplace<Hub>(loop.keys);
 
-                loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Rare, 5));
-                loop.player_stats->add_spell_to_spellbook(Spell(spells::FireWall{}, Rarity::Epic, 10));
+                loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Legendary, 100));
+                loop.player_stats->add_spell_to_spellbook(Spell(spells::FireWall{}, Rarity::Legendary, 100));
                 break;
             }
             case KEY_ESCAPE:

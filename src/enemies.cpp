@@ -190,7 +190,7 @@ std::optional<uint32_t> Enemy::take_damage(uint32_t damage, Element element) {
     // TODO: Elemental damage scaling
     if (health <= damage) {
         health = 0;
-        return true;
+        return dropped_exp();
     }
 
     health -= damage;
