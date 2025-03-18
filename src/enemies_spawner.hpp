@@ -15,19 +15,16 @@ struct Enemies {
 
     uint32_t max_cap;
     uint32_t cap;
-    quadtree::QuadTree<5, Enemy> enemies;
+    QT<false> enemies;
     uint64_t killed = 0;
     uint32_t stored_exp = 0;
-    Vector2 target_pos;
 
-    Enemies(uint32_t max_cap) : max_cap(max_cap), cap(0), enemies(arena::arena_rec), target_pos(Vector2Zero()) {
+    Enemies(uint32_t max_cap) : max_cap(max_cap), cap(0), enemies(arena::arena_rec) {
     }
 
     // true - enemy spawned
     // false - cap is maxed out
     bool spawn(const Vector2& player_pos);
-
-    void update_target(const Vector2& player_pos);
 
     template <Shape S>
     void deal_damage(S shape, uint32_t damage, Element element, std::vector<ItemDrop>& item_drop_pusher) {
@@ -79,7 +76,7 @@ struct Enemies {
             });
     }
 
-    uint32_t tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models, const Vector2& target_pos);
+    uint32_t tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models);
 
     // TODO: deferred drawing
     void draw(EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle) const;

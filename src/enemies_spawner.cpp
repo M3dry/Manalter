@@ -6,6 +6,13 @@
 #include "utility.hpp"
 #include <raymath.h>
 
+template <int N>
+void get_movement_with_repulsion(quadtree::QuadTree<N, Enemy>& enemies, Vector2& player_pos, std::size_t enemy_ix) {
+    static const float neighbourhood_radius = 50.0f;
+
+    auto& enemy = enemies.data[enemy_ix].val;
+}
+
 bool Enemies::spawn(const Vector2& player_pos) {
     static constexpr float arena_width = ARENA_WIDTH / 2.0f;
     static constexpr float arena_height = ARENA_HEIGHT / 2.0f;
@@ -30,49 +37,18 @@ bool Enemies::spawn(const Vector2& player_pos) {
     return true;
 }
 
-void Enemies::update_target(const Vector2& pos) {
-    if (pos == target_pos) {
-        return;
-    }
-
-    for (auto& enemy : enemies.data) {
-        enemy.val.update_target(pos);
-    }
-
-    target_pos = pos;
-}
-
-uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models, const Vector2& new_target) {
+uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models) {
     static uint8_t tick_count = 0;
 
     uint32_t acc = 0;
-    for (auto& enemy : enemies.data) {
-        acc += enemy.val.tick(target_hitbox, enemy_models,
-                              target_pos == new_target ? std::nullopt : std::optional(target_pos));
+    for (std::size_t i = 0; i < enemies.data.size(); i++) {
+        acc += enemies.data[i].val.tick(enemies, i, target_hitbox, enemy_models);
     }
 
     enemies.rebuild();
-    enemies.resolve_collisions([](const auto& e1, const auto& e2) -> std::optional<Vector2> {
-        auto dist_sqr = Vector2DistanceSqr(e1.position(), e2.position());
-
-#define SQR(x) ((x)*(x))
-        if (dist_sqr <= SQR(e1.simple_hitbox.radius + e2.simple_hitbox.radius)) {
-            if (dist_sqr == 0) {
-                return Vector2Scale({ 1, 0 }, e1.simple_hitbox.radius);
-            }
-
-            auto collision_normal = Vector2Scale((e1.position() - e2.position()), std::sqrt(dist_sqr));
-            return collision_normal * ((e1.simple_hitbox.radius + e2.simple_hitbox.radius) - std::sqrt(dist_sqr));
-        }
-#undef SQR
-
-        return std::nullopt;
-    }, 5);
-
-    target_pos = new_target;
 
     if (++tick_count == 20) {
-        spawn(target_pos);
+        spawn(target_hitbox.center);
         tick_count = 0;
     }
 

@@ -18,7 +18,7 @@ TEST_CASE("Spawn every second", "[enemy][raylib]") {
     EnemyModels enemy_models{};
 
     for (int i = 0; i < TICKS * n; i++) {
-        enemies.tick(shapes::Circle(Vector2Zero(), 1.0f), enemy_models, Vector2Zero());
+        enemies.tick(shapes::Circle(Vector2Zero(), 1.0f), enemy_models);
     }
 
     REQUIRE(enemies.enemies.data.size() == n);

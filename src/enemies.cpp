@@ -1,37 +1,40 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
+#include "rayhacks.hpp"
 #include "raylib.h"
 #include "raymath.h"
 #include "utility.hpp"
 #include <cassert>
 
 namespace enemies {
-    int Paladin::tick(Enemy& data, const shapes::Circle target_hitbox) {
+    int Paladin::tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox) {
+        auto& data = enemies.data[ix].val;
+
         switch (data.collision_state) {
             case Enemy::Collision:
                 data.anim_index = 0;
                 data.anim_curr_frame = 0;
-                data.movement = Vector2Zero();
+                /*data.movement = Vector2Zero();*/
                 return data.damage;
             case Enemy::Uncollision:
                 data.anim_index = 1;
                 data.anim_curr_frame = 0;
-                data.update_target(target_hitbox.center);
+                /*data.update_target(enemies, target_hitbox.center, ix);*/
                 return 0;
             case Enemy::Unchanged:
                 return 0;
         }
     }
 
-    int Zombie::tick(Enemy& data, const shapes::Circle target_hitbox) {
+    int Zombie::tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox) {
         return 0;
     }
 
-    int Heraklios::tick(Enemy& data, const shapes::Circle target_hitbox) {
+    int Heraklios::tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox) {
         return 0;
     }
 
-    int Maw::tick(Enemy& data, const shapes::Circle target_hitbox) {
+    int Maw::tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox) {
         return 0;
     }
 
@@ -112,25 +115,50 @@ void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) const {
 #endif
 }
 
-void Enemy::update_target(Vector2 new_target) {
-    // get delta
-    movement.x = new_target.x - pos.x;
-    movement.y = new_target.y - pos.z;
-    // wrap around
-    movement.x = wrap((movement.x + ARENA_WIDTH / 2.0f), ARENA_WIDTH) - ARENA_WIDTH / 2.0f;
-    movement.y = wrap((movement.y + ARENA_WIDTH / 2.0f), ARENA_WIDTH) - ARENA_WIDTH / 2.0f;
+void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix) {
+    static const float neighbourhood_radius = 30.0f;
+    static constexpr float weight_attraction = 3.0f;
+    static constexpr float weight_separation = 11.0f;
 
-    if (movement.x * movement.x + movement.y * movement.y > 1e-6f) {
-        movement = Vector2Normalize(movement);
+    auto id = enemies.data[ix].id;
+    auto enemy_pos = enemies.data[ix].val.position();
+
+    shapes::Circle circle_hitbox(enemy_pos, neighbourhood_radius);
+
+    Vector2 attraction_force;
+    attraction_force.x = player_pos.x - enemy_pos.x;
+    attraction_force.y = player_pos.y - enemy_pos.y;
+    attraction_force.x = wrap((attraction_force.x + ARENA_WIDTH / 2.0f), ARENA_WIDTH) - ARENA_WIDTH / 2.0f;
+    attraction_force.y = wrap((attraction_force.y + ARENA_WIDTH / 2.0f), ARENA_WIDTH) - ARENA_WIDTH / 2.0f;
+    if (Vector2LengthSqr(attraction_force) > 1e-6f) {
+        attraction_force = Vector2Normalize(attraction_force);
     }
+    angle = std::fmod(270 - std::atan2(-attraction_force.y, -attraction_force.x) * 180.0f / std::numbers::pi, 360);
 
-    angle = std::fmod(270 - std::atan2(-movement.y, -movement.x) * 180.0f / std::numbers::pi, 360);
+    Vector2 separation_force = Vector2Zero();
+
+    enemies.search_by(
+        [&circle_hitbox](const auto& bbox) -> bool { return check_collision((Rectangle)bbox, circle_hitbox); },
+        [&circle_hitbox](const auto& enemy) -> bool { return check_collision(enemy.simple_hitbox, circle_hitbox); },
+        [&](const auto& e, auto e_ix) {
+            if (e_ix == ix || enemies.data[e_ix].id == id) return;
+
+            auto d = enemy_pos - enemies.data[e_ix].val.position();
+
+            separation_force +=
+                Vector2Scale(Vector2Normalize(d), 1.0f / std::max(Vector2Length(d), 1e-6f));
+        });
+
+    movement = attraction_force*weight_attraction + separation_force*weight_separation;
+    movement += Vector2Scale(Vector2Normalize({ GetRandomValue(-100, 100)/100.f, GetRandomValue(-100, 100)/100.f }), 0.1f);
+    movement = Vector2Normalize(movement);
 }
 
-uint32_t Enemy::tick(shapes::Circle target_hitbox, EnemyModels& enemy_models, std::optional<Vector2> target) {
+uint32_t Enemy::tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hitbox, EnemyModels& enemy_models) {
     return std::visit(
         [&](auto&& arg) {
-            set_position({ movement.x * speed, movement.y * speed });
+            set_position({movement.x * speed, movement.y * speed});
+            update_target(enemies, target_hitbox.center, ix);
 
             auto [_, animation] = enemy_models[state];
             anim_curr_frame = (anim_curr_frame + 3) % animation.animations[anim_index].frameCount;
@@ -153,7 +181,7 @@ uint32_t Enemy::tick(shapes::Circle target_hitbox, EnemyModels& enemy_models, st
                 }
             }
 
-            return arg.tick(*this, target_hitbox);
+            return arg.tick(enemies, ix, target_hitbox);
         },
         state);
 }

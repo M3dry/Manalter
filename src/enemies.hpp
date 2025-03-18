@@ -1,6 +1,7 @@
 #pragma once
 
 #include "hitbox.hpp"
+#include "quadtree.hpp"
 #include "raylib.h"
 #include "raymath.h"
 #include "spell.hpp"
@@ -9,6 +10,9 @@
 #include <variant>
 
 struct Enemy;
+
+template <bool skip>
+using QT = quadtree::QuadTree<5, Enemy, skip>;
 
 namespace enemies {
     enum struct EnemyClass {
@@ -38,7 +42,7 @@ namespace enemies {
             Sprinting = 1,
         };
 
-        int tick(Enemy& data, const shapes::Circle target_hitbox);
+        int tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/paladin.glb",
@@ -56,7 +60,7 @@ namespace enemies {
     };
 
     struct Zombie {
-        int tick(Enemy& data, const shapes::Circle target_hitbox);
+        int tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/zombie.glb",
@@ -72,7 +76,7 @@ namespace enemies {
     };
 
     struct Heraklios {
-        int tick(Enemy& data, const shapes::Circle target_hitbox);
+        int tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/heraklios.glb",
@@ -90,7 +94,7 @@ namespace enemies {
     };
 
     struct Maw {
-        int tick(Enemy& data, const shapes::Circle target_hitbox);
+        int tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/maw.glb",
@@ -107,11 +111,11 @@ namespace enemies {
         };
     };
 
-    template <typename T>
-    concept IsEnemy = requires(T e, Enemy& enemy, const shapes::Circle& hitbox) {
+    template <uint8_t N, typename T>
+    concept IsEnemy = requires(T e, std::size_t ix, const shapes::Circle& hitbox, QT<true>& enemies) {
         { T::info } -> std::same_as<const Info&>;
         // gets called if target hitbox collides or uncollides with enemy hitbox
-        { e.tick(enemy, hitbox) } -> std::same_as<int>;
+        { e.tick(enemies, ix, hitbox) } -> std::same_as<int>;
     };
 
 #define EACH_ENEMY(F, G)                                                                                               \
@@ -121,6 +125,10 @@ namespace enemies {
     /*F(Maw)*/
 
     // DON'T LOOK HERE, pwetty pwease OwO
+
+#define ENEMY_ASSERT_CONCEPT(name) static_assert(IsEnemy<10, name>);
+    EACH_ENEMY(ENEMY_ASSERT_CONCEPT, ENEMY_ASSERT_CONCEPT)
+#undef ENEMY_ASSERT_CONCEPT
 
     enum class _EnemyType {
 #define ENEMY_TYPE_FIRST(name) name = 0,
@@ -267,9 +275,9 @@ struct Enemy {
     Enemy& operator=(Enemy&&) = default;
 
     void draw(EnemyModels& enemy_models, const Vector3& offset) const;
-    void update_target(Vector2 new_target);
+    void update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix);
     // returned number is the amount of damage taken by the player
-    uint32_t tick(shapes::Circle target_hitbox, EnemyModels& enemy_models, std::optional<Vector2> target);
+    uint32_t tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hitbox, EnemyModels& enemy_models);
 
     // if not nullopt, then the enemy is dead and dropped uint32_t amount of exp
     std::optional<uint32_t> take_damage(uint32_t damage, Element element);

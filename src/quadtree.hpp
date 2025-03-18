@@ -44,14 +44,13 @@ namespace quadtree {
 
         bool wrap_around(Vector2& v) const {
             if (contains(v)) return false;
-
+            
             float width = max.x - min.x;
             float height = max.y - min.y;
-
-            // Modulo-like wrap-around
-            v.x = min.x + fmod((v.x - min.x) + width, width);
-            v.y = min.y + fmod((v.y - min.y) + height, height);
-
+            
+            v.x = min.x + std::fmod(std::fmod((v.x - min.x), width) + width, width);
+            v.y = min.y + std::fmod(std::fmod((v.y - min.y), height) + height, height);
+            
             return true;
         }
     };
@@ -137,13 +136,23 @@ namespace quadtree {
 
     static_assert(HasPosition<pos<int>>);
 
-    template <uint8_t MaxPerNode, HasPosition T> class QuadTree {
+    template <uint8_t MaxPerNode, typename T, bool __SkipPositionCheck = false>
+    requires __SkipPositionCheck || HasPosition<T>
+    class QuadTree {
       public:
         // root node is always at 0 index
         std::vector<IDed<Node>> nodes;
         std::vector<IDed<T>> data;
 
         QuadTree(Box bbox) : nodes({Node(bbox)}) {};
+
+        operator QuadTree<MaxPerNode, T, false>&() {
+            return reinterpret_cast<QuadTree<MaxPerNode, T, false>&>(*this);
+        }
+
+        operator QuadTree<MaxPerNode, T, true>&() {
+            return reinterpret_cast<QuadTree<MaxPerNode, T, true>&>(*this);
+        }
 
         std::pair<std::size_t, uint64_t> insert(T&& t) {
             data.emplace_back(std::forward<T>(t));
@@ -203,15 +212,6 @@ namespace quadtree {
 
             for (int ix = 0; ix < data.size(); ix++) {
                 insert(0, -1, {ix, data[ix].id});
-            }
-        }
-
-        // the distance returned by collide can be squared or rooted, doesn't matter as long as it's consistent
-        void resolve_collisions(std::function<std::optional<Vector2>(const T&, const T&)> collide, int iterations) {
-            if (nodes.size() == 1) return;
-
-            for (int i = 0; i < iterations; i++) {
-                resolve_collisions(0, collide, nodes[0].val.bbox);
             }
         }
 
@@ -355,96 +355,6 @@ namespace quadtree {
                     search_by(child_ix, check_box, check_point, f);
                 }
             }
-        }
-
-        void resolve_collisions(node_ix node_ix, std::function<std::optional<Vector2>(const T&, const T&)> collide,
-                                const Box& root_bbox) {
-            auto& node = nodes[node_ix].val;
-
-            if (node.subdivided) {
-                for (int x = 0; x < 2; x++) {
-                    for (int y = 0; y < 2; y++) {
-                        auto& [child_ix, child_id] = node[x, y];
-                        if (!lookup(nodes, child_ix, child_id)) assert(false && "how can this happen");
-
-                        resolve_collisions(child_ix, collide, root_bbox);
-                    }
-                }
-            }
-
-            {
-                int i = 0;
-                while (i < node.data_ixs_ided.size()) {
-                    auto& [data_ix, data_id] = node.data_ixs_ided[i];
-                    if (!lookup(data, data_ix, data_id)) {
-                        std::swap(data[i], data.back());
-
-                        data.pop_back();
-                        continue;
-                    }
-
-                    i++;
-                }
-            }
-
-            std::set<std::size_t> to_remove;
-            for (auto& [data_ix, data_id] : node.data_ixs_ided) {
-                for (auto& [data_ix2, data_id2] : node.data_ixs_ided) {
-                    if (data_id == data_id2) continue;
-
-                    if (auto pen_vec = collide(data[data_ix].val, data[data_ix2].val); pen_vec) {
-                        auto halved = Vector2Scale(*pen_vec, 0.5f);
-
-                        auto pos1 = Vector2Add(data[data_ix].val.position(), halved);
-                        auto pos2 = Vector2Subtract(data[data_ix2].val.position(), halved);
-
-                        root_bbox.wrap_around(pos1);
-                        root_bbox.wrap_around(pos2);
-
-                        data[data_ix].val.set_position(pos1);
-                        data[data_ix2].val.set_position(pos2);
-
-                        if (!node.bbox.contains(pos1)) to_remove.insert(data_ix);
-                        if (!node.bbox.contains(pos2)) to_remove.insert(data_ix2);
-                    }
-                }
-            }
-
-            for (auto ix : to_remove) {
-                uint64_t id = 0;
-                for (int i = 0; i < node.data_ixs_ided.size(); i++) {
-                    if (node.data_ixs_ided[i].first == ix) {
-                        id = node.data_ixs_ided[i].second;
-                        std::swap(node.data_ixs_ided[i], node.data_ixs_ided.back());
-                        node.data_ixs_ided.pop_back();
-                        break;
-                    }
-                }
-
-                reinsert(0, ix, id);
-            }
-        }
-
-        bool reinsert(node_ix node_ix, std::size_t data_ix, uint64_t data_id) {
-            auto& node = nodes[node_ix].val;
-
-            if (!node.bbox.contains(data[data_ix].val.position())) return false;
-
-            if (!node.subdivided) {
-                node.data_ixs_ided.emplace_back(data_ix, data_id);
-                return true;
-            }
-
-            for (int x = 0; x < 2; x++) {
-                for (int y = 0; y < 2; y++) {
-                    auto& [child_ix, child_id] = node[x, y];
-                    if (!lookup(nodes, child_ix, child_id)) assert(false && "This really shouldn't happen");
-
-                    if (reinsert(child_ix, data_ix, data_id)) return true;
-                }
-            }
-
-            return false;
         }
     };
 }
