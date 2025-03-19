@@ -2,16 +2,8 @@
 
 #include "enemies.hpp"
 #include "hitbox.hpp"
-#include "rayhacks.hpp"
 #include "utility.hpp"
 #include <raymath.h>
-
-template <int N>
-void get_movement_with_repulsion(quadtree::QuadTree<N, Enemy>& enemies, Vector2& player_pos, std::size_t enemy_ix) {
-    static const float neighbourhood_radius = 50.0f;
-
-    auto& enemy = enemies.data[enemy_ix].val;
-}
 
 bool Enemies::spawn(const Vector2& player_pos) {
     static constexpr float arena_width = ARENA_WIDTH / 2.0f;
@@ -33,7 +25,10 @@ bool Enemies::spawn(const Vector2& player_pos) {
                               (float)GetRandomValue(-arena_height, arena_height)};
     };
 
-    enemies.insert(Enemy(enemy_pos, killed / 100, false, std::move(enemy.value())));
+    int base_level = std::ceil(killed / 100.0f);
+    auto lvl = GetRandomValue(std::max(base_level - 2, 1), base_level + 2);
+    auto _enemy = Enemy(enemy_pos, lvl, false, std::move(enemy.value()));
+    enemies.insert(std::move(_enemy));
     return true;
 }
 
@@ -64,7 +59,7 @@ void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset, const shape
 
 uint32_t Enemies::take_exp() {
     auto exp = stored_exp;
-    std::println("EXP TAKEN: {}", exp);
+    if (exp != 0) std::println("EXP TAKEN: {}", exp);
     stored_exp = 0;
     return exp;
 }

@@ -59,14 +59,14 @@ namespace shapes {
     }
 
     void Polygon::draw_lines_2D(Color color) const {
-        for (int i = 1; i < points.size(); i++) {
+        for (std::size_t i = 1; i < points.size(); i++) {
             DrawLineV(points[i - 1], points[i], color);
         }
         DrawLineV(points[points.size() - 1], points[0], color);
     }
 
     void Polygon::draw_lines_3D(Color color, float y) const {
-        for (int i = 1; i < points.size(); i++) {
+        for (std::size_t i = 1; i < points.size(); i++) {
             DrawLine3D(Vec2ToVec3(points[i - 1], y), Vec2ToVec3(points[i], y), color);
         }
         DrawLine3D(Vec2ToVec3(points[points.size() - 1], y), Vec2ToVec3(points[0], y), color);
@@ -155,7 +155,7 @@ int find_closest_point(const shapes::Circle& circle, const shapes::Polygon& poly
     int closest_point = 0;
 
     float min_distance = Vector2DistanceSqr(poly.points[closest_point], circle.center);
-    for (int i = 1; i < poly.points.size(); i++) {
+    for (std::size_t i = 1; i < poly.points.size(); i++) {
         float distance = Vector2DistanceSqr(poly.points[i], circle.center);
         if (distance < min_distance) {
             min_distance = distance;

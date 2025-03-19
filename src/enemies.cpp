@@ -14,27 +14,27 @@ namespace enemies {
             case Enemy::Collision:
                 data.anim_index = 0;
                 data.anim_curr_frame = 0;
-                /*data.movement = Vector2Zero();*/
+                data.movement = Vector2Zero();
                 return data.damage;
             case Enemy::Uncollision:
                 data.anim_index = 1;
                 data.anim_curr_frame = 0;
-                /*data.update_target(enemies, target_hitbox.center, ix);*/
+                data.update_target(enemies, target_hitbox.center, ix);
                 return 0;
             case Enemy::Unchanged:
                 return 0;
         }
     }
 
-    int Zombie::tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox) {
+    int Zombie::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix, [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
 
-    int Heraklios::tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox) {
+    int Heraklios::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix, [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
 
-    int Maw::tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox) {
+    int Maw::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix, [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
 
@@ -143,7 +143,7 @@ void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix)
         [&](const auto& e, auto e_ix) {
             if (e_ix == ix || enemies.data[e_ix].id == id) return;
 
-            auto d = enemy_pos - enemies.data[e_ix].val.position();
+            auto d = enemy_pos - e.position();
 
             separation_force +=
                 Vector2Scale(Vector2Normalize(d), 1.0f / std::max(Vector2Length(d), 1e-6f));
@@ -186,7 +186,7 @@ uint32_t Enemy::tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hi
         state);
 }
 
-std::optional<uint32_t> Enemy::take_damage(uint32_t damage, Element element) {
+std::optional<uint32_t> Enemy::take_damage(uint32_t damage, [[maybe_unused]] Element element) {
     // TODO: Elemental damage scaling
     if (health <= damage) {
         health = 0;

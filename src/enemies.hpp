@@ -11,8 +11,8 @@
 
 struct Enemy;
 
-template <bool skip>
-using QT = quadtree::QuadTree<5, Enemy, skip>;
+template <bool Check>
+using QT = quadtree::QuadTree<5, Enemy, Check>;
 
 namespace enemies {
     enum struct EnemyClass {
@@ -64,6 +64,8 @@ namespace enemies {
 
         static constexpr Info info = (Info){
             .model_path = "./assets/zombie.glb",
+            .model_scale = 0.2f,
+            .default_anim = 0,
             .y_component = 1.0f,
             .cap_value = 1,
             .element = EnemyClass::Undead,
@@ -119,9 +121,9 @@ namespace enemies {
     };
 
 #define EACH_ENEMY(F, G)                                                                                               \
-    G(Paladin)                                                                                                         //\
+    G(Paladin) /* \ */
     /*F(Zombie)                                                                                                          \*/
-    /*F(Heraklios)                                                                                                       \*/
+    /*F(Heraklios) \*/
     /*F(Maw)*/
 
     // DON'T LOOK HERE, pwetty pwease OwO
@@ -148,7 +150,7 @@ namespace enemies {
 
     template <_EnemyType Type> struct EnemyFromEnum;
 
-#define TAG_SPECIALIZE(name)                                                                                         \
+#define TAG_SPECIALIZE(name)                                                                                           \
     template <> struct EnemyFromEnum<_EnemyType::name> {                                                               \
         using Type = enemies::name;                                                                                    \
     };
@@ -157,9 +159,9 @@ namespace enemies {
 
     template <typename E> struct EnumFromEnemy;
 
-#define ENEMY_SPECIALIZE(name) \
-    template <> struct EnumFromEnemy<name> { \
-        static constexpr _EnemyType type = _EnemyType::name; \
+#define ENEMY_SPECIALIZE(name)                                                                                         \
+    template <> struct EnumFromEnemy<name> {                                                                           \
+        static constexpr _EnemyType type = _EnemyType::name;                                                           \
     };
 
     EACH_ENEMY(ENEMY_SPECIALIZE, ENEMY_SPECIALIZE)
@@ -167,7 +169,9 @@ namespace enemies {
 
     inline State create_enemy(_EnemyType type) {
         switch (type) {
-#define ENEMY_CASE(name) case _EnemyType::name: return enemies::name();
+#define ENEMY_CASE(name)                                                                                               \
+    case _EnemyType::name:                                                                                             \
+        return enemies::name();
             EACH_ENEMY(ENEMY_CASE, ENEMY_CASE)
 #undef ENEMY_CASE
             case _EnemyType::Size:
@@ -179,7 +183,9 @@ namespace enemies {
 
     inline Info get_info(const _EnemyType& type) {
         switch (type) {
-#define ENEMY_CASE(name) case _EnemyType::name: return enemies::name::info;
+#define ENEMY_CASE(name)                                                                                               \
+    case _EnemyType::name:                                                                                             \
+        return enemies::name::info;
             EACH_ENEMY(ENEMY_CASE, ENEMY_CASE)
 #undef ENEMY_CASE
             case _EnemyType::Size:
@@ -222,6 +228,7 @@ class EnemyModels {
 };
 
 struct Enemy {
+  public:
     enum CollisionState {
         Collision,
         Uncollision,
@@ -251,6 +258,7 @@ struct Enemy {
         : anim_index(get_info(enemy).default_anim), level(level),
           pos((Vector3){position.x, get_info(enemy).y_component, position.y}), movement(Vector2Zero()),
           simple_hitbox(shapes::Circle(position, get_info(enemy).simple_hitbox_radius)), boss(boss), state(enemy) {
+        assert(level != 0);
         auto info = get_info(enemy);
         health = info.max_health;
 
@@ -264,12 +272,10 @@ struct Enemy {
 
     Enemy(const Enemy&) = default;
     Enemy(Enemy&& enemy) noexcept
-        : anim_index(enemy.anim_index),
-          anim_curr_frame(enemy.anim_curr_frame), health(enemy.health), damage(enemy.damage), speed(enemy.speed),
-          pos(enemy.pos), movement(enemy.movement), angle(enemy.angle),
-          simple_hitbox(std::move(enemy.simple_hitbox)), collision_state(enemy.collision_state), boss(enemy.boss),
-          state(std::move(enemy.state)) {
-    };
+        : anim_index(enemy.anim_index), anim_curr_frame(enemy.anim_curr_frame), health(enemy.health),
+          damage(enemy.damage), speed(enemy.speed), level(enemy.level), pos(enemy.pos), movement(enemy.movement),
+          angle(enemy.angle), simple_hitbox(std::move(enemy.simple_hitbox)), collision_state(enemy.collision_state),
+          boss(enemy.boss), state(std::move(enemy.state)) {};
 
     Enemy& operator=(const Enemy&) = default;
     Enemy& operator=(Enemy&&) = default;

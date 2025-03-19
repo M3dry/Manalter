@@ -43,9 +43,9 @@ namespace hud {
         }
     }
 
-    std::optional<std::pair<std::size_t, Vector2>> SpellBookUI::update(assets::Store& assets,
+    std::optional<std::pair<std::size_t, Vector2>> SpellBookUI::update([[maybe_unused]] assets::Store& assets,
                                                                        const SpellBook& spellbook, Mouse& mouse,
-                                                                       std::optional<Vector2> screen) {
+                                                                       [[maybe_unused]] std::optional<Vector2> screen) {
         DrawRectangleRec(area, WHITE);
 
         auto& [first, second] = spells;
@@ -82,7 +82,7 @@ namespace hud {
         return ret;
     }
 
-    void SpellBookUI::draw_spell(Vector2 origin, std::size_t id, const SpellBook& spellbook) const {
+    void SpellBookUI::draw_spell(Vector2 origin, std::size_t id, [[maybe_unused]] const SpellBook& spellbook) const {
         DrawRectangle(origin.x, origin.y, spell_dims.x, spell_dims.y, BLACK);
         DrawText(std::format("ORDER: {}", id).c_str(), origin.x + spell_dims.x / 2.0f, origin.y + spell_dims.y / 2.0f,
                  10, BLACK);

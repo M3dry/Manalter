@@ -58,7 +58,7 @@ Arena::PowerUpSelection::PowerUpSelection(Keys& keys) {
     keys.register_key(KEY_ENTER);
 }
 
-void Arena::PowerUpSelection::draw(assets::Store& assets, Loop& loop) {
+void Arena::PowerUpSelection::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
     DrawText("POWER UP", loop.screen.x /2.0f, loop.screen.y /2.0f, 30, WHITE);
 }
 
@@ -77,7 +77,7 @@ Arena::Paused::Paused(Keys& keys) {
     keys.register_key(KEY_ESCAPE);
 }
 
-void Arena::Paused::draw(assets::Store& assets, Loop& loop) {
+void Arena::Paused::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
     DrawText("PAUSED", loop.screen.x /2.0f, loop.screen.y /2.0f, 30, WHITE);
 }
 
@@ -259,7 +259,6 @@ void Arena::update(Loop& loop) {
     });
 
     player.tick((Vector2){movement.x * 20, movement.y * 20}, angle.x / angle.y, loop.player_stats->spellbook);
-
     auto damage_done = enemies.tick(player.hitbox, loop.enemy_models);
     if (player.health <= damage_done) {
         player.health = 0;
@@ -292,7 +291,7 @@ Hub::Hub(Keys& keys) {
     keys.register_key(KEY_ESCAPE);
 }
 
-void Hub::draw(assets::Store& assets, Loop& loop) {
+void Hub::draw([[maybe_unused]] assets::Store& assets, [[maybe_unused]] Loop& loop) {
     BeginDrawing();
 
     ClearBackground(BLUE);
@@ -337,7 +336,7 @@ Main::Main(Keys& keys, Vector2 screen) : last_screen(screen) {
     keys.register_key(KEY_ESCAPE);
 }
 
-void Main::draw(assets::Store& assets, Loop& loop) {
+void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
     BeginDrawing();
     ClearBackground(WHITE);
 

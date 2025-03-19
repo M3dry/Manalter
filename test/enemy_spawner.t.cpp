@@ -12,12 +12,12 @@
 TEST_CASE("Spawn every second", "[enemy][raylib]") {
     InitWindow(100, 100, "TEST");
 
-    auto n = 32;
+    std::size_t n = 32;
     Enemies enemies(100);
 
     EnemyModels enemy_models{};
 
-    for (int i = 0; i < TICKS * n; i++) {
+    for (std::size_t i = 0; i < TICKS * n; i++) {
         enemies.tick(shapes::Circle(Vector2Zero(), 1.0f), enemy_models);
     }
 

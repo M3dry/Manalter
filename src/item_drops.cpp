@@ -2,10 +2,10 @@
 #include "hitbox.hpp"
 #include "raylib.h"
 
-ItemDrop::ItemDrop(Vector2 center, Spell&& spell) : hitbox(center, hitbox_radius), item(std::move(spell)) {
+ItemDrop::ItemDrop(Vector2 center, Spell&& spell) : item(std::move(spell)), hitbox(center, hitbox_radius) {
 }
 
-ItemDrop::ItemDrop(uint16_t level, const Vector2& pos) : hitbox(pos, hitbox_radius), item(Spell::random(level)) {
+ItemDrop::ItemDrop(uint16_t level, const Vector2& pos) : item(Spell::random(level)), hitbox(pos, hitbox_radius) {
 }
 
 void ItemDrop::draw_name(std::function<Vector2(Vector3)> to_screen_coords) const {

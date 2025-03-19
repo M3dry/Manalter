@@ -15,7 +15,7 @@ int main(void) {
     shapes::Polygon* poly_control = &poly1;
     int controlling = 1;
 
-    Vector2 uncollide = Vector2Zero();
+    /*Vector2 uncollide = Vector2Zero();*/
     while (!WindowShouldClose()) {
         Vector2 movement = {0};
 

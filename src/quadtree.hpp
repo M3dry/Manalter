@@ -7,7 +7,6 @@
 #include <functional>
 #include <raylib.h>
 #include <raymath.h>
-#include <set>
 #include <utility>
 #include <vector>
 
@@ -60,7 +59,7 @@ namespace quadtree {
         uint64_t id;
         T val;
 
-        IDed(T&& val) : val(std::forward<T>(val)), id(last_id + 1) {
+        IDed(T&& val) : id(last_id + 1), val(std::forward<T>(val)) {
             last_id++;
         }
     };
