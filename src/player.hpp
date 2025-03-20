@@ -5,9 +5,10 @@
 #include "hitbox.hpp"
 #include "raylib.h"
 #include "spell.hpp"
+#include "power_up.hpp"
 #include <cstdint>
 
-using Player = struct Player {
+struct Player {
     static constexpr float visibility_radius = 450.0f;
     // for some reason .x moves on the y axis and .y moves on the x axis.... fuck me
     static constexpr Vector2 visibility_center_offset = {-280.0f, 0.0f};
@@ -27,6 +28,8 @@ using Player = struct Player {
 
     static const Vector3 camera_offset;
     static const float model_scale;
+
+    uint16_t speed = 10;
 
     uint32_t max_health = 100;
     uint32_t health = max_health;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "hitbox.hpp"
+#include <random>
 #include <string_view>
 #include <utility>
 
@@ -50,3 +51,7 @@ namespace arena {
 
     void loop_around(float& x, float& y);
 }
+
+namespace rng {
+    std::mt19937& get();
+};

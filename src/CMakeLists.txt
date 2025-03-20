@@ -13,6 +13,7 @@ set(MANALTER_LIB_SOURCES
     player.cpp
     ui.cpp
     input.cpp
+    power_up.cpp
 )
 
 set(HITBOX_DEMO_SOURCES

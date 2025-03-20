@@ -258,7 +258,7 @@ void Arena::update(Loop& loop) {
         }
     });
 
-    player.tick((Vector2){movement.x * 20, movement.y * 20}, angle.x / angle.y, loop.player_stats->spellbook);
+    player.tick((Vector2){movement.x, movement.y}, angle.x / angle.y, loop.player_stats->spellbook);
     auto damage_done = enemies.tick(player.hitbox, loop.enemy_models);
     if (player.health <= damage_done) {
         player.health = 0;

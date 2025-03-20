@@ -193,7 +193,7 @@ namespace quadtree {
             std::size_t closest = -1;
             float closest_dist = -1;
 
-            for (int i = 0; i < data.size(); i++) {
+            for (std::size_t i = 0; i < data.size(); i++) {
                 auto dist = Vector2DistanceSqr(point, data[i].val.position());
                 if (closest == -1 || closest_dist > dist) {
                     closest = i;
@@ -209,7 +209,7 @@ namespace quadtree {
             nodes.clear();
             nodes.emplace_back(Node(root_bbox));
 
-            for (int ix = 0; ix < data.size(); ix++) {
+            for (std::size_t ix = 0; ix < data.size(); ix++) {
                 insert(0, -1, {ix, data[ix].id});
             }
         }

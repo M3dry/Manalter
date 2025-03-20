@@ -206,6 +206,10 @@ namespace spells {
 #undef SPELL_VARIANT
         >;
 
+#define SPELL_CONCEPT(name) static_assert(IsSpell<name>);
+    EACH_SPELL(SPELL_CONCEPT, SPELL_CONCEPT)
+#undef SPELL_CONCEPT
+
     template <Tag T> struct SpellFromTag;
 
 #define TAG_SPECIALIZE(name)                                                                                           \

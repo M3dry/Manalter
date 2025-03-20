@@ -1,7 +1,9 @@
 #include "utility.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <print>
+#include <random>
 
 std::pair<int, Vector2> max_font_size(const Font& font, float spacing, const Vector2& max_dims, std::string_view text) {
     int font_size = 100;
@@ -55,4 +57,10 @@ void arena::loop_around(float& x, float& y) {
     if (y > ARENA_HEIGHT/2.0f) y -= ARENA_HEIGHT;
     if (x < -ARENA_HEIGHT/2.0f) x += ARENA_WIDTH;
     if (y < -ARENA_HEIGHT/2.0f) y += ARENA_HEIGHT;
+}
+
+std::mt19937 rng_gen(std::chrono::steady_clock::now().time_since_epoch().count());
+
+std::mt19937& rng::get() {
+    return rng_gen;
 }
