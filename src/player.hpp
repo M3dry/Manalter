@@ -5,6 +5,7 @@
 #include "hitbox.hpp"
 #include "raylib.h"
 #include "spell.hpp"
+#include "stats.hpp"
 #include "power_up.hpp"
 #include <cstdint>
 
@@ -29,22 +30,16 @@ struct Player {
     static const Vector3 camera_offset;
     static const float model_scale;
 
-    uint16_t speed = 10;
-
-    uint32_t max_health = 100;
-    uint32_t health = max_health;
-    // per second
-    uint32_t health_regen = 1;
-    uint32_t max_mana = 100;
-    uint32_t mana = max_mana;
-    // per second
-    uint32_t mana_regen = 10;
+    std::vector<PowerUp> power_ups;
+    PlayerStats stats;
+    uint32_t health = stats.max_health.get();
+    uint32_t mana = stats.max_mana.get();
     uint16_t lvl = 0;
     // exp collected since level up
     uint32_t exp = 0;
     uint32_t exp_to_next_lvl = 100;
     // 10 max spells
-    uint8_t max_spells = 2;
+    uint8_t max_spells = 1;
     // uint32_t::max means no spell is equipped
     // otherwise index of spell in spellbook
     std::vector<uint32_t> equipped_spells;
@@ -75,10 +70,14 @@ struct Player {
     void cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook,
                        const Enemies& enemies);
 
+    void add_power_up(PowerUp&& powerup);
+
+    static bool unlocks_spell_slot(uint16_t lvl);
+
     ~Player();
 };
 
-using PlayerStats = struct PlayerStats {
+struct PlayerSave {
     SpellBook spellbook = {};
 
     uint32_t add_spell_to_spellbook(Spell&& spell);

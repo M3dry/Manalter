@@ -9,6 +9,7 @@
 #include "item_drops.hpp"
 #include "player.hpp"
 #include "ui.hpp"
+#include "power_up.hpp"
 #include <variant>
 
 struct Loop;
@@ -19,10 +20,15 @@ struct Arena {
     };
 
     struct PowerUpSelection {
-        PowerUpSelection(Keys& keys);
+        std::array<PowerUp, 3> power_ups;
+        std::vector<ui::Button> selections;
 
-        void draw(assets::Store& assets, Loop& loop);
+        PowerUpSelection(Keys& keys, Vector2 screen);
+
+        void draw(assets::Store& assets, Loop& loop, Arena& arena);
         void update(Arena& arena, Loop& loop);
+
+        void update_buttons(Vector2 screen);
     };
 
     struct Paused {
@@ -69,8 +75,6 @@ struct Main {
     std::optional<ui::Button> play_button;
     std::optional<ui::Button> exit_button;
 
-    Vector2 last_screen;
-
     Main(Keys& keys, Vector2 screen);
 
     void draw(assets::Store& assets, Loop& loop);
@@ -78,6 +82,7 @@ struct Main {
 };
 
 struct Loop {
+    bool screen_updated;
     Vector2 screen;
     Keys keys;
     Mouse mouse;
@@ -87,7 +92,7 @@ struct Loop {
     // nullopt - main menu, player_stats also are nullopt
     // scene has value -> player_stats has value
     std::variant<Arena, Hub, Main> scene;
-    std::optional<PlayerStats> player_stats;
+    std::optional<PlayerSave> player_stats;
 
     Loop(int width, int height);
     void operator()();

@@ -53,16 +53,28 @@ Arena::Playing::Playing(Keys& keys) {
     keys.register_key(KEY_ZERO);
 }
 
-Arena::PowerUpSelection::PowerUpSelection(Keys& keys) {
+Arena::PowerUpSelection::PowerUpSelection(Keys& keys, Vector2 screen)
+    : power_ups{PowerUp::random(), PowerUp::random(), PowerUp::random()} {
     keys.unregister_all();
     keys.register_key(KEY_ENTER);
+    update_buttons(screen);
 }
 
-void Arena::PowerUpSelection::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
-    DrawText("POWER UP", loop.screen.x /2.0f, loop.screen.y /2.0f, 30, WHITE);
+void Arena::PowerUpSelection::draw([[maybe_unused]] assets::Store& assets, Loop& loop, Arena& arena) {
+    for (int i = 0; i < 3; i++) {
+        if (selections[i].update(loop.mouse)) {
+            arena.player.add_power_up(std::move(power_ups[i]));
+            arena.state.emplace<Playing>(loop.keys);
+            return;
+        }
+    }
 }
 
 void Arena::PowerUpSelection::update(Arena& arena, Loop& loop) {
+    if (loop.screen_updated) {
+        update_buttons(loop.screen);
+    }
+
     loop.keys.tick([&](const auto& key) {
         switch (key) {
             case KEY_ENTER:
@@ -72,13 +84,43 @@ void Arena::PowerUpSelection::update(Arena& arena, Loop& loop) {
     });
 }
 
+void Arena::PowerUpSelection::update_buttons(Vector2 screen) {
+    auto height = screen.y * 0.5f;
+    auto width = screen.x * 0.15f;
+    auto free_space = screen.x - 3 * width;
+    auto edge_padding_x = free_space / 2.0f * 0.65f;
+    auto gap_between = (free_space - edge_padding_x*2.0f) / 2.0f;
+    auto edge_padding_y = (screen.y - height) / 2.0f;
+
+    for (int i = 0; i < 3; i++) {
+        auto rec = Rectangle{
+            .x = edge_padding_x + width * i + i * gap_between,
+            .y = edge_padding_y,
+            .width = width,
+            .height = height,
+        };
+
+        selections.emplace_back(rec, [&, rec](ui::Button::State state) {
+            switch (state) {
+                using enum ui::Button::State;
+                case Normal:
+                    power_ups[i].draw(rec);
+                    return;
+                case Hover:
+                    power_ups[i].draw_hover(rec);
+                    return;
+            }
+        });
+    }
+}
+
 Arena::Paused::Paused(Keys& keys) {
     keys.unregister_all();
     keys.register_key(KEY_ESCAPE);
 }
 
 void Arena::Paused::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
-    DrawText("PAUSED", loop.screen.x /2.0f, loop.screen.y /2.0f, 30, WHITE);
+    DrawText("PAUSED", loop.screen.x / 2.0f, loop.screen.y / 2.0f, 30, WHITE);
 }
 
 void Arena::Paused::update(Arena& arena, Loop& loop) {
@@ -93,12 +135,7 @@ void Arena::Paused::update(Arena& arena, Loop& loop) {
 
 Arena::Arena(Keys& keys, assets::Store& assets)
     : state(Playing(keys)), player({0.0f, 10.0f, 0.0f}, assets), enemies(30) {
-    item_drops.add_item_drop((Vector2){200.0f, 200.0f}, Spell(spells::FireWall{}, Rarity::Epic, 30));
-    item_drops.add_item_drop((Vector2){200.0f, 150.0f}, Spell(spells::FrostNova{}, Rarity::Epic, 30));
-    /*item_drops.emplace_back((Vector2){200.0f, 100.0f}, Spell(Spell::Falling_Icicle, Rarity::Epic, 30));*/
-
     player.equipped_spells[0] = 0;
-    player.equipped_spells[1] = 1;
 
     player.exp = 90;
 }
@@ -192,7 +229,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     DrawText(std::format("ENEMIES: {}", enemies.enemies.data.size()).c_str(), 10, 30, 20, BLACK);
 
     if (curr_state<PowerUpSelection>()) {
-        std::get<PowerUpSelection>(state).draw(assets, loop);
+        std::get<PowerUpSelection>(state).draw(assets, loop, *this);
     } else if (curr_state<Paused>()) {
         std::get<Paused>(state).draw(assets, loop);
     }
@@ -265,7 +302,7 @@ void Arena::update(Loop& loop) {
     } else {
         player.health -= damage_done;
         if (player.add_exp(enemies.take_exp())) {
-            state.emplace<PowerUpSelection>(loop.keys);
+            state.emplace<PowerUpSelection>(loop.keys, loop.screen);
         }
     }
 
@@ -313,7 +350,7 @@ void Hub::update(Loop& loop) {
     });
 }
 
-Main::Main(Keys& keys, Vector2 screen) : last_screen(screen) {
+Main::Main(Keys& keys, Vector2 screen) {
     auto play_rec = (Rectangle){
         .x = screen.x * 3.0f / 4.0f,
         .y = screen.y / 3.0f,
@@ -341,11 +378,10 @@ void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
     ClearBackground(WHITE);
 
     if (play_button->update(loop.mouse)) {
-        loop.player_stats = PlayerStats();
+        loop.player_stats = PlayerSave();
         loop.scene.emplace<Hub>(loop.keys);
 
         loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Legendary, 100));
-        loop.player_stats->add_spell_to_spellbook(Spell(spells::FireWall{}, Rarity::Legendary, 100));
     }
 
     EndDrawing();
@@ -355,11 +391,10 @@ void Main::update(Loop& loop) {
     loop.keys.tick([&](auto key) {
         switch (key) {
             case KEY_SPACE: {
-                loop.player_stats = PlayerStats();
+                loop.player_stats = PlayerSave();
                 loop.scene.emplace<Hub>(loop.keys);
 
                 loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Legendary, 100));
-                loop.player_stats->add_spell_to_spellbook(Spell(spells::FireWall{}, Rarity::Legendary, 100));
                 break;
             }
             case KEY_ESCAPE:
@@ -369,7 +404,7 @@ void Main::update(Loop& loop) {
         }
     });
 
-    if (loop.screen != last_screen) {
+    if (loop.screen_updated) {
         *this = Main(loop.keys, loop.screen);
     }
 }
@@ -401,10 +436,12 @@ void Loop::operator()() {
 }
 
 void Loop::update() {
+    screen_updated = false;
 #ifndef PLATFORM_WEB
     if (IsWindowResized()) {
         screen = (Vector2){(float)GetScreenWidth(), (float)GetScreenHeight()};
         assets.update_target_size(screen);
+        screen_updated = true;
     }
 #endif
 

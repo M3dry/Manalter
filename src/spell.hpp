@@ -1,6 +1,7 @@
 #pragma once
 
 #include "raylib.h"
+#include "stats.hpp"
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -301,7 +302,18 @@ namespace rarity {
             .stat_multiplier = 10.0f,
         },
     };
+
+    inline rarity::Info get_rarity_info(const Rarity& rarity) {
+        return rarity::info[static_cast<int>(rarity)];
+    }
 }
+
+struct SpellStats {
+    Stat<uint32_t, 0, 0> manacost;
+    Stat<uint64_t, 0, 0> damage;
+
+    SpellStats(const spell::Info& info, Rarity rarity, uint32_t level);
+};
 
 struct Spell {
     spells::Data spell;
@@ -313,37 +325,25 @@ struct Spell {
     uint32_t level;
     uint64_t experience;
 
-    uint32_t manacost;
-    uint64_t damage;
+    SpellStats stats;
 
     Spell(spells::Data&& spell, Rarity rarity, uint32_t level)
         : spell(spell), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(cooldown), level(level),
-          experience(0), manacost(get_info(spell).base_manacost), damage(get_info(spell).base_damage) {
-              // TODO: random manacost, damage
-          };
+          experience(0), stats(get_info(spell), rarity, level) {};
     Spell(Spell&&) noexcept = default;
     Spell& operator=(Spell&&) noexcept = default;
 
-    spell::Info get_spell_info() const {
-        return std::visit(
-            [](auto&& spell) {
-                using T = std::decay_t<decltype(spell)>;
-                return T::info;
-            },
-            spell);
+    inline spell::Info get_spell_info() const {
+        return get_info(spell);
     }
 
-    spells::Tag get_spell_tag() const {
+    inline spells::Tag get_spell_tag() const {
         return std::visit(
             [](auto&& spell) -> spells::Tag {
                 using T = std::decay_t<decltype(spell)>;
                 return spells::TagFromSpell<T>::tag;
             },
             spell);
-    }
-
-    rarity::Info get_rarity_info() const {
-        return rarity::info[static_cast<int>(rarity)];
     }
 
     static Spell random(uint16_t max_level);

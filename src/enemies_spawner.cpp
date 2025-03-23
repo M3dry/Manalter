@@ -59,7 +59,6 @@ void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset, const shape
 
 uint32_t Enemies::take_exp() {
     auto exp = stored_exp;
-    if (exp != 0) std::println("EXP TAKEN: {}", exp);
     stored_exp = 0;
     return exp;
 }

@@ -71,7 +71,6 @@ struct Enemies {
                 }
 
                 killed++;
-                std::println("ADDED: {}", *exp);
                 stored_exp += *exp;
                 enemies.remove(ix);
             });

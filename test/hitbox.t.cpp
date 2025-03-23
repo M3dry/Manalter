@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include <print>
+
 #include "hitbox.hpp"
 #include "power_up.hpp"
 
@@ -39,9 +41,4 @@ TEST_CASE("Polygons", "[hitbox]") {
 
     REQUIRE(check_collision(poly1, circle));
     REQUIRE(check_collision(poly2, circle));
-}
-
-TEST_CASE("Power Up Test", "[powerup]") {
-    /*std::println("GOT RANDOM: {}", powerups::__impl::get_random<powerups::Speed<PowerUpType::Percentage>>());*/
-    std::println("GOT RANDOM: {}", powerups::__impl::get_random<powerups::ManaRegen<PowerUpType::Absolute>>());
 }

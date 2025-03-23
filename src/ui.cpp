@@ -2,6 +2,7 @@
 
 #include "hitbox.hpp"
 #include "raylib.h"
+#include "spell.hpp"
 #include "utility.hpp"
 #include <format>
 
@@ -108,8 +109,8 @@ namespace hud {
         DrawCircleSector(center, outer_radius - 6 * padding, 90.0f, 270.0f, 512, RED);
         DrawCircleSector(center, outer_radius - 6 * padding, -90.0f, 90.0f, 512, BLUE);
 
-        float health_s = (float)player.health / (float)player.max_health;
-        float mana_s = (float)player.mana / (float)player.max_mana;
+        float health_s = (float)player.health / (float)player.stats.max_health.get();
+        float mana_s = (float)player.mana / (float)player.stats.max_mana.get();
         float health_b =
             (1 + std::sin(std::numbers::pi_v<double> * health_s - std::numbers::pi_v<double> / 2.0f)) / 2.0f;
         float mana_b = (1 + std::sin(std::numbers::pi_v<double> * mana_s - std::numbers::pi_v<double> / 2.0f)) / 2.0f;
@@ -196,7 +197,7 @@ namespace hud {
         int total_spells = spellbook.size();
         int page_size = std::min((int)(spellbook_dims.y / spell_height - 1), total_spells);
         for (i = 0; i < page_size; i++) {
-            auto rarity_color = spellbook[i].get_rarity_info().color;
+            auto rarity_color = rarity::get_rarity_info(spellbook[i].rarity).color;
 
             // outer border
             spell_dims = (Rectangle){4.0f, 4.0f + i * 2.0f + i * spell_height, spellbook_dims.x, (float)spell_height};

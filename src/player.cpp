@@ -48,6 +48,8 @@ bool Player::add_exp(uint32_t e) {
         lvl++;
         exp -= exp_to_next_lvl;
         exp_to_next_lvl = Player::exp_to_lvl(lvl + 1);
+
+        if (unlocks_spell_slot(lvl)) max_spells++;
         return true;
     }
 
@@ -76,8 +78,8 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
         animationIndex = 0;
     } else {
         prev_position = position;
-        position.x += movement.x;
-        position.z += movement.y;
+        position.x += movement.x * stats.speed.get();
+        position.z += movement.y * stats.speed.get();
         this->angle = angle;
 
         arena::loop_around(position.x, position.z);
@@ -95,11 +97,11 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
 
     if (tick_counter == TICKS) {
         tick_counter = 0;
-        health += health_regen;
-        mana += mana_regen;
+        health += stats.health_regen.get();
+        mana += stats.mana_regen.get();
 
-        if (health > max_health) health = max_health;
-        if (mana > max_mana) mana = max_mana;
+        if (health > stats.max_health.get()) health = stats.max_health.get();
+        if (mana > stats.max_mana.get()) mana = stats.max_mana.get();
     }
 
     for (int i = 0; i < 10 && i < max_spells; i++) {
@@ -120,19 +122,41 @@ void Player::cast_equipped(int idx, const Vector2& player_position, const Vector
 
     auto spell_id = equipped_spells[idx];
     Spell& spell = spellbook[spell_id];
-    if (mana < spell.manacost || spell.current_cooldown > 0) return;
+    if (mana < spell.stats.manacost.get() || spell.current_cooldown > 0) return;
 
     if (caster::cast(spell_id, spell, player_position, mouse_pos, enemies)) {
-        mana -= spell.manacost;
+        mana -= spell.stats.manacost.get();
         spell.current_cooldown = spell.cooldown;
     }
+}
+
+void Player::add_power_up(PowerUp&& powerup) {
+    powerup.apply(stats);
+    power_ups.emplace_back(std::forward<PowerUp>(powerup));
+}
+
+bool Player::unlocks_spell_slot(uint16_t lvl) {
+    switch (lvl) {
+        case 1:
+        case 2:
+        case 5:
+        case 7:
+        case 10:
+        case 13:
+        case 15:
+        case 17:
+        case 20:
+            return true;
+    }
+
+    return false;
 }
 
 Player::~Player() {
     UnloadModelAnimations(animations, animationsCount);
 }
 
-uint32_t PlayerStats::add_spell_to_spellbook(Spell&& spell) {
+uint32_t PlayerSave::add_spell_to_spellbook(Spell&& spell) {
     spellbook.emplace_back(std::move(spell));
 
     return spellbook.size() - 1;
