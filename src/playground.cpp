@@ -36,7 +36,7 @@ int main(void) {
 
         if (!start && IsKeyPressed(KEY_SPACE)) {
             start = true;
-            emitter.emit_explosion(Vector3Zero(), 100);
+            emitter.emit_explosion(Vector3Zero(), 700);
         }
 
         if (start) {
