@@ -18,9 +18,9 @@ bool Enemies::spawn(const Vector2& player_pos) {
 
     auto enemy_pos =
         (Vector2){(float)GetRandomValue(-arena_width, arena_width), (float)GetRandomValue(-arena_height, arena_height)};
-    auto player_radious_shape = shapes::Circle(player_pos, player_radious);
+    auto player_radius_shape = shapes::Circle(player_pos, player_radious);
 
-    while (check_collision(player_radious_shape, enemy_pos)) {
+    while (check_collision(player_radius_shape, enemy_pos)) {
         enemy_pos = (Vector2){(float)GetRandomValue(-arena_width, arena_width),
                               (float)GetRandomValue(-arena_height, arena_height)};
     };
