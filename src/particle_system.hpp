@@ -4,6 +4,7 @@
 #include "utility.hpp"
 #include <algorithm>
 #include <cassert>
+#include <limits>
 #include <memory>
 #include <random>
 #include <raylib.h>
@@ -96,12 +97,12 @@ namespace particle_system_2 {
         std::size_t alive_count = 0;
 
         Particles(std::size_t max_particles) : size(max_particles) {
-            pos.reset(new Vector3[max_particles]);
-            velocity.reset(new Vector3[max_particles]);
-            acceleration.reset(new Vector3[max_particles]);
-            color.reset(new Color[max_particles]);
-            alive.reset(new bool[max_particles]);
-            lifetime.reset(new float[max_particles]);
+            pos.reset(new Vector3[max_particles]{});
+            velocity.reset(new Vector3[max_particles]{});
+            acceleration.reset(new Vector3[max_particles]{});
+            color.reset(new Color[max_particles]{});
+            alive.reset(new bool[max_particles]{});
+            lifetime.reset(new float[max_particles]{});
         }
 
         Particles(const Particles&) = delete;
@@ -117,7 +118,6 @@ namespace particle_system_2 {
         void wake(std::size_t ix) {
             if (alive_count >= size) return;
 
-            std::println("WAKY WAKY");
             alive[ix] = true;
             swap(ix, alive_count++);
         }
@@ -132,9 +132,7 @@ namespace particle_system_2 {
         }
 
         void debug(std::size_t i) {
-            auto print_vec3 = [](Vector3 v) {
-                std::print("[{}, {}, {}]", v.x, v.y, v.z);
-            };
+            auto print_vec3 = [](Vector3 v) { std::print("[{}, {}, {}]", v.x, v.y, v.z); };
 
             std::print("POS: ");
             print_vec3(pos[i]);
@@ -150,27 +148,14 @@ namespace particle_system_2 {
     };
 
     namespace generators {
-        struct DefaultInicialize {
-            void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
-                for (std::size_t i = start_ix; i < end_ix; i++) {
-                    particles.pos[i] = Vector3Zero();
-                    particles.velocity[i] = Vector3Zero();
-                    particles.acceleration[i] = Vector3Zero();
-                    particles.color[i] = Color{ 0, 0, 0, 0};
-                    particles.alive[i] = false;
-                    particles.lifetime[i] = 0.0f;
-                }
-            }
-        };
-
         namespace pos {
-            struct FixedPoint {
+            struct Fixed {
                 Vector3 origin;
 
-                FixedPoint(Vector3 origin) : origin(origin) {
+                Fixed(Vector3 origin) : origin(origin) {
                 }
 
-                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
                     for (std::size_t i = start_ix; i < end_ix; i++) {
                         particles.pos[i] = origin;
                     }
@@ -197,10 +182,10 @@ namespace particle_system_2 {
                 Sphere(bool half_sphere, float speed) : half_sphere(half_sphere), speed(speed) {
                 }
 
-                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
                     static std::uniform_real_distribution<float> distTheta(0.0f, 2 * std::numbers::pi);
-                    static std::uniform_real_distribution<float> distPhiHalf(0.0f, std::numbers::pi);
-                    static std::uniform_real_distribution<float> distPhi(0.0f, std::numbers::pi / 2.0f);
+                    static std::uniform_real_distribution<float> distPhiHalf(0.0f, std::numbers::pi / 2.0f);
+                    static std::uniform_real_distribution<float> distPhi(0.0f, std::numbers::pi);
                     auto& gen = rng::get();
 
                     for (std::size_t i = start_ix; i < end_ix; i++) {
@@ -216,17 +201,48 @@ namespace particle_system_2 {
                 }
             };
 
-            struct SpeedRange {
+            struct ScaleRange {
                 float min;
                 float max;
                 std::uniform_real_distribution<float> dist;
 
-                SpeedRange(float min, float max) : min(min), max(max), dist(min, max) {}
+                ScaleRange(float min, float max) : min(min), max(max), dist(min, max) {
+                }
 
-                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
                     auto& gen = rng::get();
                     for (std::size_t i = start_ix; i < end_ix; i++) {
                         particles.velocity[i] = Vector3Scale(particles.velocity[i], dist(gen));
+                    }
+                }
+            };
+        }
+
+        namespace acceleration {
+            struct Fixed {
+                Vector3 accel;
+
+                Fixed(Vector3 accel) : accel(accel) { }
+
+                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
+                    for (std::size_t i = start_ix; i < end_ix; i++) {
+                        particles.acceleration[i] = accel;
+                    }
+                }
+            };
+
+            struct Uniform {
+                Vector3 magnitude;
+
+                Uniform(float magnitude) : magnitude({magnitude, magnitude, magnitude}) {}
+                Uniform(Vector3 magnitude) : magnitude(magnitude) {}
+
+                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
+                    for (std::size_t i = start_ix; i < end_ix; i++) {
+                        auto normalized = Vector3Normalize(particles.velocity[i]);
+                        particles.acceleration[i].x = normalized.x * magnitude.x;
+                        particles.acceleration[i].y = normalized.y * magnitude.y;
+                        particles.acceleration[i].z = normalized.z * magnitude.z;
                     }
                 }
             };
@@ -236,9 +252,10 @@ namespace particle_system_2 {
             struct Fixed {
                 Color color;
 
-                Fixed(Color color) : color(color) {}
+                Fixed(Color color) : color(color) {
+                }
 
-                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
                     for (std::size_t i = start_ix; i < end_ix; i++) {
                         particles.color[i] = color;
                     }
@@ -255,7 +272,7 @@ namespace particle_system_2 {
                 Range(float min, float max) : min(min), max(max), dist(min, max) {
                 }
 
-                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
                     auto& gen = rng::get();
 
                     for (std::size_t i = start_ix; i < end_ix; i++) {
@@ -265,15 +282,17 @@ namespace particle_system_2 {
             };
         }
 
-        using Generator = std::variant<pos::FixedPoint, pos::OnCircle, velocity::Sphere, velocity::SpeedRange, color::Fixed, lifetime::Range>;
+        using Generator = std::variant<pos::Fixed, pos::OnCircle, velocity::Sphere, velocity::ScaleRange,
+                                       acceleration::Fixed, acceleration::Uniform, color::Fixed, lifetime::Range>;
     };
 
     namespace emitters {
-        struct CustomEmitter {
+        template <bool Reemit = false> struct CustomEmitter {
             std::vector<generators::Generator> generators;
             float emit_rate;
+            bool emitted = false;
 
-            CustomEmitter(float emit_rate) : emit_rate(emit_rate) {
+            CustomEmitter(float emit_rate = std::numeric_limits<float>::max()) : emit_rate(emit_rate) {
             }
 
             CustomEmitter(const CustomEmitter&) = delete;
@@ -283,15 +302,20 @@ namespace particle_system_2 {
             CustomEmitter& operator=(const CustomEmitter&&) noexcept = delete;
 
             void emit(Particles& particles, float dt) {
-                std::size_t max_particles = (std::size_t)std::floor(dt * emit_rate);
+                if (emitted) return;
+                if (!Reemit) emitted = true;
+
+                float max_particles = std::floor(dt * emit_rate);
+                if (max_particles >= (float)std::numeric_limits<std::size_t>::max())
+                    max_particles = (float)std::numeric_limits<std::size_t>::max();
+                if (max_particles <= 0) max_particles = 0;
                 std::size_t start_ix = particles.alive_count;
-                std::size_t end_ix = std::min(start_ix + max_particles, particles.size - 1);
+                std::size_t end_ix = std::min(start_ix + (std::size_t)max_particles, particles.size - 1);
 
                 for (auto& gen : generators) {
                     std::visit([&](auto&& arg) { arg.gen(particles, dt, start_ix, end_ix); }, gen);
                 }
 
-                std::println("BEFORE WAKING: {}<->{}, {}, {} * {} = {}", start_ix, end_ix, max_particles, dt, emit_rate, std::floor(dt * emit_rate));
                 for (std::size_t i = start_ix; i < end_ix; i++) {
                     particles.wake(i);
                 }
@@ -302,7 +326,7 @@ namespace particle_system_2 {
             }
         };
 
-        using Emitter = std::variant<CustomEmitter>;
+        using Emitter = std::variant<CustomEmitter<false>, CustomEmitter<true>>;
     }
 
     namespace updaters {
@@ -324,14 +348,36 @@ namespace particle_system_2 {
         struct Position {
             void update(Particles& particles, float dt) {
                 for (std::size_t i = 0; i < particles.alive_count; i++) {
-                    particles.velocity[i] =
-                        Vector3Add(particles.velocity[i], Vector3Scale(particles.acceleration[i], dt));
+                    particles.velocity[i] = Vector3Add(particles.velocity[i], Vector3Scale(particles.acceleration[i], dt));
                     particles.pos[i] = Vector3Add(particles.pos[i], Vector3Scale(particles.velocity[i], dt));
                 }
             }
         };
 
-        using Updater = std::variant<Lifetime, Position>;
+        struct OnVelocity {
+            Color start_col;
+            Color end_col;
+            float min_threshold;
+            float max_threshold;
+
+            OnVelocity(Color start, Color end, float min_threshold, float max_threshold) : start_col(start), end_col(end), min_threshold(min_threshold), max_threshold(max_threshold) {
+            }
+
+            void update(Particles& particles, float _dt) {
+                for (std::size_t i = 0; i < particles.alive_count; i++) {
+                    auto speed = std::abs(Vector3Length(particles.velocity[i]));
+                    auto factor = (speed - min_threshold)/(max_threshold - min_threshold);
+
+                    if (factor < 0.0f) {
+                        particles.color[i] = lerp_color(particles.color[i], start_col, std::abs(speed/min_threshold));
+                    } else {
+                        particles.color[i] = lerp_color(start_col, end_col, factor);
+                    }
+                }
+            }
+        };
+
+        using Updater = std::variant<Lifetime, Position, OnVelocity>;
     }
 
     struct System {
@@ -348,11 +394,6 @@ namespace particle_system_2 {
                 std::visit([&](auto&& arg) { arg.emit(particles, dt); }, e);
             }
 
-            /*for (std::size_t i = 0; i < particles.alive_count; i++) {*/
-            /*    particles.debug(i);*/
-            /*}*/
-            assert(false);
-
             for (auto& u : updaters) {
                 std::visit([&](auto&& arg) { arg.update(particles, dt); }, u);
             }
@@ -360,7 +401,7 @@ namespace particle_system_2 {
 
         void draw() {
             for (std::size_t i = 0; i < particles.alive_count; i++) {
-                DrawSphere(particles.pos[i], 1.0f, particles.color[i]);
+                DrawSphere(particles.pos[i], 0.5f, particles.color[i]);
             }
         }
 

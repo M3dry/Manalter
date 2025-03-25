@@ -17,6 +17,7 @@ float angle_from_point(const Vector2& point, const Vector2& origin);
 Vector2 xz_component(const Vector3& vec);
 Vector2 mouse_xz_in_world(Ray mouse);
 float wrap(float value, float modulus);
+Color lerp_color(Color start, Color end, float factor);
 
 namespace arena {
     namespace _impl {

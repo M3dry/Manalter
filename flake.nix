@@ -14,7 +14,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
         pleaseKeepMyInputs = pkgs.writeTextDir "bin/.inputs" (builtins.concatStringsSep " " (builtins.attrValues {inherit nixpkgs;}));
         raylib_patched = pkgs.raylib.overrideAttrs (oldAttrs: {
-          patches = oldAttrs.patches ++ [./raylib.patch];
+          patches = (oldAttrs.patches or []) ++ [./raylib.patch];
         });
         manalter = pkgs.gcc14Stdenv.mkDerivation {
           pname = "Manalter";
