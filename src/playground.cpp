@@ -14,8 +14,7 @@ int main(void) {
     cam.fovy = 90.0f;
     cam.projection = CAMERA_PERSPECTIVE;
 
-    /*particle_system::Emitter emitter;*/
-    particle_system_2::System system(1000000);
+    particle_system_2::System system(2000000);
 
     particle_system_2::emitters::CustomEmitter<true> emitter;
     emitter.add_generator(particle_system_2::generators::pos::Fixed(Vector3Zero()));
@@ -43,7 +42,7 @@ int main(void) {
             BeginMode3D(cam);
                 DrawSphere(Vector3Zero(), 2.0f, BLUE);
                 DrawGrid(1000, 5.0f);
-                system.draw();
+                /*system.draw();*/
             EndMode3D();
 
             if (start) DrawText("STARTED", 10, 10, 20, BLACK);
