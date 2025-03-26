@@ -4,12 +4,17 @@
 #include "utility.hpp"
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <random>
 #include <raylib.h>
 #include <raymath.h>
 #include <vector>
+
+#include "glad.h"
+#include "rlgl.h"
 
 namespace particle_system {
     struct Particle {
@@ -222,7 +227,8 @@ namespace particle_system_2 {
             struct Fixed {
                 Vector3 accel;
 
-                Fixed(Vector3 accel) : accel(accel) { }
+                Fixed(Vector3 accel) : accel(accel) {
+                }
 
                 void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
                     for (std::size_t i = start_ix; i < end_ix; i++) {
@@ -234,8 +240,10 @@ namespace particle_system_2 {
             struct Uniform {
                 Vector3 magnitude;
 
-                Uniform(float magnitude) : magnitude({magnitude, magnitude, magnitude}) {}
-                Uniform(Vector3 magnitude) : magnitude(magnitude) {}
+                Uniform(float magnitude) : magnitude({magnitude, magnitude, magnitude}) {
+                }
+                Uniform(Vector3 magnitude) : magnitude(magnitude) {
+                }
 
                 void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
                     for (std::size_t i = start_ix; i < end_ix; i++) {
@@ -348,7 +356,8 @@ namespace particle_system_2 {
         struct Position {
             void update(Particles& particles, float dt) {
                 for (std::size_t i = 0; i < particles.alive_count; i++) {
-                    particles.velocity[i] = Vector3Add(particles.velocity[i], Vector3Scale(particles.acceleration[i], dt));
+                    particles.velocity[i] =
+                        Vector3Add(particles.velocity[i], Vector3Scale(particles.acceleration[i], dt));
                     particles.pos[i] = Vector3Add(particles.pos[i], Vector3Scale(particles.velocity[i], dt));
                 }
             }
@@ -360,18 +369,19 @@ namespace particle_system_2 {
             float min_threshold;
             float max_threshold;
 
-            OnVelocity(Color start, Color end, float min_threshold, float max_threshold) : start_col(start), end_col(end), min_threshold(min_threshold), max_threshold(max_threshold) {
+            OnVelocity(Color start, Color end, float min_threshold, float max_threshold)
+                : start_col(start), end_col(end), min_threshold(min_threshold), max_threshold(max_threshold) {
             }
 
             void update(Particles& particles, float _dt) {
                 for (std::size_t i = 0; i < particles.alive_count; i++) {
                     auto speed = std::abs(Vector3Length(particles.velocity[i]));
-                    auto factor = (speed - min_threshold)/(max_threshold - min_threshold);
+                    auto factor = (speed - min_threshold) / (max_threshold - min_threshold);
 
                     if (factor < 0.0f) {
-                        particles.color[i] = lerp_color(particles.color[i], start_col, std::abs(speed/min_threshold));
+                        particles.color[i] = ColorLerp(particles.color[i], start_col, std::abs(speed / min_threshold));
                     } else {
-                        particles.color[i] = lerp_color(start_col, end_col, factor);
+                        particles.color[i] = ColorLerp(start_col, end_col, factor);
                     }
                 }
             }
@@ -381,12 +391,41 @@ namespace particle_system_2 {
     }
 
     struct System {
+        static constexpr std::size_t vertex_size = 3 * sizeof(float) + 4 * sizeof(uint8_t);
+
         std::vector<emitters::Emitter> emitters;
         std::vector<updaters::Updater> updaters;
 
         Particles particles;
 
-        System(std::size_t max_particles) : particles(max_particles) {
+        std::unique_ptr<uint8_t[]> vertex_data;
+        unsigned int vao_id = 0;
+        unsigned int vbo_id = 0;
+        Shader shader;
+
+        System(std::size_t max_particles)
+            : particles(max_particles), vao_id(rlLoadVertexArray()),
+              vbo_id(rlLoadVertexBuffer(NULL, vertex_size * max_particles, true)),
+              shader(LoadShader("./assets/particles.vs.glsl", "./assets/particles.fs.glsl")) {
+            std::println("VERTEX_SIZE: {}", vertex_size);
+
+            vertex_data.reset(new uint8_t[max_particles * vertex_size]{});
+
+            rlEnableVertexArray(vao_id);
+            rlEnableVertexBuffer(vbo_id);
+
+            rlEnableVertexAttribute(0);
+            rlSetVertexAttribute(0, 3, RL_FLOAT, false, vertex_size, 0);
+
+            rlEnableVertexAttribute(1);
+            rlSetVertexAttribute(1, 4, RL_UNSIGNED_BYTE, true, vertex_size, 3 * sizeof(float));
+
+            rlDisableVertexArray();
+            rlDisableVertexBuffer();
+        }
+        ~System() {
+            rlUnloadVertexArray(vao_id);
+            rlUnloadVertexBuffer(vbo_id);
         }
 
         void update(float dt) {
@@ -400,9 +439,38 @@ namespace particle_system_2 {
         }
 
         void draw() {
+            if (particles.alive_count == 0) return;
+
+            auto* start_ptr = vertex_data.get();
+            auto ptr = start_ptr;
             for (std::size_t i = 0; i < particles.alive_count; i++) {
-                DrawSphere(particles.pos[i], 0.5f, particles.color[i]);
+                std::memcpy(ptr, &particles.pos[i].x, sizeof(float));
+                ptr += sizeof(float);
+                std::memcpy(ptr, &particles.pos[i].y, sizeof(float));
+                ptr += sizeof(float);
+                std::memcpy(ptr, &particles.pos[i].z, sizeof(float));
+                ptr += sizeof(float);
+                *ptr++ = particles.color[i].r;
+                *ptr++ = particles.color[i].g;
+                *ptr++ = particles.color[i].b;
+                *ptr++ = particles.color[i].a;
             }
+
+            rlUpdateVertexBuffer(vbo_id, start_ptr, particles.alive_count * vertex_size, 0);
+
+            auto mvp = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
+            auto loc = GetShaderLocation(shader, "mvp");
+
+            SetShaderValueMatrix(shader, loc, mvp);
+            glEnable(GL_PROGRAM_POINT_SIZE);
+            glPointSize(5.0f);
+
+            glUseProgram(shader.id);
+                rlEnableVertexArray(vao_id);
+                glDrawArrays(GL_POINTS, 0, particles.alive_count);
+                rlDisableVertexArray();
+            glUseProgram(rlGetShaderIdDefault());
+            glDisable(GL_PROGRAM_POINT_SIZE);
         }
 
         void reset() {
