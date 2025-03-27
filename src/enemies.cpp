@@ -13,12 +13,12 @@ namespace enemies {
         switch (data.collision_state) {
             case Enemy::Collision:
                 data.anim_index = 0;
-                data.anim_curr_frame = 0;
+                /*data.anim_curr_frame = 0;*/
                 data.movement = Vector2Zero();
                 return data.damage;
             case Enemy::Uncollision:
                 data.anim_index = 1;
-                data.anim_curr_frame = 0;
+                /*data.anim_curr_frame = 0;*/
                 data.update_target(enemies, target_hitbox.center, ix);
                 return 0;
             case Enemy::Unchanged:
@@ -163,6 +163,7 @@ uint32_t Enemy::tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hi
             auto [_, animation] = enemy_models[state];
             anim_curr_frame = (anim_curr_frame + 3) % animation.animations[anim_index].frameCount;
 
+            // BUG: I don't think this is getting the right results, fix pwetty pwease
             if (check_collision(target_hitbox, simple_hitbox)) {
                 switch (collision_state) {
                     case Collision:

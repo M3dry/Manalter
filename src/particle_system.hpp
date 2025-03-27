@@ -418,7 +418,7 @@ namespace particle_system_2 {
             rlSetVertexAttribute(0, 3, RL_FLOAT, false, vertex_size, 0);
 
             rlEnableVertexAttribute(1);
-            rlSetVertexAttribute(1, 4, RL_UNSIGNED_BYTE, true, vertex_size, (void*)(3 * sizeof(float)));
+            rlSetVertexAttribute(1, 4, RL_UNSIGNED_BYTE, true, vertex_size, 3 * sizeof(float));
 
             rlDisableVertexArray();
             rlDisableVertexBuffer();

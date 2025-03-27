@@ -227,6 +227,10 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
 
     DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
     DrawText(std::format("ENEMIES: {}", enemies.enemies.data.size()).c_str(), 10, 30, 20, BLACK);
+    if (enemies.enemies.data.size() > 0)
+            DrawText(std::format("ENEMY1_ANIM: {}", enemies.enemies.data[0].val.anim_curr_frame).c_str(), 10, 50, 20, BLACK);
+    if (enemies.enemies.data.size() > 1)
+        DrawText(std::format("ENEMY2_ANIM: {}", enemies.enemies.data[1].val.anim_curr_frame).c_str(), 10, 70, 20, BLACK);
 
     if (curr_state<PowerUpSelection>()) {
         std::get<PowerUpSelection>(state).draw(assets, loop, *this);
