@@ -42,7 +42,7 @@ int main(void) {
             BeginMode3D(cam);
                 DrawSphere(Vector3Zero(), 2.0f, BLUE);
                 DrawGrid(1000, 5.0f);
-                /*system.draw();*/
+                system.draw();
             EndMode3D();
 
             if (start) DrawText("STARTED", 10, 10, 20, BLACK);

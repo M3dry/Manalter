@@ -379,9 +379,9 @@ namespace particle_system_2 {
                     auto factor = (speed - min_threshold) / (max_threshold - min_threshold);
 
                     if (factor < 0.0f) {
-                        particles.color[i] = ColorLerp(particles.color[i], start_col, std::abs(speed / min_threshold));
+                        particles.color[i] = lerp_color(particles.color[i], start_col, std::abs(speed / min_threshold));
                     } else {
-                        particles.color[i] = ColorLerp(start_col, end_col, factor);
+                        particles.color[i] = lerp_color(start_col, end_col, factor);
                     }
                 }
             }
@@ -418,7 +418,7 @@ namespace particle_system_2 {
             rlSetVertexAttribute(0, 3, RL_FLOAT, false, vertex_size, 0);
 
             rlEnableVertexAttribute(1);
-            rlSetVertexAttribute(1, 4, RL_UNSIGNED_BYTE, true, vertex_size, 3 * sizeof(float));
+            rlSetVertexAttribute(1, 4, RL_UNSIGNED_BYTE, true, vertex_size, (void*)(3 * sizeof(float)));
 
             rlDisableVertexArray();
             rlDisableVertexBuffer();
