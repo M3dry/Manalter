@@ -75,5 +75,10 @@ namespace hud {
     };
 
     void draw(assets::Store& assets, const Player& player, const SpellBook& spellbook, const Vector2& screen);
-}
 
+    struct SpellBar {
+        // dims.xy - top left corner
+        // dim.z - height
+        void draw(Vector3 dims, assets::Store& assets, const SpellBook& spellbook, std::span<uint32_t> equipped);
+    };
+}

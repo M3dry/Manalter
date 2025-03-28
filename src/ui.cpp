@@ -1,5 +1,6 @@
 #include "ui.hpp"
 
+#include "assets.hpp"
 #include "hitbox.hpp"
 #include "raylib.h"
 #include "spell.hpp"
@@ -53,11 +54,15 @@ namespace hud {
         auto spellbook_size = spellbook.size();
         if (mouse.wheel_movement != 0) {
             if (mouse.wheel_movement < 0) {
-                if (first <= mouse.wheel_movement) first = 0;
-                else first += mouse.wheel_movement;
+                if (first <= mouse.wheel_movement)
+                    first = 0;
+                else
+                    first += mouse.wheel_movement;
 
-                if (second <= mouse.wheel_movement) second = 0;
-                else second += mouse.wheel_movement;
+                if (second <= mouse.wheel_movement)
+                    second = 0;
+                else
+                    second += mouse.wheel_movement;
             } else {
                 first += mouse.wheel_movement;
                 second += mouse.wheel_movement;
@@ -87,6 +92,52 @@ namespace hud {
         DrawRectangle(origin.x, origin.y, spell_dims.x, spell_dims.y, BLACK);
         DrawText(std::format("ORDER: {}", id).c_str(), origin.x + spell_dims.x / 2.0f, origin.y + spell_dims.y / 2.0f,
                  10, BLACK);
+    }
+
+    void SpellBar::draw(Vector3 dims, assets::Store& assets, const SpellBook& spellbook, std::span<uint32_t> equipped) {
+        DrawRectangle(dims.x, dims.y, Player::max_spell_count * dims.z, dims.z, BLACK);
+
+        for (std::size_t i = 0; i < equipped.size(); i++) {
+            if (equipped[i] == UINT32_MAX) {
+                assets.draw_texture(assets::EmptySpellSlot, Rectangle{
+                                                                .x = dims.x + i * dims.z,
+                                                                .y = dims.y,
+                                                                .width = dims.z,
+                                                                .height = dims.z,
+                                                            });
+                continue;
+            }
+
+            auto& spell = spellbook[equipped[i]];
+            assets.draw_texture(spell.get_spell_tag(), Rectangle{
+                                                           .x = dims.x + i * dims.z,
+                                                           .y = dims.y,
+                                                           .width = dims.z,
+                                                           .height = dims.z,
+                                                       });
+
+            BeginBlendMode(BLEND_ADDITIVE);
+            float cooldown_height = dims.z * (float)spell.current_cooldown / spell.cooldown;
+            DrawRectangle(dims.x + i * dims.z, dims.y + dims.z - cooldown_height, dims.z, cooldown_height,
+                          {130, 130, 130, 128});
+            EndBlendMode();
+
+            assets.draw_texture(spell.rarity, Rectangle{
+                                                  .x = dims.x + i * dims.z,
+                                                  .y = dims.y,
+                                                  .width = dims.z,
+                                                  .height = dims.z,
+                                              });
+        }
+
+        for (std::size_t i = equipped.size(); i < 10; i++) {
+            assets.draw_texture(assets::LockedSlot, Rectangle{
+                                                        .x = dims.x + i * dims.z,
+                                                        .y = dims.y,
+                                                        .width = dims.z,
+                                                        .height = dims.z,
+                                                    });
+        }
     }
 
     void draw(assets::Store& assets, const Player& player, const SpellBook& spellbook, const Vector2& screen) {
@@ -152,7 +203,7 @@ namespace hud {
             int row = i / 5;
             int col = i - 5 * row;
 
-            if (i >= player.max_spells) {
+            if (i >= player.unlocked_spell_count) {
                 assets.draw_texture(assets::LockedSlot, (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
                                                                     (float)spell_dim, (float)spell_dim});
                 continue;

@@ -7,7 +7,9 @@ const float Player::model_scale = 0.2f;
 
 Player::Player(Vector3 position, assets::Store& assets)
     : prev_position(position), position(position), interpolated_position(position), animations(nullptr),
-      hitbox((Vector2){position.x, position.z}, 8.0f), equipped_spells(10, UINT32_MAX) {
+      hitbox((Vector2){position.x, position.z}, 8.0f) {
+    equipped_spells.reset(new uint32_t[]{UINT32_MAX});
+
     camera.position = camera_offset;
     camera.target = position;
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
@@ -49,7 +51,7 @@ bool Player::add_exp(uint32_t e) {
         exp -= exp_to_next_lvl;
         exp_to_next_lvl = Player::exp_to_lvl(lvl + 1);
 
-        if (unlocks_spell_slot(lvl)) max_spells++;
+        if (unlocks_spell_slot(lvl)) unlocked_spell_count++;
         return true;
     }
 
@@ -58,14 +60,14 @@ bool Player::add_exp(uint32_t e) {
 
 std::optional<std::reference_wrapper<const Spell>> Player::get_equipped_spell(int idx,
                                                                               const SpellBook& spellbook) const {
-    if (idx >= 10 || idx >= max_spells || equipped_spells[idx] == UINT32_MAX) return {};
+    if (idx >= unlocked_spell_count || equipped_spells[idx] == UINT32_MAX) return {};
 
     return spellbook[equipped_spells[idx]];
 }
 
 int Player::equip_spell(uint32_t spellbook_idx, uint8_t slot_id, const SpellBook& spellbook) {
     if (spellbook.size() <= spellbook_idx) return -1;
-    if (max_spells <= slot_id) return -2;
+    if (unlocked_spell_count <= slot_id) return -2;
 
     equipped_spells[slot_id] = spellbook_idx;
 
@@ -104,7 +106,7 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
         if (mana > stats.max_mana.get()) mana = stats.max_mana.get();
     }
 
-    for (int i = 0; i < 10 && i < max_spells; i++) {
+    for (int i = 0; i < 10 && i < unlocked_spell_count; i++) {
         if (equipped_spells[i] == UINT32_MAX) continue;
 
         Spell& spell = spellbook[equipped_spells[i]];
@@ -118,7 +120,7 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
 
 void Player::cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook,
                            const Enemies& enemies) {
-    if (idx >= 10 || idx >= max_spells || equipped_spells[idx] == UINT32_MAX) return;
+    if (idx >= 10 || idx >= unlocked_spell_count || equipped_spells[idx] == UINT32_MAX) return;
 
     auto spell_id = equipped_spells[idx];
     Spell& spell = spellbook[spell_id];

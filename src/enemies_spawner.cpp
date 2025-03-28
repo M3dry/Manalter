@@ -3,11 +3,15 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
 #include "utility.hpp"
+#include "player.hpp"
+#include <random>
 #include <raymath.h>
 
 bool Enemies::spawn(const Vector2& player_pos) {
     static constexpr float arena_width = ARENA_WIDTH / 2.0f;
     static constexpr float arena_height = ARENA_HEIGHT / 2.0f;
+    static std::uniform_real_distribution<float> radiusDist(Player::visibility_radius - 2*player_radious, Player::visibility_radius);
+    static std::uniform_real_distribution<float> angleDist(0, 2.0f*std::numbers::pi);
 
     if (max_cap <= cap) return false;
 
@@ -16,13 +20,11 @@ bool Enemies::spawn(const Vector2& player_pos) {
     auto enemy = enemies::random_enemy(cap_diff, cap);
     if (!enemy.has_value()) return false;
 
-    auto enemy_pos =
-        (Vector2){(float)GetRandomValue(-arena_width, arena_width), (float)GetRandomValue(-arena_height, arena_height)};
-    auto player_radius_shape = shapes::Circle(player_pos, player_radious);
-
-    while (check_collision(player_radius_shape, enemy_pos)) {
-        enemy_pos = (Vector2){(float)GetRandomValue(-arena_width, arena_width),
-                              (float)GetRandomValue(-arena_height, arena_height)};
+    auto radius = radiusDist(rng::get());
+    auto angle = angleDist(rng::get());
+    auto enemy_pos = Vector2{
+        .x = radius * std::cos(angle),
+        .y = radius * std::sin(angle),
     };
 
     int base_level = std::ceil(killed / 100.0f);

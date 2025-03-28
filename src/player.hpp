@@ -8,11 +8,13 @@
 #include "stats.hpp"
 #include "power_up.hpp"
 #include <cstdint>
+#include <memory>
 
 struct Player {
     static constexpr float visibility_radius = 450.0f;
     // for some reason .x moves on the y axis and .y moves on the x axis.... fuck me
     static constexpr Vector2 visibility_center_offset = {-280.0f, 0.0f};
+    static constexpr uint8_t max_spell_count = 10;
 
     Vector3 prev_position;
     Vector3 position;
@@ -39,10 +41,10 @@ struct Player {
     uint32_t exp = 0;
     uint32_t exp_to_next_lvl = 100;
     // 10 max spells
-    uint8_t max_spells = 1;
+    uint8_t unlocked_spell_count = 1;
     // uint32_t::max means no spell is equipped
     // otherwise index of spell in spellbook
-    std::vector<uint32_t> equipped_spells;
+    std::unique_ptr<uint32_t[]> equipped_spells;
     uint8_t tick_counter = 0;
 
     Player(Vector3 position, assets::Store& assets);

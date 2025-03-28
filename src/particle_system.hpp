@@ -391,41 +391,47 @@ namespace particle_system_2 {
     }
 
     struct System {
-        static constexpr std::size_t vertex_size = 3 * sizeof(float) + 4 * sizeof(uint8_t);
+        static constexpr std::size_t pos_vertex_size = 3 * sizeof(float);
+        static constexpr std::size_t col_vertex_size = 4 * sizeof(uint8_t);
 
         std::vector<emitters::Emitter> emitters;
         std::vector<updaters::Updater> updaters;
 
         Particles particles;
 
-        std::unique_ptr<uint8_t[]> vertex_data;
+        std::unique_ptr<uint8_t[]> pos_vertex_data;
+        std::unique_ptr<uint8_t[]> col_vertex_data;
         unsigned int vao_id = 0;
-        unsigned int vbo_id = 0;
+        unsigned int pos_vbo_id = 0;
+        unsigned int col_vbo_id = 0;
         Shader shader;
 
         System(std::size_t max_particles)
             : particles(max_particles), vao_id(rlLoadVertexArray()),
-              vbo_id(rlLoadVertexBuffer(NULL, vertex_size * max_particles, true)),
+              pos_vbo_id(rlLoadVertexBuffer(NULL, pos_vertex_size * max_particles, true)),
+              col_vbo_id(rlLoadVertexBuffer(NULL, col_vertex_size * max_particles, true)),
               shader(LoadShader("./assets/particles.vs.glsl", "./assets/particles.fs.glsl")) {
-            std::println("VERTEX_SIZE: {}", vertex_size);
-
-            vertex_data.reset(new uint8_t[max_particles * vertex_size]{});
+            pos_vertex_data.reset(new uint8_t[max_particles * pos_vertex_size]{});
+            col_vertex_data.reset(new uint8_t[max_particles * col_vertex_size]{});
 
             rlEnableVertexArray(vao_id);
-            rlEnableVertexBuffer(vbo_id);
 
+            rlEnableVertexBuffer(pos_vbo_id);
             rlEnableVertexAttribute(0);
-            rlSetVertexAttribute(0, 3, RL_FLOAT, false, vertex_size, 0);
+            rlSetVertexAttribute(0, 3, RL_FLOAT, false, pos_vertex_size, 0);
 
+            rlEnableVertexBuffer(col_vbo_id);
             rlEnableVertexAttribute(1);
-            rlSetVertexAttribute(1, 4, RL_UNSIGNED_BYTE, true, vertex_size, 3 * sizeof(float));
+            rlSetVertexAttribute(1, 4, RL_UNSIGNED_BYTE, true, col_vertex_size, 0);
 
             rlDisableVertexArray();
             rlDisableVertexBuffer();
         }
+
         ~System() {
             rlUnloadVertexArray(vao_id);
-            rlUnloadVertexBuffer(vbo_id);
+            rlUnloadVertexBuffer(pos_vbo_id);
+            rlUnloadVertexBuffer(col_vbo_id);
         }
 
         void update(float dt) {
@@ -441,30 +447,17 @@ namespace particle_system_2 {
         void draw() {
             if (particles.alive_count == 0) return;
 
-            auto* start_ptr = vertex_data.get();
-            auto ptr = start_ptr;
-            for (std::size_t i = 0; i < particles.alive_count; i++) {
-                std::memcpy(ptr, &particles.pos[i].x, sizeof(float));
-                ptr += sizeof(float);
-                std::memcpy(ptr, &particles.pos[i].y, sizeof(float));
-                ptr += sizeof(float);
-                std::memcpy(ptr, &particles.pos[i].z, sizeof(float));
-                ptr += sizeof(float);
-                *ptr++ = particles.color[i].r;
-                *ptr++ = particles.color[i].g;
-                *ptr++ = particles.color[i].b;
-                *ptr++ = particles.color[i].a;
-            }
+            std::memcpy(pos_vertex_data.get(), particles.pos.get(), pos_vertex_size * particles.alive_count);
+            std::memcpy(col_vertex_data.get(), particles.color.get(), col_vertex_size * particles.alive_count);
 
-            rlUpdateVertexBuffer(vbo_id, start_ptr, particles.alive_count * vertex_size, 0);
+            rlUpdateVertexBuffer(pos_vbo_id, pos_vertex_data.get(), pos_vertex_size * particles.alive_count, 0);
+            rlUpdateVertexBuffer(col_vbo_id, col_vertex_data.get(), col_vertex_size * particles.alive_count, 0);
 
             auto mvp = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
             auto loc = GetShaderLocation(shader, "mvp");
 
             SetShaderValueMatrix(shader, loc, mvp);
             glEnable(GL_PROGRAM_POINT_SIZE);
-            glPointSize(5.0f);
-
             glUseProgram(shader.id);
                 rlEnableVertexArray(vao_id);
                 glDrawArrays(GL_POINTS, 0, particles.alive_count);

@@ -75,6 +75,7 @@
               gcc14
               gdb
               catch2_3
+              renderdoc
 
               xorg.libX11
               xorg.libXi
