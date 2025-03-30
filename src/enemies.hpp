@@ -11,8 +11,7 @@
 
 struct Enemy;
 
-template <bool Check>
-using QT = quadtree::QuadTree<5, Enemy, Check>;
+template <bool Check> using QT = quadtree::QuadTree<5, Enemy, Check>;
 
 namespace enemies {
     enum struct EnemyClass {
@@ -120,9 +119,8 @@ namespace enemies {
         { e.tick(enemies, ix, hitbox) } -> std::same_as<int>;
     };
 
-#define EACH_ENEMY(F, G)                                                                                               \
-    G(Paladin) /* \ */
-    /*F(Zombie)                                                                                                          \*/
+#define EACH_ENEMY(F, G) G(Paladin) /* \ */
+    /*F(Zombie) \*/
     /*F(Heraklios) \*/
     /*F(Maw)*/
 
@@ -219,7 +217,11 @@ class EnemyModels {
     EnemyModels();
     EnemyModels(EnemyModels&) = delete;
 
-    std::pair<Model, Animation> operator[](const enemies::State& state);
+    std::pair<Model, Animation> operator[](const enemies::State& state) const;
+
+    std::vector<Matrix> get_bone_transforms(const enemies::State& state) const;
+    void update_bones(const enemies::State& state, std::vector<Matrix>& bone_transforms, int anim_index, int anim_frame);
+    void add_shader(Shader shader);
 
     ~EnemyModels();
 
@@ -253,12 +255,15 @@ struct Enemy {
     bool boss;
 
     enemies::State state;
+    std::vector<Matrix> bone_transforms;
 
-    Enemy(Vector2 position, uint16_t level, bool boss, enemies::State&& enemy)
+    Enemy(Vector2 position, uint16_t level, bool boss, enemies::State&& enemy, std::vector<Matrix> bone_transforms)
         : anim_index(get_info(enemy).default_anim), level(level),
           pos((Vector3){position.x, get_info(enemy).y_component, position.y}), movement(Vector2Zero()),
-          simple_hitbox(shapes::Circle(position, get_info(enemy).simple_hitbox_radius)), boss(boss), state(enemy) {
+          simple_hitbox(shapes::Circle(position, get_info(enemy).simple_hitbox_radius)), boss(boss), state(enemy),
+          bone_transforms(bone_transforms) {
         assert(level != 0);
+
         auto info = get_info(enemy);
         health = info.max_health;
 
@@ -270,17 +275,18 @@ struct Enemy {
         damage = GetRandomValue(min_damage, max_damage);
     }
 
-    Enemy(const Enemy&) = default;
-    Enemy(Enemy&& enemy) noexcept
-        : anim_index(enemy.anim_index), anim_curr_frame(enemy.anim_curr_frame), health(enemy.health),
-          damage(enemy.damage), speed(enemy.speed), level(enemy.level), pos(enemy.pos), movement(enemy.movement),
-          angle(enemy.angle), simple_hitbox(std::move(enemy.simple_hitbox)), collision_state(enemy.collision_state),
-          boss(enemy.boss), state(std::move(enemy.state)) {};
+    Enemy(const Enemy&) = delete;
+    Enemy& operator=(const Enemy&) = delete;
 
-    Enemy& operator=(const Enemy&) = default;
+    Enemy(Enemy&& enemy) noexcept
+        : anim_index(enemy.anim_index), anim_curr_frame(enemy.anim_curr_frame),
+          health(enemy.health), damage(enemy.damage), speed(enemy.speed), level(enemy.level), pos(enemy.pos),
+          movement(enemy.movement), angle(enemy.angle), simple_hitbox(std::move(enemy.simple_hitbox)),
+          collision_state(enemy.collision_state), boss(enemy.boss), state(std::move(enemy.state)), bone_transforms(std::move(enemy.bone_transforms)) {};
     Enemy& operator=(Enemy&&) = default;
 
-    void draw(EnemyModels& enemy_models, const Vector3& offset) const;
+    void update_bones(EnemyModels& enemy_models);
+    void draw(EnemyModels& enemy_models, const Vector3& offset);
     void update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix);
     // returned number is the amount of damage taken by the player
     uint32_t tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hitbox, EnemyModels& enemy_models);

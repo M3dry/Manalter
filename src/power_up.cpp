@@ -1,6 +1,5 @@
 #include "power_up.hpp"
 
-#include "print"
 #include "raylib.h"
 #include <random>
 

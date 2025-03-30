@@ -44,6 +44,7 @@ struct Arena {
     ItemDrops item_drops;
 
     std::optional<hud::SpellBookUI> spellbook_ui;
+    hud::SpellBar spellbar;
 
     Vector2 mouse_xz;
 
@@ -87,7 +88,9 @@ struct Loop {
     Keys keys;
     Mouse mouse;
     assets::Store assets;
+
     EnemyModels enemy_models;
+    Shader skinning_shader;
 
     // nullopt - main menu, player_stats also are nullopt
     // scene has value -> player_stats has value
@@ -101,4 +104,6 @@ struct Loop {
     double accum_time = 0.0f;
 
     void update();
+
+    ~Loop();
 };

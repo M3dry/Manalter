@@ -160,7 +160,7 @@ namespace particle_system_2 {
                 Fixed(Vector3 origin) : origin(origin) {
                 }
 
-                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
                     for (std::size_t i = start_ix; i < end_ix; i++) {
                         particles.pos[i] = origin;
                     }
@@ -187,7 +187,7 @@ namespace particle_system_2 {
                 Sphere(bool half_sphere, float speed) : half_sphere(half_sphere), speed(speed) {
                 }
 
-                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
                     static std::uniform_real_distribution<float> distTheta(0.0f, 2 * std::numbers::pi);
                     static std::uniform_real_distribution<float> distPhiHalf(0.0f, std::numbers::pi / 2.0f);
                     static std::uniform_real_distribution<float> distPhi(0.0f, std::numbers::pi);
@@ -214,7 +214,7 @@ namespace particle_system_2 {
                 ScaleRange(float min, float max) : min(min), max(max), dist(min, max) {
                 }
 
-                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
                     auto& gen = rng::get();
                     for (std::size_t i = start_ix; i < end_ix; i++) {
                         particles.velocity[i] = Vector3Scale(particles.velocity[i], dist(gen));
@@ -230,7 +230,7 @@ namespace particle_system_2 {
                 Fixed(Vector3 accel) : accel(accel) {
                 }
 
-                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
                     for (std::size_t i = start_ix; i < end_ix; i++) {
                         particles.acceleration[i] = accel;
                     }
@@ -245,7 +245,7 @@ namespace particle_system_2 {
                 Uniform(Vector3 magnitude) : magnitude(magnitude) {
                 }
 
-                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
                     for (std::size_t i = start_ix; i < end_ix; i++) {
                         auto normalized = Vector3Normalize(particles.velocity[i]);
                         particles.acceleration[i].x = normalized.x * magnitude.x;
@@ -263,7 +263,7 @@ namespace particle_system_2 {
                 Fixed(Color color) : color(color) {
                 }
 
-                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
                     for (std::size_t i = start_ix; i < end_ix; i++) {
                         particles.color[i] = color;
                     }
@@ -280,7 +280,7 @@ namespace particle_system_2 {
                 Range(float min, float max) : min(min), max(max), dist(min, max) {
                 }
 
-                void gen(Particles& particles, float _dt, std::size_t start_ix, std::size_t end_ix) {
+                void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
                     auto& gen = rng::get();
 
                     for (std::size_t i = start_ix; i < end_ix; i++) {
@@ -373,7 +373,7 @@ namespace particle_system_2 {
                 : start_col(start), end_col(end), min_threshold(min_threshold), max_threshold(max_threshold) {
             }
 
-            void update(Particles& particles, float _dt) {
+            void update(Particles& particles, float dt) {
                 for (std::size_t i = 0; i < particles.alive_count; i++) {
                     auto speed = std::abs(Vector3Length(particles.velocity[i]));
                     auto factor = (speed - min_threshold) / (max_threshold - min_threshold);

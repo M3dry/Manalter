@@ -4,7 +4,6 @@
 #include <print>
 
 #include "hitbox.hpp"
-#include "power_up.hpp"
 
 using Poly = shapes::Polygon;
 using Circ = shapes::Circle;

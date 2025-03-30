@@ -15,6 +15,7 @@
         pleaseKeepMyInputs = pkgs.writeTextDir "bin/.inputs" (builtins.concatStringsSep " " (builtins.attrValues {inherit nixpkgs;}));
         raylib_patched = pkgs.raylib.overrideAttrs (oldAttrs: {
           patches = (oldAttrs.patches or []) ++ [./raylib.patch];
+          cmakeFlags = oldAttrs.cmakeFlags ++ [ "-DGRAPHICS=GRAPHICS_API_OPENGL_43" ];
         });
         manalter = pkgs.gcc14Stdenv.mkDerivation {
           pname = "Manalter";

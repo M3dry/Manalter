@@ -7,7 +7,7 @@
 RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples) {
     return LoadRenderTexture(width, height);
 
-    RenderTexture2D target = {0};
+    RenderTexture2D target{};
 
     // Step 1: Create a Framebuffer Object (FBO)
     glGenFramebuffers(1, &target.id);

@@ -27,7 +27,7 @@ struct Player {
     int animationIndex = 0;
 
     shapes::Circle hitbox;
-    Camera3D camera = {0};
+    Camera3D camera{};
 
     static const Vector3 camera_offset;
     static const float model_scale;

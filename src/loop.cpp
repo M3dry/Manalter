@@ -89,7 +89,7 @@ void Arena::PowerUpSelection::update_buttons(Vector2 screen) {
     auto width = screen.x * 0.15f;
     auto free_space = screen.x - 3 * width;
     auto edge_padding_x = free_space / 2.0f * 0.65f;
-    auto gap_between = (free_space - edge_padding_x*2.0f) / 2.0f;
+    auto gap_between = (free_space - edge_padding_x * 2.0f) / 2.0f;
     auto edge_padding_y = (screen.y - height) / 2.0f;
 
     for (int i = 0; i < 3; i++) {
@@ -215,11 +215,15 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
                              (Rectangle){loop.screen.x - circle_ui_dim - padding,
                                          loop.screen.y - circle_ui_dim - padding, circle_ui_dim, circle_ui_dim});
 
-    float spell_bar_width = loop.screen.x / 4.0f;
-    float spell_bar_height = spell_bar_width / 4.0f;
-    loop.assets.draw_texture(assets::SpellBarUI, true,
-                             (Rectangle){(loop.screen.x - spell_bar_width) / 2.0f, loop.screen.y - spell_bar_height,
-                                         spell_bar_width, spell_bar_height});
+    float spell_dim = 96.0f;
+    spellbar.draw(
+        Vector3{
+            .x = loop.screen.x / 2.0f - spell_dim * Player::max_spell_count / 2.0f,
+            .y = loop.screen.y - spell_dim,
+            .z = spell_dim,
+        },
+        loop.assets, loop.player_stats->spellbook,
+        std::span(player.equipped_spells.get(), player.unlocked_spell_count));
 
     if (spellbook_ui) {
         spellbook_ui->update(assets, loop.player_stats->spellbook, loop.mouse, std::nullopt);
@@ -227,10 +231,6 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
 
     DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
     DrawText(std::format("ENEMIES: {}", enemies.enemies.data.size()).c_str(), 10, 30, 20, BLACK);
-    if (enemies.enemies.data.size() > 0)
-            DrawText(std::format("ENEMY1_ANIM: {}", enemies.enemies.data[0].val.anim_curr_frame).c_str(), 10, 50, 20, BLACK);
-    if (enemies.enemies.data.size() > 1)
-        DrawText(std::format("ENEMY2_ANIM: {}", enemies.enemies.data[1].val.anim_curr_frame).c_str(), 10, 70, 20, BLACK);
 
     if (curr_state<PowerUpSelection>()) {
         std::get<PowerUpSelection>(state).draw(assets, loop, *this);
@@ -414,10 +414,12 @@ void Main::update(Loop& loop) {
 }
 
 Loop::Loop(int width, int height)
-    : screen((Vector2){(float)width, (float)height}), assets(screen), scene(Main(keys, screen)) {
+    : screen((Vector2){(float)width, (float)height}), assets(screen),
+      skinning_shader(LoadShader("./assets/skinning.vs.glsl", "./assets/skinning.fs.glsl")), scene(Main(keys, screen)) {
 #ifdef PLATFORM_WEB
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, this, false, resize_handler);
 #endif
+    enemy_models.add_shader(skinning_shader);
 };
 
 void Loop::operator()() {
@@ -450,4 +452,8 @@ void Loop::update() {
 #endif
 
     std::visit([&](auto&& arg) { arg.update(*this); }, scene);
+}
+
+Loop::~Loop() {
+    UnloadShader(skinning_shader);
 }

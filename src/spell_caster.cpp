@@ -1,6 +1,5 @@
 #include "spell_caster.hpp"
 #include "hitbox.hpp"
-#include "rayhacks.hpp"
 #include "spell.hpp"
 
 #include <algorithm>

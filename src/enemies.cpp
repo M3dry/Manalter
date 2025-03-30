@@ -5,6 +5,7 @@
 #include "raymath.h"
 #include "utility.hpp"
 #include <cassert>
+#include <memory>
 
 namespace enemies {
     int Paladin::tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox) {
@@ -26,15 +27,18 @@ namespace enemies {
         }
     }
 
-    int Zombie::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix, [[maybe_unused]] const shapes::Circle target_hitbox) {
+    int Zombie::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
+                     [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
 
-    int Heraklios::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix, [[maybe_unused]] const shapes::Circle target_hitbox) {
+    int Heraklios::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
+                        [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
 
-    int Maw::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix, [[maybe_unused]] const shapes::Circle target_hitbox) {
+    int Maw::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
+                  [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
 
@@ -88,8 +92,48 @@ EnemyModels::EnemyModels() {
     }
 }
 
-std::pair<Model, EnemyModels::Animation> EnemyModels::operator[](const enemies::State& state) {
+std::pair<Model, EnemyModels::Animation> EnemyModels::operator[](const enemies::State& state) const {
     return models[static_cast<int>(enemies::get_type(state))];
+}
+
+std::vector<Matrix> EnemyModels::get_bone_transforms(const enemies::State& state) const {
+    auto [model, _] = (*this)[state];
+
+    std::vector<Matrix> bones;
+    for (int i = 0; i < model.meshCount; i++) {
+        bones.insert(bones.end(), model.meshes[i].boneMatrices,
+                     model.meshes[i].boneMatrices + model.meshes[i].boneCount);
+    }
+
+    return bones;
+}
+
+void EnemyModels::update_bones(const enemies::State& state, std::vector<Matrix>& bone_transforms, int anim_index,
+                               int anim_frame) {
+    auto [model, animation] = (*this)[state];
+
+    auto mesh_bone_ptrs = std::unique_ptr<Matrix*[]>(new Matrix*[model.meshCount]);
+    std::size_t sum = 0;
+    for (int i = 0; i < model.meshCount; i++) {
+        mesh_bone_ptrs[i] = model.meshes[i].boneMatrices;
+
+        model.meshes[i].boneMatrices = bone_transforms.data() + sum;
+        sum += model.meshes[i].boneCount;
+    }
+
+    UpdateModelAnimationBones(model, animation.animations[anim_index], anim_frame);
+
+    for (int i = 0; i < model.meshCount; i++) {
+        model.meshes[i].boneMatrices = mesh_bone_ptrs[i];
+    }
+}
+
+void EnemyModels::add_shader(Shader shader) {
+    for (auto& [model, _] : models) {
+        for (int i = 0; i < model.materialCount; i++) {
+            model.materials[i].shader = shader;
+        }
+    }
 }
 
 EnemyModels::~EnemyModels() {
@@ -99,9 +143,22 @@ EnemyModels::~EnemyModels() {
     }
 }
 
-void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) const {
-    auto [model, animation] = enemy_models[state];
-    UpdateModelAnimation(model, animation.animations[anim_index], anim_curr_frame);
+void Enemy::update_bones(EnemyModels& enemy_models) {
+    enemy_models.update_bones(state, bone_transforms, anim_index, anim_curr_frame);
+}
+
+void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) {
+    auto [model, _] = enemy_models[state];
+
+    auto mesh_bone_ptrs = std::unique_ptr<Matrix*[]>(new Matrix*[model.meshCount]);
+    std::size_t sum = 0;
+    for (int i = 0; i < model.meshCount; i++) {
+        mesh_bone_ptrs[i] = model.meshes[i].boneMatrices;
+
+        model.meshes[i].boneMatrices = bone_transforms.data() + sum;
+        sum += model.meshes[i].boneCount;
+    }
+
     DrawModelEx(model, Vector3Add(pos, offset), (Vector3){0.0f, 1.0f, 0.0f}, angle,
                 std::visit(
                     [](auto&& arg) -> Vector3 {
@@ -113,6 +170,10 @@ void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) const {
 #ifdef DEBUG
     simple_hitbox.draw_3D(RED, 1.0f, xz_component(offset));
 #endif
+
+    for (int i = 0; i < model.meshCount; i++) {
+        model.meshes[i].boneMatrices = mesh_bone_ptrs[i];
+    }
 }
 
 void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix) {
@@ -145,12 +206,12 @@ void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix)
 
             auto d = enemy_pos - e.position();
 
-            separation_force +=
-                Vector2Scale(Vector2Normalize(d), 1.0f / std::max(Vector2Length(d), 1e-6f));
+            separation_force += Vector2Scale(Vector2Normalize(d), 1.0f / std::max(Vector2Length(d), 1e-6f));
         });
 
-    movement = attraction_force*weight_attraction + separation_force*weight_separation;
-    movement += Vector2Scale(Vector2Normalize({ GetRandomValue(-100, 100)/100.f, GetRandomValue(-100, 100)/100.f }), 0.1f);
+    movement = attraction_force * weight_attraction + separation_force * weight_separation;
+    movement +=
+        Vector2Scale(Vector2Normalize({GetRandomValue(-100, 100) / 100.f, GetRandomValue(-100, 100) / 100.f}), 0.1f);
     movement = Vector2Normalize(movement);
 }
 

@@ -1,13 +1,11 @@
 #include "particle_system.hpp"
-#include "print"
 
-#include <limits>
 #include <raylib.h>
 
 int main(void) {
     InitWindow(0, 0, "skibidi");
 
-    Camera3D cam = {0};
+    Camera3D cam{};
     cam.position = {0.0f, 50.0f, 50.0f};
     cam.target = Vector3Zero();
     cam.up = {0.0f, 1.0f, 0.0f};

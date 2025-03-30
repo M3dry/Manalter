@@ -24,7 +24,7 @@ struct Enemies {
 
     // true - enemy spawned
     // false - cap is maxed out
-    bool spawn(const Vector2& player_pos);
+    bool spawn(const EnemyModels& enemy_models, const Vector2& player_pos);
 
     template <Shape S>
     void deal_damage(S shape, uint32_t damage, Element element, std::vector<ItemDrop>& item_drop_pusher) {
@@ -78,7 +78,7 @@ struct Enemies {
 
     uint32_t tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models);
 
-    void draw(EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle) const;
+    void draw(EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle);
 
     uint32_t take_exp();
 };

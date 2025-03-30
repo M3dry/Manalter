@@ -17,7 +17,7 @@ int main(void) {
 
     /*Vector2 uncollide = Vector2Zero();*/
     while (!WindowShouldClose()) {
-        Vector2 movement = {0};
+        Vector2 movement{};
 
         if (IsKeyPressed(KEY_A)) {
             movement.x = -10.0f;
