@@ -25,6 +25,17 @@ void Keys::unregister_all() {
     registered.shrink_to_fit();
 }
 
+void Keys::handled_key(int key) {
+    for (auto& [k, handled] : pressed) {
+        if (k == key) {
+            handled = true;
+            return;
+        }
+    }
+
+    pressed.emplace_back(key, true);
+}
+
 void Keys::poll() {
     auto [first, last] =
         std::ranges::remove_if(pressed, [](const auto& pair) { return pair.second && IsKeyUp(pair.first); });

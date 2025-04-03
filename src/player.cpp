@@ -1,6 +1,7 @@
 #include "player.hpp"
 #include "spell_caster.hpp"
 #include "utility.hpp"
+#include <cstdint>
 
 const Vector3 Player::camera_offset = (Vector3){60.0f, 140.0f, 0.0f};
 const float Player::model_scale = 0.2f;
@@ -8,7 +9,10 @@ const float Player::model_scale = 0.2f;
 Player::Player(Vector3 position, assets::Store& assets)
     : prev_position(position), position(position), interpolated_position(position), animations(nullptr),
       hitbox((Vector2){position.x, position.z}, 8.0f) {
-    equipped_spells.reset(new uint32_t[]{UINT32_MAX});
+    equipped_spells.reset(new uint32_t[Player::max_spell_count]);
+    for (int i = 0; i < Player::max_spell_count; i++) {
+        equipped_spells[i] = UINT32_MAX;
+    }
 
     camera.position = camera_offset;
     camera.target = position;

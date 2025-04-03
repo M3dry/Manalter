@@ -23,12 +23,12 @@ struct Arena {
         std::array<PowerUp, 3> power_ups;
         std::vector<ui::Button> selections;
 
-        PowerUpSelection(Keys& keys, Vector2 screen);
+        PowerUpSelection(assets::Store& assets, Keys& keys, Vector2 screen);
 
         void draw(assets::Store& assets, Loop& loop, Arena& arena);
         void update(Arena& arena, Loop& loop);
 
-        void update_buttons(Vector2 screen);
+        void update_buttons(assets::Store& assets, Vector2 screen);
     };
 
     struct Paused {
@@ -76,8 +76,13 @@ struct Main {
     std::optional<ui::Button> play_button;
     std::optional<ui::Button> exit_button;
 
-    Main(Keys& keys, Vector2 screen);
+    Main(assets::Store& assets, Keys& keys, Vector2 screen);
 
+    void draw(assets::Store& assets, Loop& loop);
+    void update(Loop& loop);
+};
+
+struct SplashScreen {
     void draw(assets::Store& assets, Loop& loop);
     void update(Loop& loop);
 };
@@ -92,9 +97,8 @@ struct Loop {
     EnemyModels enemy_models;
     Shader skinning_shader;
 
-    // nullopt - main menu, player_stats also are nullopt
-    // scene has value -> player_stats has value
-    std::variant<Arena, Hub, Main> scene;
+    // scene isn't Main or SplashScreen -> player_stats has value
+    std::variant<Arena, Hub, Main, SplashScreen> scene;
     std::optional<PlayerSave> player_stats;
 
     Loop(int width, int height);

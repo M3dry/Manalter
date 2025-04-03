@@ -7,6 +7,7 @@
 #include <utility>
 #include <variant>
 
+#include "assets.hpp"
 #include "stats.hpp"
 #include "utility.hpp"
 
@@ -263,8 +264,8 @@ struct PowerUp {
     PowerUp(PowerUp&&) noexcept = default;
     PowerUp& operator=(PowerUp&&) noexcept = default;
 
-    void draw(const Rectangle& inside);
-    void draw_hover(const Rectangle& inside);
+    void draw(assets::Store& assets, const Rectangle& inside);
+    void draw_hover(assets::Store& assets, const Rectangle& inside);
     void apply(PlayerStats& stats);
     static PowerUp random();
 };

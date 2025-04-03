@@ -94,6 +94,16 @@ namespace hud {
                  10, BLACK);
     }
 
+    int SpellBar::dragged(Vector2 point,Vector3 dims, std::size_t unlocked_count) {
+        if (point.x < dims.x || point.y < dims.y) return -1;
+
+        for (std::size_t i = 1; i <= unlocked_count; i++) {
+            if (point.x < (dims.x + dims.z*i)) return i - 1;
+        }
+
+        return - 1;
+    }
+
     void SpellBar::draw(Vector3 dims, assets::Store& assets, const SpellBook& spellbook, std::span<uint32_t> equipped) {
         DrawRectangle(dims.x, dims.y, Player::max_spell_count * dims.z, dims.z, BLACK);
 

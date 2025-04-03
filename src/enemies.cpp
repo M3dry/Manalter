@@ -177,8 +177,8 @@ void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) {
 }
 
 void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix) {
-    static const float neighbourhood_radius = 30.0f;
-    static constexpr float weight_attraction = 3.0f;
+    static const float neighbourhood_radius = 100.0f;
+    static constexpr float weight_attraction = 3.0f; // attraction to player
     static constexpr float weight_separation = 11.0f;
 
     auto id = enemies.data[ix].id;
@@ -198,6 +198,7 @@ void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix)
 
     Vector2 separation_force = Vector2Zero();
 
+    // FIXME: I don't think this gets all the neighbouring enemies correctly as using the for loop the enemies don't go inside each other at all
     enemies.search_by(
         [&circle_hitbox](const auto& bbox) -> bool { return check_collision((Rectangle)bbox, circle_hitbox); },
         [&circle_hitbox](const auto& enemy) -> bool { return check_collision(enemy.simple_hitbox, circle_hitbox); },
@@ -208,6 +209,12 @@ void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix)
 
             separation_force += Vector2Scale(Vector2Normalize(d), 1.0f / std::max(Vector2Length(d), 1e-6f));
         });
+    /*for (const auto& [e_id, enemy] : enemies.data) {*/
+    /*    if (e_id == id) continue;*/
+    /**/
+    /*    auto d = enemy_pos - enemy.position();*/
+    /*    separation_force += Vector2Scale(Vector2Normalize(d), 1.0f / std::max(Vector2Length(d), 1e-6f));*/
+    /*}*/
 
     movement = attraction_force * weight_attraction + separation_force * weight_separation;
     movement +=

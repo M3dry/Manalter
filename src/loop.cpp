@@ -10,6 +10,7 @@
 #include <utility>
 #include <variant>
 
+#include "assets.hpp"
 #include "item_drops.hpp"
 #include "player.hpp"
 #include "rayhacks.hpp"
@@ -53,11 +54,11 @@ Arena::Playing::Playing(Keys& keys) {
     keys.register_key(KEY_ZERO);
 }
 
-Arena::PowerUpSelection::PowerUpSelection(Keys& keys, Vector2 screen)
+Arena::PowerUpSelection::PowerUpSelection(assets::Store& assets, Keys& keys, Vector2 screen)
     : power_ups{PowerUp::random(), PowerUp::random(), PowerUp::random()} {
     keys.unregister_all();
     keys.register_key(KEY_ENTER);
-    update_buttons(screen);
+    update_buttons(assets, screen);
 }
 
 void Arena::PowerUpSelection::draw([[maybe_unused]] assets::Store& assets, Loop& loop, Arena& arena) {
@@ -72,7 +73,7 @@ void Arena::PowerUpSelection::draw([[maybe_unused]] assets::Store& assets, Loop&
 
 void Arena::PowerUpSelection::update(Arena& arena, Loop& loop) {
     if (loop.screen_updated) {
-        update_buttons(loop.screen);
+        update_buttons(loop.assets, loop.screen);
     }
 
     loop.keys.tick([&](const auto& key) {
@@ -84,7 +85,7 @@ void Arena::PowerUpSelection::update(Arena& arena, Loop& loop) {
     });
 }
 
-void Arena::PowerUpSelection::update_buttons(Vector2 screen) {
+void Arena::PowerUpSelection::update_buttons(assets::Store& assets, Vector2 screen) {
     auto height = screen.y * 0.5f;
     auto width = screen.x * 0.15f;
     auto free_space = screen.x - 3 * width;
@@ -104,10 +105,10 @@ void Arena::PowerUpSelection::update_buttons(Vector2 screen) {
             switch (state) {
                 using enum ui::Button::State;
                 case Normal:
-                    power_ups[i].draw(rec);
+                    power_ups[i].draw(assets, rec);
                     return;
                 case Hover:
-                    power_ups[i].draw_hover(rec);
+                    power_ups[i].draw_hover(assets, rec);
                     return;
             }
         });
@@ -172,8 +173,10 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
         // RIGHT-UP
         (Vector3){-ARENA_WIDTH, 0.0f, -ARENA_HEIGHT},
     };
+    auto floor_tex = assets[assets::Floor];
     for (const auto& v : vs) {
         DrawPlane(v, (Vector2){ARENA_WIDTH, ARENA_HEIGHT}, GREEN);
+
         enemies.draw(loop.enemy_models, v, circle);
         item_drops.draw_item_drops(v);
     }
@@ -216,17 +219,25 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
                                          loop.screen.y - circle_ui_dim - padding, circle_ui_dim, circle_ui_dim});
 
     float spell_dim = 96.0f;
-    spellbar.draw(
-        Vector3{
-            .x = loop.screen.x / 2.0f - spell_dim * Player::max_spell_count / 2.0f,
-            .y = loop.screen.y - spell_dim,
-            .z = spell_dim,
-        },
-        loop.assets, loop.player_stats->spellbook,
-        std::span(player.equipped_spells.get(), player.unlocked_spell_count));
+    auto spellbar_dims = Vector3{
+        .x = loop.screen.x / 2.0f - spell_dim * Player::max_spell_count / 2.0f,
+        .y = loop.screen.y - spell_dim,
+        .z = spell_dim,
+    };
+    spellbar.draw(spellbar_dims, loop.assets, loop.player_stats->spellbook,
+                  std::span(player.equipped_spells.get(), player.unlocked_spell_count));
 
     if (spellbook_ui) {
-        spellbook_ui->update(assets, loop.player_stats->spellbook, loop.mouse, std::nullopt);
+        if (auto dropped = spellbook_ui->update(assets, loop.player_stats->spellbook, loop.mouse, std::nullopt);
+            dropped) {
+            auto [spell, pos] = *dropped;
+
+            auto slot = spellbar.dragged(pos, spellbar_dims, player.unlocked_spell_count);
+            std::println("SLOT: {}", slot);
+            if (slot != -1) {
+                player.equip_spell(spell, slot, loop.player_stats->spellbook);
+            };
+        }
     }
 
     DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
@@ -306,7 +317,7 @@ void Arena::update(Loop& loop) {
     } else {
         player.health -= damage_done;
         if (player.add_exp(enemies.take_exp())) {
-            state.emplace<PowerUpSelection>(loop.keys, loop.screen);
+            state.emplace<PowerUpSelection>(loop.assets, loop.keys, loop.screen);
         }
     }
 
@@ -347,39 +358,71 @@ void Hub::update(Loop& loop) {
                 loop.scene.emplace<Arena>(loop.keys, loop.assets);
                 return;
             case KEY_ESCAPE:
-                loop.scene.emplace<Main>(loop.keys, loop.screen);
+                loop.scene.emplace<Main>(loop.assets, loop.keys, loop.screen);
                 loop.player_stats = std::nullopt;
                 return;
         }
     });
 }
 
-Main::Main(Keys& keys, Vector2 screen) {
-    auto play_rec = (Rectangle){
-        .x = screen.x * 3.0f / 4.0f,
-        .y = screen.y / 3.0f,
-        .width = screen.x / 5.0f,
-        .height = screen.y / 7.0f,
+Main::Main(assets::Store& assets, Keys& keys, Vector2 screen) {
+    auto play_button_rec = Rectangle{
+        .x = screen.x/1.5f - assets[assets::PlayButton].width/2.0f,
+        .y = screen.y/2.0f * 0.90f,
+        .width = (float)assets[assets::PlayButton].width,
+        .height = (float)assets[assets::PlayButton].height,
     };
-    play_button.emplace(play_rec, [play_rec](auto state) {
+    play_button.emplace(play_button_rec, [&, play_button_rec](auto state) {
+        DrawRectangleRec(play_button_rec, BLUE);
         switch (state) {
             case ui::Button::State::Normal:
-                DrawRectangleRec(play_rec, BLACK);
+                assets.draw_texture(assets::PlayButton, play_button_rec);
                 break;
             case ui::Button::State::Hover:
-                DrawRectangleRec(play_rec, RED);
+                assets.draw_texture(assets::PlayButtonHover, play_button_rec);
                 break;
         }
     });
 
-    keys.unregister_all();
-    keys.register_key(KEY_SPACE);
-    keys.register_key(KEY_ESCAPE);
+    auto exit_button_rec = Rectangle{
+        .x = screen.x/1.5f - assets[assets::PlayButtonHover].width/2.0f,
+        .y = screen.y/2.0f * 0.90f + assets[assets::PlayButton].height * 1.05f,
+        .width = (float)assets[assets::PlayButtonHover].width,
+        .height = (float)assets[assets::PlayButtonHover].height,
+    };
+    exit_button.emplace(exit_button_rec, [&, exit_button_rec](auto state) {
+        DrawRectangleRec(exit_button_rec, RED);
+        switch (state) {
+            case ui::Button::State::Normal:
+                assets.draw_texture(assets::ExitButton, exit_button_rec);
+                break;
+            case ui::Button::State::Hover:
+                assets.draw_texture(assets::ExitButtonHover, exit_button_rec);
+                break;
+        }
+    });
 }
 
 void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
     BeginDrawing();
     ClearBackground(WHITE);
+
+    auto tex = assets[assets::MainMenu];
+    auto screen_ratio = loop.screen.x / loop.screen.y;
+    DrawTexturePro(tex,
+                   Rectangle{
+                       .x = 100.0f,
+                       .y = 300.0f,
+                       .width = screen_ratio * (loop.screen.y - 300.0f),
+                       .height = loop.screen.y - 300.0f,
+                   },
+                   Rectangle{
+                       .x = 0.0f,
+                       .y = 0.0f,
+                       .width = loop.screen.x,
+                       .height = loop.screen.y,
+                   },
+                   Vector2Zero(), 0.0f, WHITE);
 
     if (play_button->update(loop.mouse)) {
         loop.player_stats = PlayerSave();
@@ -388,34 +431,49 @@ void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
         loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Legendary, 100));
     }
 
+    if (exit_button->update(loop.mouse)) {
+        EndDrawing();
+        CloseWindow();
+        exit(0);
+    }
+
     EndDrawing();
 }
 
 void Main::update(Loop& loop) {
-    loop.keys.tick([&](auto key) {
-        switch (key) {
-            case KEY_SPACE: {
-                loop.player_stats = PlayerSave();
-                loop.scene.emplace<Hub>(loop.keys);
-
-                loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Legendary, 100));
-                break;
-            }
-            case KEY_ESCAPE:
-                // TEST: should I do some other clean up?
-                CloseWindow();
-                exit(0);
-        }
-    });
-
     if (loop.screen_updated) {
-        *this = Main(loop.keys, loop.screen);
+        *this = Main(loop.assets, loop.keys, loop.screen);
     }
+}
+
+void SplashScreen::draw(assets::Store& assets, Loop& loop) {
+    BeginDrawing();
+    ClearBackground(WHITE);
+    assets.draw_texture(assets::SplashScreen, Rectangle{
+                                                  .x = 0.0f,
+                                                  .y = 0.0f,
+                                                  .width = loop.screen.x,
+                                                  .height = loop.screen.y,
+                                              });
+    EndDrawing();
+
+    // NOTE: This is a very ugly hack, the key handling isn't in `update` cuz PollInputEvents gets called every frame.
+    // There isn't a nice way to poll all the keys that changed state without hacking raylib or making a custom glfw
+    // callback handler.
+    auto key = 0;
+    while ((key = GetKeyPressed()) != 0) {
+        loop.scene.emplace<Main>(loop.assets, loop.keys, loop.screen);
+        loop.keys.handled_key(key);
+        return;
+    }
+}
+
+void SplashScreen::update(Loop& loop) {
 }
 
 Loop::Loop(int width, int height)
     : screen((Vector2){(float)width, (float)height}), assets(screen),
-      skinning_shader(LoadShader("./assets/skinning.vs.glsl", "./assets/skinning.fs.glsl")), scene(Main(keys, screen)) {
+      skinning_shader(LoadShader("./assets/skinning.vs.glsl", "./assets/skinning.fs.glsl")), scene(SplashScreen()) {
 #ifdef PLATFORM_WEB
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, this, false, resize_handler);
 #endif

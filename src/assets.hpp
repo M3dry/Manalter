@@ -35,6 +35,14 @@ namespace assets {
     enum GeneralId {
         EmptySpellSlot = 0,
         LockedSlot,
+        SplashScreen,
+        MainMenu,
+        PlayButton,
+        PlayButtonHover,
+        ExitButton,
+        ExitButtonHover,
+        Floor,
+        PowerUpBackground,
         GeneralIdSize,
     };
 

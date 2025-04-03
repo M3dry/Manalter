@@ -66,7 +66,8 @@ void EndTextureModeMSAA(RenderTexture2D target, RenderTexture2D resolveTarget) {
     /*BeginTextureMode(resolveTarget);*/
     /*    DrawTexturePro(target.texture,*/
     /*                (Rectangle){ 0.0f, 0.0f, (float)target.texture.width, -(float)target.texture.height },*/
-    /*                (Rectangle){ 0.0f, 0.0f, (float)resolveTarget.texture.width, (float)resolveTarget.texture.height },*/
+    /*                (Rectangle){ 0.0f, 0.0f, (float)resolveTarget.texture.width, (float)resolveTarget.texture.height
+     * },*/
     /*                (Vector2){ 0.0f, 0.0f, }, 0.0f, WHITE);*/
     /*EndTextureMode();*/
     glBindFramebuffer(GL_READ_FRAMEBUFFER, target.id);        // Bind the MSAA framebuffer (read source)
@@ -160,7 +161,7 @@ namespace assets {
         UnloadRenderTexture((*this)[SpellBarUI, true]);
         UnloadRenderTexture((*this)[SpellBarUI, false]);
         index_render_map(SpellBarUI, false) =
-        CreateRenderTextureMSAA(SpellBookWidth(screen), SpellBookHeight(screen), MSAA);
+            CreateRenderTextureMSAA(SpellBookWidth(screen), SpellBookHeight(screen), MSAA);
         index_render_map(SpellBarUI, true) = LoadRenderTexture(SpellBookWidth(screen), SpellBookHeight(screen));
     }
 
@@ -186,10 +187,50 @@ namespace assets {
         SetTextureFilter(texture_map[EmptySpellSlot], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
-        Image img2 = LoadImage("./assets/spell-icons/locked-slot.png");
-        texture_map[LockedSlot] = LoadTextureFromImage(img2);
+        img = LoadImage("./assets/spell-icons/locked-slot.png");
+        texture_map[LockedSlot] = LoadTextureFromImage(img);
         SetTextureFilter(texture_map[LockedSlot], TEXTURE_FILTER_BILINEAR);
-        UnloadImage(img2);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/splash-screen.png");
+        texture_map[SplashScreen] = LoadTextureFromImage(img);
+        SetTextureFilter(texture_map[SplashScreen], TEXTURE_FILTER_BILINEAR);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/main-menu.png");
+        texture_map[MainMenu] = LoadTextureFromImage(img);
+        SetTextureFilter(texture_map[MainMenu], TEXTURE_FILTER_BILINEAR);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/play-button.png");
+        texture_map[PlayButton] = LoadTextureFromImage(img);
+        SetTextureFilter(texture_map[PlayButton], TEXTURE_FILTER_BILINEAR);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/play-button-hover.png");
+        texture_map[PlayButtonHover] = LoadTextureFromImage(img);
+        SetTextureFilter(texture_map[PlayButtonHover], TEXTURE_FILTER_BILINEAR);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/exit-button.png");
+        texture_map[ExitButton] = LoadTextureFromImage(img);
+        SetTextureFilter(texture_map[ExitButton], TEXTURE_FILTER_BILINEAR);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/exit-button-hover.png");
+        texture_map[ExitButtonHover] = LoadTextureFromImage(img);
+        SetTextureFilter(texture_map[ExitButtonHover], TEXTURE_FILTER_BILINEAR);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/floor.png");
+        texture_map[Floor] = LoadTextureFromImage(img);
+        SetTextureFilter(texture_map[Floor], TEXTURE_FILTER_BILINEAR);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/powerup-background.png");
+        texture_map[PowerUpBackground] = LoadTextureFromImage(img);
+        SetTextureFilter(texture_map[PowerUpBackground], TEXTURE_FILTER_BILINEAR);
+        UnloadImage(img);
 
         for (int tag_i = 0; tag_i < static_cast<int>(spells::Tag::Size); tag_i++) {
             Image img = LoadImage((std::string(spell::icon_path) + "/" + spells::infos[tag_i].icon).c_str());
@@ -201,7 +242,8 @@ namespace assets {
         for (int rarity_i = 0; rarity_i < static_cast<int>(Rarity::Size); rarity_i++) {
             Image img = LoadImage((std::string(rarity::frame_path) + "/" + rarity::info[rarity_i].frame).c_str());
             texture_map[rarity_i + static_cast<int>(spells::Tag::Size) + GeneralIdSize] = LoadTextureFromImage(img);
-            SetTextureFilter(texture_map[rarity_i + static_cast<int>(spells::Tag::Size) + GeneralIdSize], TEXTURE_FILTER_BILINEAR);
+            SetTextureFilter(texture_map[rarity_i + static_cast<int>(spells::Tag::Size) + GeneralIdSize],
+                             TEXTURE_FILTER_BILINEAR);
             UnloadImage(img);
         }
     }
@@ -225,6 +267,7 @@ namespace assets {
 
     void Store::add_models() {
         model_map[Player] = LoadModel("./assets/player/player.glb");
-        model_map[Player].transform = MatrixMultiply(model_map[Player].transform, MatrixRotateX(std::numbers::pi / 2.0f));
+        model_map[Player].transform =
+            MatrixMultiply(model_map[Player].transform, MatrixRotateX(std::numbers::pi / 2.0f));
     }
 }

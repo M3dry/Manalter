@@ -67,7 +67,6 @@ namespace hud {
 
         SpellBookUI(const SpellBook& spellbook, const Vector2& screen);
 
-        // doesn't assume where to draw, just a bunch of draw calls
         // returns the coords of where the spell was dropped
         std::optional<std::pair<std::size_t, Vector2>> update(assets::Store& assets, const SpellBook& spellbook, Mouse& mouse, std::optional<Vector2> screen);
 
@@ -79,6 +78,7 @@ namespace hud {
     struct SpellBar {
         // dims.xy - top left corner
         // dim.z - height
+        int dragged(Vector2 point, Vector3 dims, std::size_t unlocked_count);
         void draw(Vector3 dims, assets::Store& assets, const SpellBook& spellbook, std::span<uint32_t> equipped);
     };
 }

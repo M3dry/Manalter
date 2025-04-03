@@ -14,8 +14,11 @@ class Keys {
 
   public:
     void register_key(int key);
+    void register_all();
     void unregister_key(int key);
     void unregister_all();
+
+    void handled_key(int key);
 
     void poll();
     void tick(std::function<void(const int&)> key_handler);

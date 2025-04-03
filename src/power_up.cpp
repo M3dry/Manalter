@@ -1,13 +1,14 @@
 #include "power_up.hpp"
 
+#include "assets.hpp"
 #include "raylib.h"
 #include <random>
 
-void PowerUp::draw(const Rectangle& constraint) {
-    DrawRectangleRec(constraint, RED);
+void PowerUp::draw(assets::Store& assets, const Rectangle& constraint) {
+    assets.draw_texture(assets::PowerUpBackground, constraint);
 }
 
-void PowerUp::draw_hover(const Rectangle& constraint) {
+void PowerUp::draw_hover(assets::Store& assets, const Rectangle& constraint) {
     DrawRectangleRec(constraint, BLUE);
 }
 

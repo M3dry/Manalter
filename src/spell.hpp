@@ -328,7 +328,7 @@ struct Spell {
     SpellStats stats;
 
     Spell(spells::Data&& spell, Rarity rarity, uint32_t level)
-        : spell(spell), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(cooldown), level(level),
+        : spell(spell), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(0), level(level),
           experience(0), stats(get_info(spell), rarity, level) {};
     Spell(Spell&&) noexcept = default;
     Spell& operator=(Spell&&) noexcept = default;
