@@ -358,8 +358,8 @@ void Hub::update(Loop& loop) {
                 loop.scene.emplace<Arena>(loop.keys, loop.assets);
                 return;
             case KEY_ESCAPE:
-                loop.scene.emplace<Main>(loop.assets, loop.keys, loop.screen);
                 loop.player_stats = std::nullopt;
+                loop.scene.emplace<Main>(loop.assets, loop.keys, loop.screen);
                 return;
         }
     });
@@ -373,7 +373,7 @@ Main::Main(assets::Store& assets, Keys& keys, Vector2 screen) {
         .height = (float)assets[assets::PlayButton].height,
     };
     play_button.emplace(play_button_rec, [&, play_button_rec](auto state) {
-        DrawRectangleRec(play_button_rec, BLUE);
+        /*DrawRectangleRec(play_button_rec, BLUE);*/
         switch (state) {
             case ui::Button::State::Normal:
                 assets.draw_texture(assets::PlayButton, play_button_rec);
@@ -391,7 +391,7 @@ Main::Main(assets::Store& assets, Keys& keys, Vector2 screen) {
         .height = (float)assets[assets::PlayButtonHover].height,
     };
     exit_button.emplace(exit_button_rec, [&, exit_button_rec](auto state) {
-        DrawRectangleRec(exit_button_rec, RED);
+        /*DrawRectangleRec(exit_button_rec, RED);*/
         switch (state) {
             case ui::Button::State::Normal:
                 assets.draw_texture(assets::ExitButton, exit_button_rec);
@@ -426,9 +426,10 @@ void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
 
     if (play_button->update(loop.mouse)) {
         loop.player_stats = PlayerSave();
-        loop.scene.emplace<Hub>(loop.keys);
-
         loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Legendary, 100));
+
+        loop.scene.emplace<Hub>(loop.keys);
+        return;
     }
 
     if (exit_button->update(loop.mouse)) {
@@ -462,8 +463,8 @@ void SplashScreen::draw(assets::Store& assets, Loop& loop) {
     // callback handler.
     auto key = 0;
     while ((key = GetKeyPressed()) != 0) {
-        loop.scene.emplace<Main>(loop.assets, loop.keys, loop.screen);
         loop.keys.handled_key(key);
+        loop.scene.emplace<Main>(loop.assets, loop.keys, loop.screen);
         return;
     }
 }

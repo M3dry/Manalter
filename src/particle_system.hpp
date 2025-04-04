@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <random>
@@ -17,79 +18,6 @@
 #include "rlgl.h"
 
 namespace particle_system {
-    struct Particle {
-        Vector3 pos;
-        Vector3 velocity;
-        Vector3 accel = Vector3Zero();
-        Color color;
-
-        // in seconds
-        float lifetime;
-        float size;
-
-        Particle(const Vector3 pos, const Vector3 vel, const Color& col, float lifetime, float size)
-            : pos(pos), velocity(vel), color(col), lifetime(lifetime), size(size) {
-        }
-    };
-
-    struct Emitter {
-        std::vector<Particle> particles;
-
-        void emit_explosion(const Vector3& origin, std::size_t particle_count) {
-            auto& gen = rng::get();
-
-            static std::uniform_real_distribution<float> distTheta(0.0f, 2 * std::numbers::pi);
-            static std::uniform_real_distribution<float> distPhi(0.0f, std::numbers::pi / 2.0f);
-            static std::uniform_real_distribution<float> distSpeed(5.f, 15.f);
-            static std::uniform_real_distribution<float> distLife(0.5f, 1.5f);
-            static std::uniform_real_distribution<float> distColor(128, 255);
-
-            for (std::size_t i = 0; i < particle_count; i++) {
-                float theta = distTheta(gen);
-                float phi = distPhi(gen);
-                float speed = distSpeed(gen);
-
-                Vector3 velocity = {
-                    .x = speed * std::sin(phi) * std::cos(theta),
-                    .y = speed * std::cos(phi),
-                    .z = speed * std::sin(phi) * std::sin(theta),
-                };
-
-                Color color = {
-                    .r = (uint8_t)distColor(gen),
-                    .g = (uint8_t)(distColor(gen) * 0.5f),
-                    .b = 0,
-                    .a = 255,
-                };
-
-                float life = distLife(gen);
-                float size = 1.0f;
-
-                particles.emplace_back(origin, velocity, color, life, size);
-            }
-        }
-
-        void update(float dt) {
-            for (auto& p : particles) {
-                p.velocity = Vector3Add(p.velocity, Vector3Scale(p.accel, dt));
-                p.pos = Vector3Add(p.pos, Vector3Scale(p.velocity, dt));
-                p.lifetime -= dt;
-            }
-
-            particles.erase(std::remove_if(particles.begin(), particles.end(),
-                                           [](const auto& p) -> bool { return p.lifetime <= 0.0f; }),
-                            particles.end());
-        }
-
-        void draw() {
-            for (const auto& p : particles) {
-                DrawSphere(p.pos, p.size, p.color);
-            }
-        }
-    };
-}
-
-namespace particle_system_2 {
     struct Particles {
         std::unique_ptr<Vector3[]> pos;
         std::unique_ptr<Vector3[]> velocity;
@@ -168,13 +96,20 @@ namespace particle_system_2 {
             };
 
             struct OnCircle {
-                Vector3 origin;
+                Vector3 center;
                 float radius;
 
-                OnCircle(Vector3 origin, float radius) : origin(origin), radius(radius) {
+                OnCircle(Vector3 center, float radius) : center(center), radius(radius) {
                 }
 
                 void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
+                    static std::uniform_real_distribution<float> distAngle(0.0f, 2 * std::numbers::pi);
+
+                    auto& gen = rng::get();
+                    for (std::size_t i = start_ix; i < end_ix; i++) {
+                        particles.pos[i].x = radius * std::cos(distAngle(gen));
+                        particles.pos[i].y = radius * std::sin(distAngle(gen));
+                    }
                 }
             };
         }
@@ -206,6 +141,7 @@ namespace particle_system_2 {
                 }
             };
 
+            // vecolity must already be set
             struct ScaleRange {
                 float min;
                 float max;
@@ -290,8 +226,10 @@ namespace particle_system_2 {
             };
         }
 
-        using Generator = std::variant<pos::Fixed, pos::OnCircle, velocity::Sphere, velocity::ScaleRange,
-                                       acceleration::Fixed, acceleration::Uniform, color::Fixed, lifetime::Range>;
+        using AnonGen = std::function<void(Particles&, float, std::size_t, std::size_t)>;
+        using Generator =
+            std::variant<pos::Fixed, pos::OnCircle, velocity::Sphere, velocity::ScaleRange, acceleration::Fixed,
+                         acceleration::Uniform, color::Fixed, lifetime::Range, AnonGen>;
     };
 
     namespace emitters {
@@ -321,7 +259,16 @@ namespace particle_system_2 {
                 std::size_t end_ix = std::min(start_ix + (std::size_t)max_particles, particles.size - 1);
 
                 for (auto& gen : generators) {
-                    std::visit([&](auto&& arg) { arg.gen(particles, dt, start_ix, end_ix); }, gen);
+                    std::visit(
+                        [&](auto&& arg) {
+                            using T = std::decay_t<decltype(arg)>;
+                            if constexpr (std::is_same_v<T, generators::AnonGen>) {
+                                arg(particles, dt, start_ix, end_ix);
+                            } else {
+                                arg.gen(particles, dt, start_ix, end_ix);
+                            }
+                        },
+                        gen);
                 }
 
                 for (std::size_t i = start_ix; i < end_ix; i++) {
@@ -363,13 +310,13 @@ namespace particle_system_2 {
             }
         };
 
-        struct OnVelocity {
+        struct ColorByVelocity {
             Color start_col;
             Color end_col;
             float min_threshold;
             float max_threshold;
 
-            OnVelocity(Color start, Color end, float min_threshold, float max_threshold)
+            ColorByVelocity(Color start, Color end, float min_threshold, float max_threshold)
                 : start_col(start), end_col(end), min_threshold(min_threshold), max_threshold(max_threshold) {
             }
 
@@ -387,7 +334,8 @@ namespace particle_system_2 {
             }
         };
 
-        using Updater = std::variant<Lifetime, Position, OnVelocity>;
+        using AnonUpdater = std::function<void(Particles& particles, float dt)>;
+        using Updater = std::variant<Lifetime, Position, ColorByVelocity, AnonUpdater>;
     }
 
     struct System {
@@ -440,7 +388,13 @@ namespace particle_system_2 {
             }
 
             for (auto& u : updaters) {
-                std::visit([&](auto&& arg) { arg.update(particles, dt); }, u);
+                std::visit([&](auto&& arg) {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(arg)>, updaters::AnonUpdater>) {
+                        arg(particles, dt);
+                    } else {
+                        arg.update(particles, dt);
+                    }
+                }, u);
             }
         }
 
@@ -459,9 +413,9 @@ namespace particle_system_2 {
             SetShaderValueMatrix(shader, loc, mvp);
             glEnable(GL_PROGRAM_POINT_SIZE);
             glUseProgram(shader.id);
-                rlEnableVertexArray(vao_id);
-                glDrawArrays(GL_POINTS, 0, particles.alive_count);
-                rlDisableVertexArray();
+            rlEnableVertexArray(vao_id);
+            glDrawArrays(GL_POINTS, 0, particles.alive_count);
+            rlDisableVertexArray();
             glUseProgram(rlGetShaderIdDefault());
             glDisable(GL_PROGRAM_POINT_SIZE);
         }

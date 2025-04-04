@@ -12,19 +12,19 @@ int main(void) {
     cam.fovy = 90.0f;
     cam.projection = CAMERA_PERSPECTIVE;
 
-    particle_system_2::System system(2000000);
+    particle_system::System system(2000000);
 
-    particle_system_2::emitters::CustomEmitter<true> emitter;
-    emitter.add_generator(particle_system_2::generators::pos::Fixed(Vector3Zero()));
-    emitter.add_generator(particle_system_2::generators::velocity::Sphere(true, 1));
-    emitter.add_generator(particle_system_2::generators::velocity::ScaleRange(5.0f, 15.0f));
-    emitter.add_generator(particle_system_2::generators::acceleration::Uniform(Vector3{ .x = 10.0f, .y = 0.0f, .z = 10.0f }));
-    /*emitter.add_generator(particle_system_2::generators::color::Fixed(WHITE));*/
-    emitter.add_generator(particle_system_2::generators::lifetime::Range(0.5f, 1.5f));
+    particle_system::emitters::CustomEmitter<true> emitter;
+    emitter.add_generator(particle_system::generators::pos::Fixed(Vector3Zero()));
+    emitter.add_generator(particle_system::generators::velocity::Sphere(true, 1));
+    emitter.add_generator(particle_system::generators::velocity::ScaleRange(5.0f, 15.0f));
+    emitter.add_generator(particle_system::generators::acceleration::Uniform(Vector3{ .x = 10.0f, .y = 0.0f, .z = 10.0f }));
+    emitter.add_generator(particle_system::generators::color::Fixed(WHITE));
+    emitter.add_generator(particle_system::generators::lifetime::Range(0.5f, 1.5f));
     system.add_emitter(std::move(emitter));
-    system.add_updater(particle_system_2::updaters::Position());
-    system.add_updater(particle_system_2::updaters::Lifetime());
-    system.add_updater(particle_system_2::updaters::OnVelocity(WHITE, BLUE, 17.0f, 25.0f));
+    system.add_updater(particle_system::updaters::Position());
+    system.add_updater(particle_system::updaters::Lifetime());
+    system.add_updater(particle_system::updaters::ColorByVelocity(WHITE, BLUE, 17.0f, 25.0f));
 
     bool start = false;
     double prev_time = 0.;
