@@ -212,7 +212,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     // EndShaderMode();
 
     float circle_ui_dim = loop.screen.x * 1 / 8;
-    static const float padding = 10;
+    const float padding = 10;
     SetTextureFilter(loop.assets[assets::CircleUI, true].texture, TEXTURE_FILTER_BILINEAR);
     loop.assets.draw_texture(assets::CircleUI, true,
                              (Rectangle){loop.screen.x - circle_ui_dim - padding,
@@ -233,7 +233,6 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
             auto [spell, pos] = *dropped;
 
             auto slot = spellbar.dragged(pos, spellbar_dims, player.unlocked_spell_count);
-            std::println("SLOT: {}", slot);
             if (slot != -1) {
                 player.equip_spell(spell, slot, loop.player_stats->spellbook);
             };
@@ -261,9 +260,9 @@ void Arena::update(Loop& loop) {
         return;
     }
 
-    static const int movement_keys[] = {KEY_A, KEY_S, KEY_D, KEY_W};
-    static const Vector2 movements[] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
-    static const float angles[] = {0.0f, 90.0f, 180.0f, 270.0f};
+    const int movement_keys[] = {KEY_A, KEY_S, KEY_D, KEY_W};
+    const Vector2 movements[] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
+    const float angles[] = {0.0f, 90.0f, 180.0f, 270.0f};
 
     Vector2 movement = {0, 0};
     Vector2 angle = {0.0f, 0.0f};
@@ -278,7 +277,7 @@ void Arena::update(Loop& loop) {
     float length = Vector2Length(movement);
     if (length != 1 && length != 0) movement = Vector2Divide(movement, {length, length});
 
-    static const std::vector<std::pair<int, int>> spell_keys = {
+    const std::vector<std::pair<int, int>> spell_keys = {
         {KEY_ONE, 0}, {KEY_TWO, 1},   {KEY_THREE, 2}, {KEY_FOUR, 3}, {KEY_FIVE, 4},
         {KEY_SIX, 5}, {KEY_SEVEN, 6}, {KEY_EIGHT, 7}, {KEY_NINE, 8}, {KEY_ZERO, 9},
     };

@@ -28,6 +28,7 @@ bool Enemies::spawn(const EnemyModels& enemy_models, const Vector2& player_pos) 
         .x = radius * std::cos(angle) + player_pos.x,
         .y = radius * std::sin(angle) + player_pos.y,
     };
+    arena::loop_around(enemy_pos.x, enemy_pos.y);
 
     int base_level = std::ceil(killed / 100.0f);
     auto lvl = GetRandomValue(std::max(base_level - 2, 1), base_level + 2);

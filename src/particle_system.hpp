@@ -63,21 +63,6 @@ namespace particle_system {
             std::swap(alive[a], alive[b]);
             std::swap(lifetime[a], lifetime[b]);
         }
-
-        void debug(std::size_t i) {
-            auto print_vec3 = [](Vector3 v) { std::print("[{}, {}, {}]", v.x, v.y, v.z); };
-
-            std::print("POS: ");
-            print_vec3(pos[i]);
-            std::print("\nVELOCITY: ");
-            print_vec3(velocity[i]);
-            std::print("\nACCEL: ");
-            print_vec3(acceleration[i]);
-            std::print("\nCOLOR: ");
-            std::println("[{}, {}, {}, {}]", color[i].r, color[i].g, color[i].b, color[i].a);
-            std::println("\nALIVE: {}", alive[i]);
-            std::println("\nIFETIME: {}", lifetime[i]);
-        }
     };
 
     namespace generators {
