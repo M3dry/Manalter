@@ -14,12 +14,12 @@ set(MANALTER_LIB_SOURCES
     ui.cpp
     input.cpp
     power_up.cpp
+    particle_system.cpp
+    effects.cpp
 )
 
 set(HITBOX_DEMO_SOURCES
     hitbox_demo.cpp
-    hitbox.cpp
-    rayhacks.cpp
 )
 
 set(PLAYGROUND_SOURCES
@@ -30,6 +30,16 @@ add_library(manalter_lib STATIC ${MANALTER_LIB_SOURCES})
 target_include_directories(manalter_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(manalter_lib PRIVATE raylib)
 target_compile_definitions(manalter_lib PRIVATE DEBUG)
+target_precompile_headers(manalter_lib PRIVATE
+    <vector>
+    <string>
+    <cassert>
+    <random>
+    <functional>
+    <utility>
+    <raylib.h>
+    <raymath.h>
+)
 
 add_executable(manalter main.cpp)
 target_link_libraries(manalter PRIVATE manalter_lib)

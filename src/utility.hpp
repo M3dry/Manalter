@@ -19,6 +19,12 @@ Vector2 mouse_xz_in_world(Ray mouse);
 float wrap(float value, float modulus);
 Color lerp_color(Color start, Color end, float factor);
 
+template <typename T, bool Zero = true> inline constexpr int sgn(T val) {
+    T ret = (T(0) < val) - (val < T(0));
+    if (!Zero && ret == 0) return (T)1;
+    return ret;
+}
+
 namespace arena {
     namespace _impl {
         constexpr Rectangle plane_to_rectangle(Vector2 origin, float width, float height) {
@@ -26,29 +32,32 @@ namespace arena {
         }
     }
 
-    constexpr Rectangle arena_rec = Rectangle{ .x = -ARENA_WIDTH/2.0f, .y = -ARENA_HEIGHT/2.0f, .width = ARENA_WIDTH, .height = ARENA_HEIGHT };
+    constexpr Rectangle arena_rec =
+        Rectangle{.x = -ARENA_WIDTH / 2.0f, .y = -ARENA_HEIGHT / 2.0f, .width = ARENA_WIDTH, .height = ARENA_HEIGHT};
 
-    const shapes::Polygon center(_impl::plane_to_rectangle({ 0.0f, 0.0f }, ARENA_WIDTH, ARENA_HEIGHT));
-    constexpr Vector2 center_origin = { 0.0f, 0.0f };
+    const shapes::Polygon center(_impl::plane_to_rectangle({0.0f, 0.0f}, ARENA_WIDTH, ARENA_HEIGHT));
+    constexpr Vector2 center_origin = {0.0f, 0.0f};
 
     const shapes::Polygon top(_impl::plane_to_rectangle({ARENA_WIDTH, ARENA_HEIGHT}, ARENA_WIDTH, ARENA_HEIGHT));
     const shapes::Polygon left(_impl::plane_to_rectangle({-ARENA_WIDTH, 0.0f}, ARENA_WIDTH, ARENA_HEIGHT));
     const shapes::Polygon right(_impl::plane_to_rectangle({ARENA_WIDTH, 0.0f}, ARENA_WIDTH, ARENA_HEIGHT));
-    const shapes::Polygon bottom(_impl::plane_to_rectangle({ 0.0f, -ARENA_HEIGHT }, ARENA_WIDTH, ARENA_HEIGHT));
+    const shapes::Polygon bottom(_impl::plane_to_rectangle({0.0f, -ARENA_HEIGHT}, ARENA_WIDTH, ARENA_HEIGHT));
     constexpr Vector2 top_origin = {ARENA_WIDTH, ARENA_HEIGHT};
     constexpr Vector2 left_origin = {-ARENA_WIDTH, 0.0f};
     constexpr Vector2 right_origin = {ARENA_WIDTH, 0.0f};
-    constexpr Vector2 bottom_origin = { 0.0f, -ARENA_HEIGHT };
+    constexpr Vector2 bottom_origin = {0.0f, -ARENA_HEIGHT};
 
-    const shapes::Polygon top_right(_impl::plane_to_rectangle({ ARENA_WIDTH, ARENA_HEIGHT }, ARENA_WIDTH, ARENA_HEIGHT));
-    const shapes::Polygon bottom_right(_impl::plane_to_rectangle({ ARENA_WIDTH, -ARENA_HEIGHT }, ARENA_WIDTH, ARENA_HEIGHT));
-    constexpr Vector2 top_right_origin = { ARENA_WIDTH, ARENA_HEIGHT };
-    constexpr Vector2 bottom_right_origin = { ARENA_WIDTH, -ARENA_HEIGHT };
+    const shapes::Polygon top_right(_impl::plane_to_rectangle({ARENA_WIDTH, ARENA_HEIGHT}, ARENA_WIDTH, ARENA_HEIGHT));
+    const shapes::Polygon bottom_right(_impl::plane_to_rectangle({ARENA_WIDTH, -ARENA_HEIGHT}, ARENA_WIDTH,
+                                                                 ARENA_HEIGHT));
+    constexpr Vector2 top_right_origin = {ARENA_WIDTH, ARENA_HEIGHT};
+    constexpr Vector2 bottom_right_origin = {ARENA_WIDTH, -ARENA_HEIGHT};
 
-    const shapes::Polygon top_left(_impl::plane_to_rectangle({ -ARENA_WIDTH, ARENA_HEIGHT }, ARENA_WIDTH, ARENA_HEIGHT));
-    const shapes::Polygon bottom_left(_impl::plane_to_rectangle({ -ARENA_WIDTH, -ARENA_HEIGHT }, ARENA_WIDTH, ARENA_HEIGHT));
-    constexpr Vector2 top_left_origin = { -ARENA_WIDTH, ARENA_HEIGHT };
-    constexpr Vector2 bottom_left_origin = { -ARENA_WIDTH, -ARENA_HEIGHT };
+    const shapes::Polygon top_left(_impl::plane_to_rectangle({-ARENA_WIDTH, ARENA_HEIGHT}, ARENA_WIDTH, ARENA_HEIGHT));
+    const shapes::Polygon bottom_left(_impl::plane_to_rectangle({-ARENA_WIDTH, -ARENA_HEIGHT}, ARENA_WIDTH,
+                                                                ARENA_HEIGHT));
+    constexpr Vector2 top_left_origin = {-ARENA_WIDTH, ARENA_HEIGHT};
+    constexpr Vector2 bottom_left_origin = {-ARENA_WIDTH, -ARENA_HEIGHT};
 
     void loop_around(float& x, float& y);
 }

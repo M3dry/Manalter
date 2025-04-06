@@ -24,6 +24,7 @@
           buildInputs = with pkgs;
             [
               cmake
+              lld
               glfw
               libGL.dev
               catch2_3
@@ -71,6 +72,7 @@
           nativeBuildInputs = with pkgs;
             [
               cmake
+              lld
               glfw
               libGLU
               gcc14

@@ -13,7 +13,6 @@
 #include "assets.hpp"
 #include "item_drops.hpp"
 #include "player.hpp"
-#include "rayhacks.hpp"
 #include "spell.hpp"
 #include "spell_caster.hpp"
 #include "ui.hpp"
@@ -188,6 +187,11 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     caster::draw_hitbox(1.0f);
 #endif
 
+    EndMode3D();
+
+    effects::update(loop.accum_time);
+    BeginMode3D(player.camera);
+        effects::draw();
     EndMode3D();
 
 #ifdef DEBUG
@@ -425,7 +429,7 @@ void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
 
     if (play_button->update(loop.mouse)) {
         loop.player_stats = PlayerSave();
-        loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Legendary, 100));
+        loop.player_stats->add_spell_to_spellbook(Spell(spells::VoidImplosion{}, Rarity::Common, 10));
 
         loop.scene.emplace<Hub>(loop.keys);
         return;

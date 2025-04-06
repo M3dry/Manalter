@@ -1,4 +1,5 @@
 #include "spell_caster.hpp"
+#include "effects.hpp"
 #include "hitbox.hpp"
 #include "spell.hpp"
 
@@ -58,8 +59,8 @@ namespace caster {
                 till_stopped--;
             }
 
-            enemies.deal_damage(hitbox, spellbook[spell_id].stats.damage.get(), spellbook[spell_id].get_spell_info().element,
-                                item_drops);
+            enemies.deal_damage(hitbox, spellbook[spell_id].stats.damage.get(),
+                                spellbook[spell_id].get_spell_info().element, item_drops);
 
             if (till_stopped <= 0)
                 return till_removal-- == 0;
@@ -95,8 +96,8 @@ namespace caster {
                 until_max--;
             }
 
-            enemies.deal_damage(hitbox, spellbook[spell_id].stats.damage.get(), spellbook[spell_id].get_spell_info().element,
-                                item_drops);
+            enemies.deal_damage(hitbox, spellbook[spell_id].stats.damage.get(),
+                                spellbook[spell_id].get_spell_info().element, item_drops);
 
             if (until_max == 0) return wait-- == 0;
             return false;
@@ -137,15 +138,18 @@ namespace caster {
 
     bool cast(std::size_t spell_id, const Spell& spell, const Vector2& player_position, const Vector2& mouse_position,
               const Enemies& enemies) {
+        auto info = spell.get_spell_info();
         return std::visit(
             [&](auto&& arg) -> bool {
                 using T = std::decay_t<decltype(arg)>;
 
+                Vector2 effect_origin{};
                 if constexpr (std::is_same_v<T, spell::movement::Circle>) {
                     auto center = point(arg.center, mouse_position, player_position, enemies);
                     if (!center) return false;
 
                     circle_spells.emplace_back(spell_id, *center, arg);
+                    effect_origin = *center;
                 } else if constexpr (std::is_same_v<T, spell::movement::Beam>) {
                     auto origin = point(arg.origin, mouse_position, player_position, enemies);
                     auto dest = point(arg.dest, mouse_position, player_position, enemies);
@@ -153,11 +157,13 @@ namespace caster {
 
                     moving_spells.emplace_back(spell_id, arg, Vector2Normalize(*dest - *origin), player_position,
                                                mouse_position);
+                    effect_origin = *origin;
                 }
 
+                std::visit([&](auto&& eff) { effects::push_effect(eff(effect_origin), false); }, info.effect);
                 return true;
             },
-            spell.get_spell_info().movement);
+            info.movement);
     }
 
     void tick(const SpellBook& spellbook, Enemies& enemies, std::vector<ItemDrop>& item_drops) {
