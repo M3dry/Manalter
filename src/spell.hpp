@@ -158,22 +158,24 @@ namespace spells {
             .movement =
                 (spell::movement::Circle){
                     .center = spell::movement::ClosestEnemy,
-                    .initial_radius = 10,
+                    .initial_radius = 15,
                     .maximal_radius = 5,
                     .increase_duration = 5,
                 },
             .effect = effect::Implosion{
-                .radius = 10.0f,
+                .radius = 40.0f,
+                .particle_count = 350,
+                .particle_size_scale = 0.1f,
                 .floor_y = 0.0f,
-                .lifetime = { 0.5f, 1.0f},
-                .velocity_scale = { 5.0f, 15.0f },
-                .acceleration = {20.0f, 20.0f, 20.0f },
-                .color = { {PURPLE, 10.0f}, { BLACK, 25.0f} },
+                .lifetime = { 0.1f, 0.7f},
+                .velocity_scale = { 70.0f, 90.0f },
+                .acceleration = {200.0f, 200.0f, 200.0f },
+                .color = { {PURPLE, 80.0f}, { BLACK, 130.0f} },
             },
             .element = Element::Shadow,
             .cooldown = 40,
             .base_manacost = 75,
-            .base_damage = 50,
+            .base_damage = 20,
         };
     };
 

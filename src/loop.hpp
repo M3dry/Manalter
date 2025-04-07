@@ -105,6 +105,7 @@ struct Loop {
     void operator()();
 
     double prev_time = 0.0f;
+    double delta_time = 0.0f;
     double accum_time = 0.0f;
 
     void update();

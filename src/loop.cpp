@@ -189,7 +189,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
 
     EndMode3D();
 
-    effects::update(loop.accum_time);
+    effects::update(loop.delta_time);
     BeginMode3D(player.camera);
         effects::draw();
     EndMode3D();
@@ -486,7 +486,7 @@ Loop::Loop(int width, int height)
 
 void Loop::operator()() {
     double current_time = GetTime();
-    double delta_time = current_time - prev_time;
+    delta_time = current_time - prev_time;
     prev_time = current_time;
     accum_time += delta_time;
 

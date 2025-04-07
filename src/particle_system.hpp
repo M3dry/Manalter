@@ -147,10 +147,16 @@ namespace particle_system {
                 : emit_rate(emit_rate), max_emit(max_emit) {
             }
 
+            CustomEmitter(const CustomEmitter&) = delete;
+            CustomEmitter& operator=(const CustomEmitter&) = delete;
+
+            CustomEmitter(CustomEmitter&&) noexcept = default;
+            CustomEmitter& operator=(CustomEmitter&&) noexcept = default;
+
             void emit(Particles& particles, float dt) {
                 float max_particles = std::floor(dt * emit_rate);
-                if (max_particles >= (float)std::numeric_limits<std::size_t>::max())
-                    max_particles = (float)std::numeric_limits<std::size_t>::max();
+                if (max_particles >= particles.max_size)
+                    max_particles = particles.max_size;
                 if (max_particles <= 0) max_particles = 0;
 
                 if (max_emit <= max_particles) {
@@ -234,11 +240,14 @@ namespace particle_system {
             Shader shader;
 
             Point(std::size_t max_size);
+            Point(const Point&) = delete;
+            Point& operator=(const Point&) = delete;
             Point(Point&& p) noexcept
                 : particle_circle(p.particle_circle), max_size(p.max_size),
                   pos_vertex_data(std::move(p.pos_vertex_data)), size_vertex_data(std::move(p.size_vertex_data)),
                   col_vertex_data(std::move(p.col_vertex_data)), vao_id(p.vao_id), pos_vbo_id(p.pos_vbo_id),
                   size_vbo_id(p.size_vbo_id), col_vbo_id(p.col_vbo_id), shader(p.shader) {
+                std::println("MOVE CALLED");
                 p.particle_circle.id = 0;
                 p.vao_id = 0;
                 p.pos_vbo_id = 0;

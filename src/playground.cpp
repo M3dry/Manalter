@@ -1,6 +1,5 @@
 #include "effects.hpp"
 #include "particle_system.hpp"
-#include "utility.hpp"
 
 #include <raylib.h>
 #include <raymath.h>

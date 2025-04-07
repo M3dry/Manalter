@@ -11,6 +11,7 @@ namespace effect {
     struct Implosion {
         float radius;
         std::size_t particle_count = 50000;
+        float particle_size_scale = 1.0f;
         std::optional<float> floor_y = std::nullopt;
         float origin_y = 0.0f;
         std::pair<float, float> lifetime = {2.5f, 3.5f};
