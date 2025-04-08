@@ -14,7 +14,8 @@ int main(void) {
     cam.fovy = 90.0f;
     cam.projection = CAMERA_PERSPECTIVE;
 
-    auto system = effect::Implosion{
+    auto system = effect::Plosion{
+        .type = effect::Plosion::Ex,
         .radius = 10.0f,
         .particle_count = 5000,
         .floor_y = 0.0f,

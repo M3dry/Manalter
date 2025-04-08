@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hitbox.hpp"
 #include "print"
 #include <cassert>
 #include <cstdint>
@@ -51,6 +52,12 @@ namespace quadtree {
             v.y = min.y + std::fmod(std::fmod((v.y - min.y), height) + height, height);
             
             return true;
+        }
+
+        void draw(Color col) const {
+            shapes::Polygon bbox = (Rectangle)*this;
+
+            bbox.draw_lines_3D(col, 1.0f);
         }
     };
 
@@ -244,6 +251,10 @@ namespace quadtree {
             }
         }
 
+        void draw_bbs(Color col) {
+            draw_bbs(col, 0);
+        }
+
       private:
         std::optional<node_ix> insert(node_ix ix, uint64_t ix_id, std::pair<std::size_t, uint64_t> dat) {
             node_ix parent_ix = ix;
@@ -352,6 +363,26 @@ namespace quadtree {
                     }
 
                     search_by(child_ix, check_box, check_point, f);
+                }
+            }
+        }
+
+        void draw_bbs(Color col, node_ix ix) {
+            auto& node = nodes[ix].val;
+
+            node.bbox.draw(col);
+
+            if (!node.subdivided) return;
+
+            for (int i = 0; i < 2; i++) {
+                for (int j = 0; j < 2; j++) {
+                    auto& [child_ix,  child_id] = node[i, j];
+
+                    if (!lookup(nodes, child_ix, child_id)) {
+                        assert(false && "I hate you very much");
+                    }
+
+                    draw_bbs(col, child_ix);
                 }
             }
         }

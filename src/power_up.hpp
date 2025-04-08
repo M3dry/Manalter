@@ -20,6 +20,7 @@ namespace powerups {
     namespace __impl {
         template <typename T>
         concept DiscreteDistr = requires(T t) {
+            { T::name } -> std::convertible_to<const char*>;
             { T::min } -> std::convertible_to<uint8_t>;
             { T::max } -> std::convertible_to<uint8_t>;
             { T::step } -> std::convertible_to<uint8_t>;
@@ -49,6 +50,7 @@ namespace powerups {
 
     template <PowerUpType Type> struct Speed;
     template <> struct Speed<Percentage> {
+        static constexpr const char* name = "Speed";
         static constexpr uint8_t min = 5;
         static constexpr uint8_t max = 35;
         static constexpr uint8_t step = 5;
@@ -61,6 +63,7 @@ namespace powerups {
         }
     };
     template <> struct Speed<Absolute> {
+        static constexpr const char* name = "Speed";
         static constexpr uint8_t min = 1;
         static constexpr uint8_t max = 5;
         static constexpr uint8_t step = 1;
@@ -75,6 +78,7 @@ namespace powerups {
 
     template <PowerUpType Type> struct MaxHealth;
     template <> struct MaxHealth<Percentage> {
+        static constexpr const char* name = "Max Health";
         static constexpr uint8_t min = 2;
         static constexpr uint8_t max = 16;
         static constexpr uint8_t step = 2;
@@ -87,6 +91,7 @@ namespace powerups {
         }
     };
     template <> struct MaxHealth<Absolute> {
+        static constexpr const char* name = "Max Health";
         static constexpr uint8_t min = 5;
         static constexpr uint8_t max = 50;
         static constexpr uint8_t step = 5;
@@ -101,6 +106,7 @@ namespace powerups {
 
     template <PowerUpType Type> struct MaxMana;
     template <> struct MaxMana<Percentage> {
+        static constexpr const char* name = "Max Mana";
         static constexpr uint8_t min = 2;
         static constexpr uint8_t max = 30;
         static constexpr uint8_t step = 4;
@@ -113,6 +119,7 @@ namespace powerups {
         }
     };
     template <> struct MaxMana<Absolute> {
+        static constexpr const char* name = "Max Mana";
         static constexpr uint8_t min = 30;
         static constexpr uint8_t max = 150;
         static constexpr uint8_t step = 10;
@@ -127,6 +134,7 @@ namespace powerups {
 
     template <PowerUpType Type> struct HealthRegen;
     template <> struct HealthRegen<Percentage> {
+        static constexpr const char* name = "Health Regen";
         static constexpr uint8_t min = 2;
         static constexpr uint8_t max = 10;
         static constexpr uint8_t step = 1;
@@ -139,6 +147,7 @@ namespace powerups {
         }
     };
     template <> struct HealthRegen<Absolute> {
+        static constexpr const char* name = "Health Regen";
         static constexpr uint8_t min = 1;
         static constexpr uint8_t max = 5;
         static constexpr uint8_t step = 1;
@@ -153,6 +162,7 @@ namespace powerups {
 
     template <PowerUpType Type> struct ManaRegen;
     template <> struct ManaRegen<Percentage> {
+        static constexpr const char* name = "Mana Regen";
         static constexpr uint8_t min = 4;
         static constexpr uint8_t max = 16;
         static constexpr uint8_t step = 4;
@@ -165,6 +175,7 @@ namespace powerups {
         }
     };
     template <> struct ManaRegen<Absolute> {
+        static constexpr const char* name = "Mana Regen";
         static constexpr uint8_t min = 2;
         static constexpr uint8_t max = 6;
         static constexpr uint8_t step = 1;

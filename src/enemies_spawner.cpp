@@ -30,7 +30,7 @@ bool Enemies::spawn(const EnemyModels& enemy_models, const Vector2& player_pos) 
     };
     arena::loop_around(enemy_pos.x, enemy_pos.y);
 
-    int base_level = std::ceil(killed / 100.0f);
+    int base_level = std::ceil(killed / 5.0f);
     auto lvl = GetRandomValue(std::max(base_level - 2, 1), base_level + 2);
 
     auto bone_data = enemy_models.get_bone_transforms(*enemy);
@@ -58,14 +58,14 @@ uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_m
 }
 
 void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle) {
-    std::vector<Matrix> instance_transforms;
-    std::vector<Matrix> bone_transforms;
     for (auto& enemy : enemies.data) {
         if (check_collision(visibility_circle, xz_component(Vector3Add(enemy.val.pos, offset)))) {
             enemy.val.update_bones(enemy_models);
             enemy.val.draw(enemy_models, offset);
         }
     }
+
+    /*enemies.draw_bbs(RED);*/
 }
 
 uint32_t Enemies::take_exp() {

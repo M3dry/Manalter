@@ -2,15 +2,12 @@
 #include "particle_system.hpp"
 
 namespace effect {
-    particle_system::System Explosion::operator()(Vector2 origin) {
-    }
-
-    particle_system::System Implosion::operator()(Vector2 _origin) {
+    particle_system::System Plosion::operator()(Vector2 _origin) {
         using namespace particle_system;
 
         auto origin = Vector3{
             .x = _origin.x,
-            .y = origin_y,
+            .y = center_y,
             .z = _origin.y,
         };
 
@@ -19,9 +16,16 @@ namespace effect {
         emitters::CustomEmitter emitter;
         emitter.add_generator(generators::pos::OnSphere(origin, { radius*0.7f, radius + 1.0f }));
         emitter.add_generator(
-            [origin = origin](Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
+            [origin = origin, type = type](Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
                 for (std::size_t i = start_ix; i < end_ix; i++) {
-                    particles.velocity[i] = Vector3Normalize(Vector3Subtract(origin, particles.pos[i]));
+                    switch (type) {
+                        case Ex:
+                            particles.velocity[i] = Vector3Normalize(Vector3Subtract(particles.pos[i], origin));
+                            break;
+                        case Im:
+                            particles.velocity[i] = Vector3Normalize(Vector3Subtract(origin, particles.pos[i]));
+                            break;
+                    }
                 }
             });
         emitter.add_generator(generators::velocity::ScaleRange(velocity_scale.first, velocity_scale.second));

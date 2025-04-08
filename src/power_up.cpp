@@ -4,8 +4,21 @@
 #include "raylib.h"
 #include <random>
 
+template <powerups::__impl::DiscreteDistr T> void draw_text(const Rectangle& constraint, uint8_t value) {
+    DrawText(T::name, constraint.x + 10, constraint.y + 20, 20, WHITE);
+    DrawText(std::format("{}", value).c_str(), constraint.x + 10, constraint.y + 40, 20, WHITE);
+}
+
 void PowerUp::draw(assets::Store& assets, const Rectangle& constraint) {
     assets.draw_texture(assets::PowerUpBackground, constraint);
+
+    std::visit([&constraint](auto&& arg) {
+        using T = std::decay_t<decltype(arg)>;
+
+        if (powerups::__impl::DiscreteDistr<T>) {
+            draw_text<T>(constraint, arg.value);
+        }
+    }, power_up);
 }
 
 void PowerUp::draw_hover(assets::Store& assets, const Rectangle& constraint) {

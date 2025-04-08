@@ -11,7 +11,7 @@
 
 struct Enemies {
     // enemies can't spawn inside this circle, centered at player
-    static constexpr float player_radious = 20.0f;
+    static constexpr float player_radious = 50.0f;
 
     uint32_t max_cap;
     uint32_t cap;

@@ -162,7 +162,8 @@ namespace spells {
                     .maximal_radius = 5,
                     .increase_duration = 5,
                 },
-            .effect = effect::Implosion{
+            .effect = effect::Plosion{
+                .type = effect::Plosion::Im,
                 .radius = 40.0f,
                 .particle_count = 350,
                 .particle_size_scale = 0.1f,
