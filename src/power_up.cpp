@@ -5,8 +5,8 @@
 #include <random>
 
 template <powerups::__impl::DiscreteDistr T> void draw_text(const Rectangle& constraint, uint8_t value) {
-    DrawText(T::name, constraint.x + 10, constraint.y + 20, 20, WHITE);
-    DrawText(std::format("{}", value).c_str(), constraint.x + 10, constraint.y + 40, 20, WHITE);
+    DrawText(T::name, static_cast<int>(constraint.x + 10), static_cast<int>(constraint.y + 20), 20, WHITE);
+    DrawText(std::format("{}", value).c_str(), static_cast<int>(constraint.x + 10), static_cast<int>(constraint.y + 40), 20, WHITE);
 }
 
 void PowerUp::draw(assets::Store& assets, const Rectangle& constraint) {

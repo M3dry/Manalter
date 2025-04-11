@@ -10,7 +10,7 @@ class Stat {
     Int value = update();
 
     inline constexpr Int update() {
-        return value = points * percentage/100.0f;
+        return value = static_cast<Int>(static_cast<float>(points) * static_cast<float>(percentage)/100.0f);
     }
   public:
     inline constexpr void add_points(Int p) {

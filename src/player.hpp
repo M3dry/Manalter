@@ -35,16 +35,16 @@ struct Player {
     std::vector<PowerUp> power_ups;
     PlayerStats stats;
     uint32_t health = stats.max_health.get();
-    uint32_t mana = stats.max_mana.get();
+    uint64_t mana = stats.max_mana.get();
     uint16_t lvl = 0;
     // exp collected since level up
     uint32_t exp = 0;
     uint32_t exp_to_next_lvl = 100;
     // 10 max spells
     uint8_t unlocked_spell_count = 1;
-    // uint32_t::max means no spell is equipped
+    // std::size_t::max means no spell is equipped
     // otherwise index of spell in spellbook
-    std::unique_ptr<uint32_t[]> equipped_spells;
+    std::unique_ptr<uint64_t[]> equipped_spells;
     uint8_t tick_counter = 0;
 
     Player(Vector3 position, assets::Store& assets);
@@ -62,14 +62,14 @@ struct Player {
     static uint32_t exp_to_lvl(uint16_t lvl);
     // returns if the player leveled up
     bool add_exp(uint32_t e);
-    std::optional<std::reference_wrapper<const Spell>> get_equipped_spell(int idx, const SpellBook& spellbook) const;
+    std::optional<std::reference_wrapper<const Spell>> get_equipped_spell(uint8_t idx, const SpellBook& spellbook) const;
 
     // -2 - slot out of range
     // -1 - spell isn't inside the spellbook
     // 0 - ok
-    int equip_spell(uint32_t spellbook_idx, uint8_t slot_id, const SpellBook& spellbook);
+    int equip_spell(uint64_t spellbook_idx, uint8_t slot_id, const SpellBook& spellbook);
     void tick(Vector2 movement, float angle, SpellBook& spellbook);
-    void cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook,
+    void cast_equipped(uint8_t idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook,
                        const Enemies& enemies);
 
     void add_power_up(PowerUp&& powerup);
@@ -82,5 +82,5 @@ struct Player {
 struct PlayerSave {
     SpellBook spellbook = {};
 
-    uint32_t add_spell_to_spellbook(Spell&& spell);
+    uint64_t add_spell_to_spellbook(Spell&& spell);
 };

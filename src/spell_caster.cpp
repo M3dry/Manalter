@@ -7,7 +7,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
-#include <print>
 #include <raylib.h>
 #include <raymath.h>
 #include <vector>
@@ -30,7 +29,7 @@ namespace caster {
                       return (Vector2){width / 2.0f * std::sin(alpha), width / 2.0f * std::cos(alpha)};
                   };
 
-                  Vector2 a = c(-angle), b = c(std::numbers::pi - angle);
+                  Vector2 a = c(-angle), b = c(static_cast<float>(std::numbers::pi) - angle);
                   a = (Vector2){origin.x + a.x, origin.y - a.y};
                   b = (Vector2){origin.x + b.x, origin.y - b.y};
 
@@ -86,7 +85,7 @@ namespace caster {
     struct Circle {
         Circle(std::size_t spell_id, Vector2 center, spell::movement::Circle info)
             : spell_id(spell_id), hitbox(center, info.initial_radius), until_max(info.increase_duration),
-              radius_increase((float)(info.maximal_radius - info.initial_radius) / info.increase_duration),
+              radius_increase(static_cast<float>(info.maximal_radius - info.initial_radius) / info.increase_duration),
               wait(info.duration) {
         }
 

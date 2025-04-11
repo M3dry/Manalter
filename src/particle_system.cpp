@@ -55,7 +55,7 @@ namespace particle_system::generators::pos {
     }
 
     void OnCircle::gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
-        static std::uniform_real_distribution<float> distAngle(0.0f, 2 * std::numbers::pi);
+        static std::uniform_real_distribution<float> distAngle(0.0f, 2 * static_cast<float>(std::numbers::pi));
 
         auto& gen = rng::get();
         for (std::size_t i = start_ix; i < end_ix; i++) {
@@ -70,8 +70,8 @@ namespace particle_system::generators::pos {
     }
 
     void OnSphere::gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
-        static std::uniform_real_distribution<float> distTheta(0.0f, 2 * std::numbers::pi);
-        static std::uniform_real_distribution<float> distPhi(0.0f, std::numbers::pi);
+        static std::uniform_real_distribution<float> distTheta(0.0f, 2 * static_cast<float>(std::numbers::pi));
+        static std::uniform_real_distribution<float> distPhi(0.0f, static_cast<float>(std::numbers::pi));
         auto& gen = rng::get();
 
         for (std::size_t i = start_ix; i < end_ix; i++) {
@@ -93,8 +93,8 @@ namespace particle_system::generators::velocity {
     }
 
     void Sphere::gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
-        static std::uniform_real_distribution<float> distTheta(0.0f, 2 * std::numbers::pi);
-        static std::uniform_real_distribution<float> distPhi(0.0f, std::numbers::pi);
+        static std::uniform_real_distribution<float> distTheta(0.0f, 2 * static_cast<float>(std::numbers::pi));
+        static std::uniform_real_distribution<float> distPhi(0.0f, static_cast<float>(std::numbers::pi));
         auto& gen = rng::get();
 
         for (std::size_t i = start_ix; i < end_ix; i++) {
@@ -204,9 +204,9 @@ namespace particle_system::updaters {
             auto factor = (speed - min_threshold) / (max_threshold - min_threshold);
 
             if (factor < 0.0f) {
-                particles.color[i] = lerp_color(particles.color[i], start_col, std::abs(speed / min_threshold));
+                particles.color[i] = ColorLerp(particles.color[i], start_col, std::abs(speed / min_threshold));
             } else {
-                particles.color[i] = lerp_color(start_col, end_col, factor);
+                particles.color[i] = ColorLerp(start_col, end_col, factor);
             }
         }
     }
@@ -235,9 +235,9 @@ namespace particle_system::renderers {
         std::memcpy(size_vertex_data.get(), particles.size.get(), size_vertex_size * particles.alive_count);
         std::memcpy(col_vertex_data.get(), particles.color.get(), col_vertex_size * particles.alive_count);
 
-        rlUpdateVertexBuffer(pos_vbo_id, pos_vertex_data.get(), pos_vertex_size * particles.alive_count, 0);
-        rlUpdateVertexBuffer(size_vbo_id, size_vertex_data.get(), size_vertex_size * particles.alive_count, 0);
-        rlUpdateVertexBuffer(col_vbo_id, col_vertex_data.get(), col_vertex_size * particles.alive_count, 0);
+        rlUpdateVertexBuffer(pos_vbo_id, pos_vertex_data.get(), static_cast<int>(pos_vertex_size * particles.alive_count), 0);
+        rlUpdateVertexBuffer(size_vbo_id, size_vertex_data.get(), static_cast<int>(size_vertex_size * particles.alive_count), 0);
+        rlUpdateVertexBuffer(col_vbo_id, col_vertex_data.get(), static_cast<int>(col_vertex_size * particles.alive_count), 0);
 
         auto mvp = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
         SetShaderValueMatrix(shader, GetShaderLocation(shader, "mvp"), mvp);
@@ -253,7 +253,7 @@ namespace particle_system::renderers {
         glBindTexture(GL_TEXTURE_2D, particle_circle.id);
 
         rlEnableVertexArray(vao_id);
-        glDrawArrays(GL_POINTS, 0, particles.alive_count);
+        glDrawArrays(GL_POINTS, 0, static_cast<int>(particles.alive_count));
         rlDisableVertexArray();
 
         glUseProgram(rlGetShaderIdDefault());
@@ -266,9 +266,9 @@ namespace particle_system::renderers {
 
     void Point::setup_gl() {
         vao_id = rlLoadVertexArray();
-        pos_vbo_id = rlLoadVertexBuffer(NULL, pos_vertex_size * max_size, true);
-        size_vbo_id = rlLoadVertexBuffer(NULL, size_vertex_size * max_size, true);
-        col_vbo_id = rlLoadVertexBuffer(NULL, col_vertex_size * max_size, true);
+        pos_vbo_id = rlLoadVertexBuffer(NULL, static_cast<int>(pos_vertex_size * max_size), true);
+        size_vbo_id = rlLoadVertexBuffer(NULL, static_cast<int>(size_vertex_size * max_size), true);
+        col_vbo_id = rlLoadVertexBuffer(NULL, static_cast<int>(col_vertex_size * max_size), true);
         shader = LoadShader("./assets/particles.vs.glsl", "./assets/particles.fs.glsl");
 
         pos_vertex_data.reset(new uint8_t[max_size * pos_vertex_size]{});

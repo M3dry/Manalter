@@ -106,14 +106,25 @@ namespace spells {
                 (spell::movement::Circle){
                     .center = spell::movement::Mouse,
                     .initial_radius = 0,
-                    .maximal_radius = 15,
+                    .maximal_radius = 20,
                     .increase_duration = 5,
                     .duration = 0,
                 },
+            .effect = effect::Plosion{
+                .type = effect::Plosion::Ex,
+                .radius = 0.0f,
+                .particle_count = 350,
+                .particle_size_scale = 0.1f,
+                .floor_y = 0.0f,
+                .lifetime = { 0.1f, 0.3f},
+                .velocity_scale = { 70.0f, 90.0f },
+                .acceleration = {200.0f, 200.0f, 200.0f },
+                .color = { {WHITE, 80.0f}, { BLUE, 130.0f} },
+            },
             .element = Element::Ice,
             .cooldown = 20,
             .base_manacost = 20,
-            .base_damage = 5,
+            .base_damage = 15,
         };
     };
 
@@ -317,7 +328,7 @@ namespace rarity {
     };
 
     inline rarity::Info get_rarity_info(const Rarity& rarity) {
-        return rarity::info[static_cast<int>(rarity)];
+        return rarity::info[static_cast<std::size_t>(rarity)];
     }
 }
 
@@ -359,7 +370,7 @@ struct Spell {
             spell);
     }
 
-    static Spell random(uint16_t max_level);
+    static Spell random(uint32_t max_level);
 };
 
 using SpellBook = std::vector<Spell>;

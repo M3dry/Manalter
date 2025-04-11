@@ -7,11 +7,11 @@
 #include <functional>
 #include <limits>
 #include <memory>
-#include <print>
 #include <random>
 #include <raylib.h>
 #include <raymath.h>
 #include <vector>
+#include <print>
 
 #include "glad.h"
 #include "rlgl.h"
@@ -142,7 +142,7 @@ namespace particle_system {
             float emit_rate;
             std::size_t max_emit;
 
-            CustomEmitter(float emit_rate = std::numeric_limits<float>::max(),
+            CustomEmitter(float emit_rate = static_cast<float>(std::numeric_limits<std::size_t>::max()),
                           std::size_t max_emit = std::numeric_limits<std::size_t>::max())
                 : emit_rate(emit_rate), max_emit(max_emit) {
             }
@@ -154,10 +154,8 @@ namespace particle_system {
             CustomEmitter& operator=(CustomEmitter&&) noexcept = default;
 
             void emit(Particles& particles, float dt) {
-                float max_particles = std::floor(dt * emit_rate);
-                if (max_particles >= particles.max_size)
-                    max_particles = particles.max_size;
-                if (max_particles <= 0) max_particles = 0;
+                std::size_t max_particles =
+                    std::max<std::size_t>(std::min(static_cast<std::size_t>(dt * emit_rate), particles.max_size), 0);
 
                 if (max_emit <= max_particles) {
                     max_particles = max_emit;
@@ -169,7 +167,8 @@ namespace particle_system {
                 if (max_particles == 0) return;
 
                 std::size_t start_ix = particles.alive_count;
-                std::size_t end_ix = std::min(start_ix + (std::size_t)max_particles, particles.max_size - 1);
+                std::size_t end_ix =
+                    std::min(start_ix + static_cast<std::size_t>(max_particles), particles.max_size - 1);
 
                 for (auto& gen : generators) {
                     std::visit(
@@ -247,7 +246,6 @@ namespace particle_system {
                   pos_vertex_data(std::move(p.pos_vertex_data)), size_vertex_data(std::move(p.size_vertex_data)),
                   col_vertex_data(std::move(p.col_vertex_data)), vao_id(p.vao_id), pos_vbo_id(p.pos_vbo_id),
                   size_vbo_id(p.size_vbo_id), col_vbo_id(p.col_vbo_id), shader(p.shader) {
-                std::println("MOVE CALLED");
                 p.particle_circle.id = 0;
                 p.vao_id = 0;
                 p.pos_vbo_id = 0;

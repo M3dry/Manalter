@@ -1,8 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
-#include <print>
-
 #include "hitbox.hpp"
 
 using Poly = shapes::Polygon;
@@ -11,17 +9,17 @@ using Circ = shapes::Circle;
 TEST_CASE("Polygons", "[hitbox]") {
 
     Poly poly1({
-            (Vector2){ 0, 0 },
-            (Vector2){ 1, 0 },
-            (Vector2){ 1, 1 },
-            (Vector2){ 0, 2 },
-            (Vector2){ -1, 1 },
+            (Vector2){ 0.0f, 0.0f },
+            (Vector2){ 1.0f, 0.0f },
+            (Vector2){ 1.0f, 1.0f },
+            (Vector2){ 0.0f, 2.0f },
+            (Vector2){ -1.0f, 1.0f },
     });
 
     Poly poly2({
-        (Vector2){ 0, 2.1 },
-        (Vector2){ 1, 1.1 },
-        (Vector2){ 0.5, 3.1 },
+        (Vector2){ 0.f, 2.1f },
+        (Vector2){ 1.f, 1.1f },
+        (Vector2){ 0.5f, 3.1f },
     });
 
 

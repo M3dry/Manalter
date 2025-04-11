@@ -1,7 +1,6 @@
 #include "assets.hpp"
 #include "raylib.h"
 #include "spell.hpp"
-#include <print>
 
 #ifndef PLATFORM_WEB
 RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples) {
@@ -123,9 +122,10 @@ namespace assets {
 
     void Store::draw_texture(RenderId render_id, bool resolved, std::optional<Rectangle> dest) {
         auto tex = (*this)[render_id, resolved].texture;
-        DrawTexturePro(tex, (Rectangle){0.0f, 0.0f, (float)tex.width, -(float)tex.height},
-                       dest ? *dest : (Rectangle){0.0f, 0.0f, (float)tex.width, (float)tex.height}, Vector2Zero(), 0.0f,
-                       WHITE);
+        DrawTexturePro(tex, (Rectangle){0.0f, 0.0f, static_cast<float>(tex.width), -static_cast<float>(tex.height)},
+                       dest ? *dest
+                            : (Rectangle){0.0f, 0.0f, static_cast<float>(tex.width), static_cast<float>(tex.height)},
+                       Vector2Zero(), 0.0f, WHITE);
     }
 
     Texture2D Store::operator[](GeneralId id) {
@@ -155,8 +155,9 @@ namespace assets {
     void Store::update_target_size(Vector2 screen) {
         UnloadRenderTexture((*this)[Target, true]);
         UnloadRenderTexture((*this)[Target, false]);
-        index_render_map(Target, false) = CreateRenderTextureMSAA(screen.x, screen.y, MSAA);
-        index_render_map(Target, true) = LoadRenderTexture(screen.x, screen.y);
+        index_render_map(Target, false) =
+            CreateRenderTextureMSAA(static_cast<int>(screen.x), static_cast<int>(screen.y), MSAA);
+        index_render_map(Target, true) = LoadRenderTexture(static_cast<int>(screen.x), static_cast<int>(screen.y));
 
         UnloadRenderTexture((*this)[SpellBarUI, true]);
         UnloadRenderTexture((*this)[SpellBarUI, false]);
@@ -169,16 +170,16 @@ namespace assets {
         return render_map[id + (resolved ? static_cast<int>(RenderIdSize) : 0)];
     }
 
-    int Store::id_to_idx(GeneralId id) {
+    std::size_t Store::id_to_idx(GeneralId id) {
         return id;
     }
 
-    int Store::id_to_idx(spells::Tag name) {
-        return static_cast<int>(name) + static_cast<int>(GeneralIdSize);
+    std::size_t Store::id_to_idx(spells::Tag name) {
+        return static_cast<std::size_t>(name) + GeneralIdSize;
     }
 
-    int Store::id_to_idx(Rarity id) {
-        return static_cast<int>(id) + GeneralIdSize + static_cast<int>(spells::Tag::Size);
+    std::size_t Store::id_to_idx(Rarity id) {
+        return static_cast<std::size_t>(id) + GeneralIdSize + static_cast<std::size_t>(spells::Tag::Size);
     }
 
     void Store::add_textures() {
@@ -232,15 +233,15 @@ namespace assets {
         SetTextureFilter(texture_map[PowerUpBackground], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
-        for (int tag_i = 0; tag_i < static_cast<int>(spells::Tag::Size); tag_i++) {
-            Image img = LoadImage((std::string(spell::icon_path) + "/" + spells::infos[tag_i].icon).c_str());
+        for (std::size_t tag_i = 0; tag_i < static_cast<int>(spells::Tag::Size); tag_i++) {
+            img = LoadImage((std::string(spell::icon_path) + "/" + spells::infos[tag_i].icon).c_str());
             texture_map[tag_i + GeneralIdSize] = LoadTextureFromImage(img);
             SetTextureFilter(texture_map[tag_i + GeneralIdSize], TEXTURE_FILTER_BILINEAR);
             UnloadImage(img);
         }
 
-        for (int rarity_i = 0; rarity_i < static_cast<int>(Rarity::Size); rarity_i++) {
-            Image img = LoadImage((std::string(rarity::frame_path) + "/" + rarity::info[rarity_i].frame).c_str());
+        for (std::size_t rarity_i = 0; rarity_i < static_cast<int>(Rarity::Size); rarity_i++) {
+            img = LoadImage((std::string(rarity::frame_path) + "/" + rarity::info[rarity_i].frame).c_str());
             texture_map[rarity_i + static_cast<int>(spells::Tag::Size) + GeneralIdSize] = LoadTextureFromImage(img);
             SetTextureFilter(texture_map[rarity_i + static_cast<int>(spells::Tag::Size) + GeneralIdSize],
                              TEXTURE_FILTER_BILINEAR);
@@ -249,8 +250,9 @@ namespace assets {
     }
 
     void Store::add_render_textures(Vector2 screen) {
-        index_render_map(Target, false) = CreateRenderTextureMSAA(screen.x, screen.y, MSAA);
-        index_render_map(Target, true) = LoadRenderTexture(screen.x, screen.y);
+        index_render_map(Target, false) =
+            CreateRenderTextureMSAA(static_cast<int>(screen.x), static_cast<int>(screen.y), MSAA);
+        index_render_map(Target, true) = LoadRenderTexture(static_cast<int>(screen.x), static_cast<int>(screen.y));
         index_render_map(CircleUI, false) = CreateRenderTextureMSAA(1023, 1023, MSAA); // odd, to have a center pixel
         index_render_map(CircleUI, true) = LoadRenderTexture(1023, 1023);
         index_render_map(SpellBarUI, false) = CreateRenderTextureMSAA(512, 128, MSAA);
@@ -268,6 +270,6 @@ namespace assets {
     void Store::add_models() {
         model_map[Player] = LoadModel("./assets/player/player.glb");
         model_map[Player].transform =
-            MatrixMultiply(model_map[Player].transform, MatrixRotateX(std::numbers::pi / 2.0f));
+            MatrixMultiply(model_map[Player].transform, MatrixRotateX(static_cast<float>(std::numbers::pi) / 2.0f));
     }
 }

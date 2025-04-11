@@ -7,7 +7,7 @@
 #include <memory>
 
 namespace enemies {
-    int Paladin::tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox) {
+    uint32_t Paladin::tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox) {
         auto& data = enemies.data[ix].val;
 
         switch (data.collision_state) {
@@ -26,17 +26,17 @@ namespace enemies {
         }
     }
 
-    int Zombie::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
+    uint32_t Zombie::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
                      [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
 
-    int Heraklios::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
+    uint32_t Heraklios::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
                         [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
 
-    int Maw::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
+    uint32_t Maw::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
                   [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
@@ -77,7 +77,7 @@ namespace enemies {
 }
 
 EnemyModels::EnemyModels() {
-    for (int i = 0; i < static_cast<int>(enemies::_EnemyType::Size); i++) {
+    for (std::size_t i = 0; i < static_cast<int>(enemies::_EnemyType::Size); i++) {
         auto type = static_cast<enemies::_EnemyType>(i);
         auto model_path = get_info(type).model_path;
 
@@ -85,14 +85,14 @@ EnemyModels::EnemyModels() {
         anim.animations = LoadModelAnimations(model_path, &anim.count);
 
         auto model = LoadModel(model_path);
-        model.transform = MatrixMultiply(model.transform, MatrixRotateX(std::numbers::pi / 2.0f));
+        model.transform = MatrixMultiply(model.transform, MatrixRotateX(static_cast<float>(std::numbers::pi) / 2.0f));
 
         models[i] = {model, anim};
     }
 }
 
 std::pair<Model, EnemyModels::Animation> EnemyModels::operator[](const enemies::State& state) const {
-    return models[static_cast<int>(enemies::get_type(state))];
+    return models[static_cast<std::size_t>(enemies::get_type(state))];
 }
 
 std::vector<Matrix> EnemyModels::get_bone_transforms(const enemies::State& state) const {
@@ -111,9 +111,9 @@ void EnemyModels::update_bones(const enemies::State& state, std::vector<Matrix>&
                                int anim_frame) {
     auto [model, animation] = (*this)[state];
 
-    auto mesh_bone_ptrs = std::unique_ptr<Matrix*[]>(new Matrix*[model.meshCount]);
-    std::size_t sum = 0;
-    for (int i = 0; i < model.meshCount; i++) {
+    auto mesh_bone_ptrs = std::unique_ptr<Matrix*[]>(new Matrix*[static_cast<unsigned int>(model.meshCount)]);
+    int sum = 0;
+    for (std::size_t i = 0; i < static_cast<std::size_t>(model.meshCount); i++) {
         mesh_bone_ptrs[i] = model.meshes[i].boneMatrices;
 
         model.meshes[i].boneMatrices = bone_transforms.data() + sum;
@@ -122,7 +122,7 @@ void EnemyModels::update_bones(const enemies::State& state, std::vector<Matrix>&
 
     UpdateModelAnimationBones(model, animation.animations[anim_index], anim_frame);
 
-    for (int i = 0; i < model.meshCount; i++) {
+    for (std::size_t i = 0; i < static_cast<std::size_t>(model.meshCount); i++) {
         model.meshes[i].boneMatrices = mesh_bone_ptrs[i];
     }
 }
@@ -149,9 +149,9 @@ void Enemy::update_bones(EnemyModels& enemy_models) {
 void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) {
     auto [model, _] = enemy_models[state];
 
-    auto mesh_bone_ptrs = std::unique_ptr<Matrix*[]>(new Matrix*[model.meshCount]);
-    std::size_t sum = 0;
-    for (int i = 0; i < model.meshCount; i++) {
+    auto mesh_bone_ptrs = std::unique_ptr<Matrix*[]>(new Matrix*[static_cast<unsigned int>(model.meshCount)]);
+    int sum = 0;
+    for (std::size_t i = 0; i < static_cast<std::size_t>(model.meshCount); i++) {
         mesh_bone_ptrs[i] = model.meshes[i].boneMatrices;
 
         model.meshes[i].boneMatrices = bone_transforms.data() + sum;
@@ -165,12 +165,12 @@ void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) {
                         return (Vector3){scale, scale, scale};
                     },
                     state),
-                WHITE);
+                damage_tint_left == 0 ? WHITE : damage_tint);
 #ifdef DEBUG
     simple_hitbox.draw_3D(RED, 1.0f, xz_component(offset));
 #endif
 
-    for (int i = 0; i < model.meshCount; i++) {
+    for (std::size_t i = 0; i < static_cast<std::size_t>(model.meshCount); i++) {
         model.meshes[i].boneMatrices = mesh_bone_ptrs[i];
     }
 }
@@ -193,13 +193,13 @@ void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix)
     if (Vector2LengthSqr(attraction_force) > 1e-6f) {
         attraction_force = Vector2Normalize(attraction_force);
     }
-    angle = std::fmod(270 - std::atan2(-attraction_force.y, -attraction_force.x) * 180.0f / std::numbers::pi, 360);
+    angle = std::fmod(270 - std::atan2(-attraction_force.y, -attraction_force.x) * 180.0f / static_cast<float>(std::numbers::pi), 360.0f);
 
     Vector2 separation_force = Vector2Zero();
 
     // FIXME: I don't think this gets all the neighbouring enemies correctly as using the for loop the enemies don't go inside each other at all
     enemies.search_by(
-        [&circle_hitbox](const auto& bbox) -> bool { return check_collision((Rectangle)bbox, circle_hitbox); },
+        [&circle_hitbox](const auto& bbox) -> bool { return check_collision(static_cast<Rectangle>(bbox), circle_hitbox); },
         [&circle_hitbox](const auto& enemy) -> bool { return check_collision(enemy.simple_hitbox, circle_hitbox); },
         [&](const auto& e, auto e_ix) {
             if (e_ix == ix || enemies.data[e_ix].id == id) return;
@@ -224,6 +224,8 @@ void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix)
 uint32_t Enemy::tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hitbox, EnemyModels& enemy_models) {
     return std::visit(
         [&](auto&& arg) {
+            if (damage_tint_left != 0) damage_tint_left--;
+
             set_position({movement.x * speed, movement.y * speed});
             update_target(enemies, target_hitbox.center, ix);
 
@@ -254,12 +256,14 @@ uint32_t Enemy::tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hi
         state);
 }
 
-std::optional<uint32_t> Enemy::take_damage(uint32_t damage, [[maybe_unused]] Element element) {
+std::optional<uint32_t> Enemy::take_damage(uint64_t taken_damage, [[maybe_unused]] Element element) {
     // TODO: Elemental damage scaling
-    if (health <= damage) {
+    if (health <= taken_damage) {
         health = 0;
         return dropped_exp();
     }
+
+    damage_tint_left = damage_tint_init;
 
     health -= damage;
     return std::nullopt;

@@ -15,9 +15,9 @@ int main(void) {
     cam.projection = CAMERA_PERSPECTIVE;
 
     auto system = effect::Plosion{
-        .type = effect::Plosion::Ex,
+        .type = effect::Plosion::Im,
         .radius = 10.0f,
-        .particle_count = 5000,
+        .particle_count = 350,
         .floor_y = 0.0f,
         .lifetime = { 0.5f, 1.0f},
         .velocity_scale = { 5.0f, 15.0f },
@@ -57,7 +57,7 @@ int main(void) {
         }
 
         if (start) {
-            system.update(delta_time);
+            system.update(static_cast<float>(delta_time));
 
             if (system.particles.alive_count == 0) start = false;
         }
@@ -67,3 +67,59 @@ int main(void) {
 
     return 0;
 }
+
+/*#include "quadtree.hpp"*/
+/**/
+/*#include <cstdint>*/
+/*#include <raylib.h>*/
+/*#include <raymath.h>*/
+/**/
+/*int main(void) {*/
+/*    InitWindow(0, 0, "skibidi");*/
+/**/
+/*    quadtree::QuadTree<3, quadtree::pos<uint8_t>> qt(*/
+/*        quadtree::Box({0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight()}));*/
+/**/
+/*    double prev_time = 0.;*/
+/*    while (!WindowShouldClose()) {*/
+/*        double current_time = GetTime();*/
+/*        double delta_time = current_time - prev_time;*/
+/*        prev_time = current_time;*/
+/**/
+/*        PollInputEvents();*/
+/*        BeginDrawing();*/
+/**/
+/*        ClearBackground(WHITE);*/
+/*        for (const auto& p : qt.data) {*/
+/*            auto pos = p.val.position();*/
+/*            DrawCircleV(pos, 20.0f, BLACK);*/
+/*            DrawText(std::format("{}", p.id).c_str(), pos.x, pos.y, 5, WHITE);*/
+/*        }*/
+/*        qt.draw_bbs(RED);*/
+/**/
+/*        EndDrawing();*/
+/*        SwapScreenBuffer();*/
+/**/
+/*        if (IsKeyPressed(KEY_SPACE)) {*/
+/*            auto pos = GetMousePosition();*/
+/*            qt.insert(quadtree::pos(pos, (uint8_t)0));*/
+/*        } else if (IsKeyPressed(KEY_D)) {*/
+/*            for (std::size_t i = 0; i < qt.data.size(); i++) {*/
+/*                if (CheckCollisionPointCircle(GetMousePosition(), qt.data[i].val.position(), 20.0f)) {*/
+/*                    qt.remove(i);*/
+/*                    break;*/
+/*                }*/
+/*            }*/
+/*        } else if (IsKeyPressed(KEY_P)) {*/
+/*            qt.prune();*/
+/*        } else if (IsKeyPressed(KEY_A)) {*/
+/*            qt.print([](auto& x, auto y) {*/
+/**/
+/*            });*/
+/*        }*/
+/*    }*/
+/**/
+/*    CloseWindow();*/
+/**/
+/*    return 0;*/
+/*}*/

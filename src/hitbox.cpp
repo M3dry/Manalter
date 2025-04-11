@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <limits>
-#include <print>
 #include <raylib.h>
 #include <utility>
 
@@ -113,8 +112,8 @@ namespace shapes {
 }
 
 bool check_collision(const shapes::Polygon& poly1, const shapes::Polygon& poly2) {
-    int points = poly1.points.size();
-    for (int i = 0; i < points; i++) {
+    std::size_t points = poly1.points.size();
+    for (std::size_t i = 0; i < points; i++) {
         Vector2 edge = poly1.points[(i + 1) % points] - poly1.points[i];
         Vector2 axis = Vector2Normalize((Vector2){-edge.y, edge.x});
 
@@ -126,7 +125,7 @@ bool check_collision(const shapes::Polygon& poly1, const shapes::Polygon& poly2)
     }
 
     points = poly2.points.size();
-    for (int i = 0; i < points; i++) {
+    for (std::size_t i = 0; i < points; i++) {
         Vector2 edge = poly2.points[(i + 1) % points] - poly2.points[i];
         Vector2 axis = Vector2Normalize((Vector2){-edge.y, edge.x});
 
@@ -151,8 +150,8 @@ bool check_collision(const Vector2& point1, const Vector2& point2) {
     return point1.x == point2.x && point2.y == point2.y;
 }
 
-int find_closest_point(const shapes::Circle& circle, const shapes::Polygon& poly) {
-    int closest_point = 0;
+std::size_t find_closest_point(const shapes::Circle& circle, const shapes::Polygon& poly) {
+    std::size_t closest_point = 0;
 
     float min_distance = Vector2DistanceSqr(poly.points[closest_point], circle.center);
     for (std::size_t i = 1; i < poly.points.size(); i++) {
@@ -168,7 +167,7 @@ int find_closest_point(const shapes::Circle& circle, const shapes::Polygon& poly
 
 bool check_collision(const shapes::Polygon& poly, const shapes::Circle& circle) {
     {
-        int closest = find_closest_point(circle, poly);
+        std::size_t closest = find_closest_point(circle, poly);
         Vector2 closest_v = poly.points[closest];
 
         if (closest_v == circle.center) return true;
@@ -180,8 +179,8 @@ bool check_collision(const shapes::Polygon& poly, const shapes::Circle& circle) 
         if (min_poly >= max_circle || min_circle >= max_poly) return false;
     }
 
-    int points = poly.points.size();
-    for (int i = 0; i < points; i++) {
+    std::size_t points = poly.points.size();
+    for (std::size_t i = 0; i < points; i++) {
         Vector2 edge = poly.points[(i + 1) % points] - poly.points[i];
         Vector2 axis = Vector2Normalize((Vector2){-edge.y, edge.x});
 
@@ -195,8 +194,8 @@ bool check_collision(const shapes::Polygon& poly, const shapes::Circle& circle) 
 }
 
 bool check_collision(const shapes::Polygon& poly, const Vector2& point) {
-    int points = poly.points.size();
-    for (int i = 0; i < points; i++) {
+    std::size_t points = poly.points.size();
+    for (std::size_t i = 0; i < points; i++) {
         Vector2 edge = poly.points[(i + 1) % points] - poly.points[i];
         Vector2 axis = Vector2Normalize((Vector2){-edge.y, edge.x});
 

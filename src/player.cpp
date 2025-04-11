@@ -2,6 +2,7 @@
 #include "spell_caster.hpp"
 #include "utility.hpp"
 #include <cstdint>
+#include <limits>
 
 const Vector3 Player::camera_offset = (Vector3){60.0f, 140.0f, 0.0f};
 const float Player::model_scale = 0.2f;
@@ -9,9 +10,9 @@ const float Player::model_scale = 0.2f;
 Player::Player(Vector3 position, assets::Store& assets)
     : prev_position(position), position(position), interpolated_position(position), animations(nullptr),
       hitbox((Vector2){position.x, position.z}, 8.0f) {
-    equipped_spells.reset(new uint32_t[Player::max_spell_count]);
-    for (int i = 0; i < Player::max_spell_count; i++) {
-        equipped_spells[i] = UINT32_MAX;
+    equipped_spells.reset(new uint64_t[Player::max_spell_count]);
+    for (std::size_t i = 0; i < Player::max_spell_count; i++) {
+        equipped_spells[i] = std::numeric_limits<uint64_t>::max();
     }
 
     camera.position = camera_offset;
@@ -27,7 +28,7 @@ Player::Player(Vector3 position, assets::Store& assets)
 }
 
 void Player::update_interpolated_pos(double accum_time) {
-    interpolated_position = Vector3Lerp(prev_position, position, accum_time * TICKS);
+    interpolated_position = Vector3Lerp(prev_position, position, static_cast<float>(accum_time) * TICKS);
     prev_position = interpolated_position;
     camera.target = interpolated_position;
     camera.position = Vector3Lerp(camera.position, Vector3Add(camera_offset, interpolated_position), 1.0f);
@@ -45,7 +46,7 @@ void Player::draw_model(assets::Store& assets) const {
 }
 
 uint32_t Player::exp_to_lvl(uint16_t lvl) {
-    return 100 * std::pow(lvl, 2);
+    return 100 * static_cast<uint32_t>(std::pow(lvl, 2));
 }
 
 bool Player::add_exp(uint32_t e) {
@@ -62,14 +63,14 @@ bool Player::add_exp(uint32_t e) {
     return false;
 }
 
-std::optional<std::reference_wrapper<const Spell>> Player::get_equipped_spell(int idx,
+std::optional<std::reference_wrapper<const Spell>> Player::get_equipped_spell(uint8_t idx,
                                                                               const SpellBook& spellbook) const {
-    if (idx >= unlocked_spell_count || equipped_spells[idx] == UINT32_MAX) return {};
+    if (idx >= unlocked_spell_count || equipped_spells[idx] == std::numeric_limits<uint64_t>::max()) return {};
 
     return spellbook[equipped_spells[idx]];
 }
 
-int Player::equip_spell(uint32_t spellbook_idx, uint8_t slot_id, const SpellBook& spellbook) {
+int Player::equip_spell(uint64_t spellbook_idx, uint8_t slot_id, const SpellBook& spellbook) {
     if (spellbook.size() <= spellbook_idx) return -1;
     if (unlocked_spell_count <= slot_id) return -2;
 
@@ -78,7 +79,7 @@ int Player::equip_spell(uint32_t spellbook_idx, uint8_t slot_id, const SpellBook
     return 0;
 }
 
-void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
+void Player::tick(Vector2 movement, float new_angle, SpellBook& spellbook) {
     int lastIndex = animationIndex;
     if (movement.x == 0 && movement.y == 0) {
         animationIndex = 0;
@@ -86,7 +87,7 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
         prev_position = position;
         position.x += movement.x * stats.speed.get();
         position.z += movement.y * stats.speed.get();
-        this->angle = angle;
+        angle = new_angle;
 
         arena::loop_around(position.x, position.z);
 
@@ -110,8 +111,8 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
         if (mana > stats.max_mana.get()) mana = stats.max_mana.get();
     }
 
-    for (int i = 0; i < 10 && i < unlocked_spell_count; i++) {
-        if (equipped_spells[i] == UINT32_MAX) continue;
+    for (std::size_t i = 0; i < 10 && i < unlocked_spell_count; i++) {
+        if (equipped_spells[i] == std::numeric_limits<uint64_t>::max()) continue;
 
         Spell& spell = spellbook[equipped_spells[i]];
 
@@ -122,9 +123,9 @@ void Player::tick(Vector2 movement, float angle, SpellBook& spellbook) {
     tick_counter++;
 }
 
-void Player::cast_equipped(int idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook,
+void Player::cast_equipped(uint8_t idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook,
                            const Enemies& enemies) {
-    if (idx >= 10 || idx >= unlocked_spell_count || equipped_spells[idx] == UINT32_MAX) return;
+    if (idx >= 10 || idx >= unlocked_spell_count || equipped_spells[idx] == std::numeric_limits<uint64_t>::max()) return;
 
     auto spell_id = equipped_spells[idx];
     Spell& spell = spellbook[spell_id];
@@ -162,7 +163,7 @@ Player::~Player() {
     UnloadModelAnimations(animations, animationsCount);
 }
 
-uint32_t PlayerSave::add_spell_to_spellbook(Spell&& spell) {
+uint64_t PlayerSave::add_spell_to_spellbook(Spell&& spell) {
     spellbook.emplace_back(std::move(spell));
 
     return spellbook.size() - 1;

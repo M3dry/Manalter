@@ -21,7 +21,7 @@ Color lerp_color(Color start, Color end, float factor);
 
 template <typename T, bool Zero = true> inline constexpr int sgn(T val) {
     T ret = (T(0) < val) - (val < T(0));
-    if (!Zero && ret == 0) return (T)1;
+    if (!Zero && ret == 0) return static_cast<T>(1);
     return ret;
 }
 

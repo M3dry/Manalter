@@ -16,7 +16,7 @@ class ItemDrop {
     shapes::Circle hitbox;
 
     ItemDrop(Vector2 center, Spell&& spell);
-    ItemDrop(uint16_t level, const Vector2& pos);
+    ItemDrop(uint32_t level, const Vector2& pos);
 
     ItemDrop(ItemDrop&&) noexcept = default;
     ItemDrop& operator=(ItemDrop&&) noexcept = default;
@@ -24,7 +24,7 @@ class ItemDrop {
     void draw_name(std::function<Vector2(Vector3)> to_screen_coords) const;
     std::string_view get_name() const;
 
-    static ItemDrop random(uint16_t level, const Vector2& pos);
+    static ItemDrop random(uint32_t level, const Vector2& pos);
 };
 
 struct ItemDrops {

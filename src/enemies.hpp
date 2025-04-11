@@ -5,8 +5,10 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "spell.hpp"
+#include "utility.hpp"
 #include <cassert>
 #include <cstdint>
+#include <random>
 #include <variant>
 
 struct Enemy;
@@ -29,7 +31,7 @@ namespace enemies {
         uint32_t cap_value;
         EnemyClass element;
         std::pair<uint32_t, uint32_t> damage_range;
-        std::pair<uint32_t, uint32_t> speed_range;
+        std::pair<uint16_t, uint16_t> speed_range;
         uint32_t max_health;
         float simple_hitbox_radius;
         uint32_t base_exp_dropped;
@@ -41,7 +43,7 @@ namespace enemies {
             Sprinting = 1,
         };
 
-        int tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
+        uint32_t tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/paladin.glb",
@@ -59,7 +61,7 @@ namespace enemies {
     };
 
     struct Zombie {
-        int tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
+        uint32_t tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/zombie.glb",
@@ -77,7 +79,7 @@ namespace enemies {
     };
 
     struct Heraklios {
-        int tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
+        uint32_t tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/heraklios.glb",
@@ -95,7 +97,7 @@ namespace enemies {
     };
 
     struct Maw {
-        int tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
+        uint32_t tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox);
 
         static constexpr Info info = (Info){
             .model_path = "./assets/maw.glb",
@@ -116,7 +118,7 @@ namespace enemies {
     concept IsEnemy = requires(T e, std::size_t ix, const shapes::Circle& hitbox, QT<true>& enemies) {
         { T::info } -> std::same_as<const Info&>;
         // gets called if target hitbox collides or uncollides with enemy hitbox
-        { e.tick(enemies, ix, hitbox) } -> std::same_as<int>;
+        { e.tick(enemies, ix, hitbox) } -> std::same_as<uint32_t>;
     };
 
 #define EACH_ENEMY(F, G) G(Paladin) /* \ */
@@ -220,7 +222,8 @@ class EnemyModels {
     std::pair<Model, Animation> operator[](const enemies::State& state) const;
 
     std::vector<Matrix> get_bone_transforms(const enemies::State& state) const;
-    void update_bones(const enemies::State& state, std::vector<Matrix>& bone_transforms, int anim_index, int anim_frame);
+    void update_bones(const enemies::State& state, std::vector<Matrix>& bone_transforms, int anim_index,
+                      int anim_frame);
     void add_shader(Shader shader);
 
     ~EnemyModels();
@@ -231,6 +234,9 @@ class EnemyModels {
 
 struct Enemy {
   public:
+    static constexpr uint8_t damage_tint_init = 2;
+    static constexpr Color damage_tint = (Color){200, 200, 200, 180};
+
     enum CollisionState {
         Collision,
         Uncollision,
@@ -239,6 +245,8 @@ struct Enemy {
 
     int anim_index = 0;
     int anim_curr_frame = 0;
+
+    uint8_t damage_tint_left = 0;
 
     uint32_t health;
     uint32_t damage;
@@ -269,20 +277,18 @@ struct Enemy {
 
         // TODO: scale based on `level`
         auto [min_speed, max_speed] = info.speed_range;
-        speed = GetRandomValue(min_speed, max_speed);
+        std::uniform_int_distribution<uint16_t> speedDist(min_speed, max_speed);
+        speed = speedDist(rng::get());
 
         auto [min_damage, max_damage] = info.damage_range;
-        damage = GetRandomValue(min_damage, max_damage);
+        std::uniform_int_distribution<uint32_t> damageDist(min_damage, max_damage);
+        damage = damageDist(rng::get());
     }
 
     Enemy(const Enemy&) = delete;
     Enemy& operator=(const Enemy&) = delete;
 
-    Enemy(Enemy&& enemy) noexcept
-        : anim_index(enemy.anim_index), anim_curr_frame(enemy.anim_curr_frame),
-          health(enemy.health), damage(enemy.damage), speed(enemy.speed), level(enemy.level), pos(enemy.pos),
-          movement(enemy.movement), angle(enemy.angle), simple_hitbox(std::move(enemy.simple_hitbox)),
-          collision_state(enemy.collision_state), boss(enemy.boss), state(std::move(enemy.state)), bone_transforms(std::move(enemy.bone_transforms)) {};
+    Enemy(Enemy&&) noexcept = default;
     Enemy& operator=(Enemy&&) = default;
 
     void update_bones(EnemyModels& enemy_models);
@@ -292,7 +298,7 @@ struct Enemy {
     uint32_t tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hitbox, EnemyModels& enemy_models);
 
     // if not nullopt, then the enemy is dead and dropped uint32_t amount of exp
-    std::optional<uint32_t> take_damage(uint32_t damage, Element element);
+    std::optional<uint32_t> take_damage(uint64_t damage, Element element);
 
     Vector2 position() const;
     void set_position(const Vector2& p);

@@ -13,6 +13,7 @@
 #include "assets.hpp"
 #include "item_drops.hpp"
 #include "player.hpp"
+#include "power_up.hpp"
 #include "spell.hpp"
 #include "spell_caster.hpp"
 #include "ui.hpp"
@@ -61,7 +62,7 @@ Arena::PowerUpSelection::PowerUpSelection(assets::Store& assets, Keys& keys, Vec
 }
 
 void Arena::PowerUpSelection::draw([[maybe_unused]] assets::Store& assets, Loop& loop, Arena& arena) {
-    for (int i = 0; i < 3; i++) {
+    for (std::size_t i = 0; i < 3; i++) {
         if (selections[i].update(loop.mouse)) {
             arena.player.add_power_up(std::move(power_ups[i]));
             arena.state.emplace<Playing>(loop.keys);
@@ -92,7 +93,8 @@ void Arena::PowerUpSelection::update_buttons(assets::Store& assets, Vector2 scre
     auto gap_between = (free_space - edge_padding_x * 2.0f) / 2.0f;
     auto edge_padding_y = (screen.y - height) / 2.0f;
 
-    for (int i = 0; i < 3; i++) {
+    selections.clear();
+    for (std::size_t i = 0; i < 3; i++) {
         auto rec = Rectangle{
             .x = edge_padding_x + width * i + i * gap_between,
             .y = edge_padding_y,
@@ -100,8 +102,8 @@ void Arena::PowerUpSelection::update_buttons(assets::Store& assets, Vector2 scre
             .height = height,
         };
 
-        selections.emplace_back(rec, [&, rec](ui::Button::State state) {
-            switch (state) {
+        selections.emplace_back(rec, [&, i, rec](ui::Button::State button_state) {
+            switch (button_state) {
                 using enum ui::Button::State;
                 case Normal:
                     power_ups[i].draw(assets, rec);
@@ -120,7 +122,7 @@ Arena::Paused::Paused(Keys& keys) {
 }
 
 void Arena::Paused::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
-    DrawText("PAUSED", loop.screen.x / 2.0f, loop.screen.y / 2.0f, 30, WHITE);
+    DrawText("PAUSED", static_cast<int>(loop.screen.x / 2.0f), static_cast<int>(loop.screen.y / 2.0f), 30, WHITE);
 }
 
 void Arena::Paused::update(Arena& arena, Loop& loop) {
@@ -189,14 +191,14 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
 
     EndMode3D();
 
-    effects::update(loop.delta_time);
+    effects::update(static_cast<float>(loop.delta_time));
     BeginMode3D(player.camera);
-        effects::draw();
+    effects::draw();
     EndMode3D();
 
 #ifdef DEBUG
     item_drops.draw_item_drop_names([camera = player.camera, screen = loop.screen](auto pos) {
-        return GetWorldToScreenEx(pos, camera, screen.x, screen.y);
+        return GetWorldToScreenEx(pos, camera, static_cast<int>(screen.x), static_cast<int>(screen.y));
     });
 #endif
 
@@ -238,7 +240,8 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
 
             auto slot = spellbar.dragged(pos, spellbar_dims, player.unlocked_spell_count);
             if (slot != -1) {
-                player.equip_spell(spell, slot, loop.player_stats->spellbook);
+                player.equip_spell(static_cast<uint32_t>(spell), static_cast<uint8_t>(slot),
+                                   loop.player_stats->spellbook);
             };
         }
     }
@@ -281,7 +284,7 @@ void Arena::update(Loop& loop) {
     float length = Vector2Length(movement);
     if (length != 1 && length != 0) movement = Vector2Divide(movement, {length, length});
 
-    const std::vector<std::pair<int, int>> spell_keys = {
+    const std::vector<std::pair<int, uint8_t>> spell_keys = {
         {KEY_ONE, 0}, {KEY_TWO, 1},   {KEY_THREE, 2}, {KEY_FOUR, 3}, {KEY_FIVE, 4},
         {KEY_SIX, 5}, {KEY_SEVEN, 6}, {KEY_EIGHT, 7}, {KEY_NINE, 8}, {KEY_ZERO, 9},
     };
@@ -370,10 +373,10 @@ void Hub::update(Loop& loop) {
 
 Main::Main(assets::Store& assets, Keys& keys, Vector2 screen) {
     auto play_button_rec = Rectangle{
-        .x = screen.x/1.5f - assets[assets::PlayButton].width/2.0f,
-        .y = screen.y/2.0f * 0.90f,
-        .width = (float)assets[assets::PlayButton].width,
-        .height = (float)assets[assets::PlayButton].height,
+        .x = screen.x / 1.5f - assets[assets::PlayButton].width / 2.0f,
+        .y = screen.y / 2.0f * 0.90f,
+        .width = static_cast<float>(assets[assets::PlayButton].width),
+        .height = static_cast<float>(assets[assets::PlayButton].height),
     };
     play_button.emplace(play_button_rec, [&, play_button_rec](auto state) {
         /*DrawRectangleRec(play_button_rec, BLUE);*/
@@ -388,10 +391,10 @@ Main::Main(assets::Store& assets, Keys& keys, Vector2 screen) {
     });
 
     auto exit_button_rec = Rectangle{
-        .x = screen.x/1.5f - assets[assets::PlayButtonHover].width/2.0f,
-        .y = screen.y/2.0f * 0.90f + assets[assets::PlayButton].height * 1.05f,
-        .width = (float)assets[assets::PlayButtonHover].width,
-        .height = (float)assets[assets::PlayButtonHover].height,
+        .x = screen.x / 1.5f - assets[assets::PlayButtonHover].width / 2.0f,
+        .y = screen.y / 2.0f * 0.90f + assets[assets::PlayButton].height * 1.05f,
+        .width = static_cast<float>(assets[assets::PlayButtonHover].width),
+        .height = static_cast<float>(assets[assets::PlayButtonHover].height),
     };
     exit_button.emplace(exit_button_rec, [&, exit_button_rec](auto state) {
         /*DrawRectangleRec(exit_button_rec, RED);*/
@@ -430,6 +433,7 @@ void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
     if (play_button->update(loop.mouse)) {
         loop.player_stats = PlayerSave();
         loop.player_stats->add_spell_to_spellbook(Spell(spells::VoidImplosion{}, Rarity::Common, 10));
+        loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Common, 10));
 
         loop.scene.emplace<Hub>(loop.keys);
         return;
@@ -476,7 +480,7 @@ void SplashScreen::update(Loop& loop) {
 }
 
 Loop::Loop(int width, int height)
-    : screen((Vector2){(float)width, (float)height}), assets(screen),
+    : screen((Vector2){static_cast<float>(width), static_cast<float>(height)}), assets(screen),
       skinning_shader(LoadShader("./assets/skinning.vs.glsl", "./assets/skinning.fs.glsl")), scene(SplashScreen()) {
 #ifdef PLATFORM_WEB
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, this, false, resize_handler);
@@ -497,9 +501,9 @@ void Loop::operator()() {
     std::visit([&](auto&& arg) { arg.draw(assets, *this); }, scene);
     SwapScreenBuffer();
 
-    while (accum_time >= (1.0f / TICKS)) {
+    while (accum_time >= (1.0 / TICKS)) {
         update();
-        accum_time -= 1.0f / TICKS;
+        accum_time -= 1.0 / TICKS;
     }
 }
 
@@ -507,7 +511,7 @@ void Loop::update() {
     screen_updated = false;
 #ifndef PLATFORM_WEB
     if (IsWindowResized()) {
-        screen = (Vector2){(float)GetScreenWidth(), (float)GetScreenHeight()};
+        screen = (Vector2){static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())};
         assets.update_target_size(screen);
         screen_updated = true;
     }

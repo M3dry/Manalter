@@ -12,12 +12,13 @@
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
+        llvm = pkgs.llvmPackages_20;
         pleaseKeepMyInputs = pkgs.writeTextDir "bin/.inputs" (builtins.concatStringsSep " " (builtins.attrValues {inherit nixpkgs;}));
         raylib_patched = pkgs.raylib.overrideAttrs (oldAttrs: {
           patches = (oldAttrs.patches or []) ++ [./raylib.patch];
-          cmakeFlags = oldAttrs.cmakeFlags ++ [ "-DGRAPHICS=GRAPHICS_API_OPENGL_43" ];
+          cmakeFlags = oldAttrs.cmakeFlags ++ ["-DGRAPHICS=GRAPHICS_API_OPENGL_43"];
         });
-        manalter = pkgs.gcc14Stdenv.mkDerivation {
+        manalter = llvm.stdenv.mkDerivation {
           pname = "Manalter";
           version = "0.1.0";
           src = ./.;
@@ -38,15 +39,17 @@
             cp src/manalter $out/bin/manalter
           '';
         };
-        hitbox-demo = pkgs.gcc14Stdenv.mkDerivation {
+        hitbox-demo = llvm.stdenv.mkDerivation {
           pname = "Hitbox demo";
           version = "0.1.0";
           src = ./.;
           buildInputs = with pkgs;
             [
               cmake
+              lld
               glfw
               libGL.dev
+              catch2_3
             ]
             ++ [raylib_patched];
           buildPhase = ''
@@ -75,7 +78,6 @@
               lld
               glfw
               libGLU
-              gcc14
               gdb
               catch2_3
               renderdoc
@@ -86,7 +88,11 @@
               xorg.libXrandr
               xorg.libXinerama
             ]
-            ++ [raylib_patched pleaseKeepMyInputs];
+            ++ [raylib_patched pleaseKeepMyInputs llvm.clang-tools llvm.clang];
+          shellHook = ''
+            export CC=clang
+            export CXX=clang++
+          '';
         };
       }
     );

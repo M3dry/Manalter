@@ -36,7 +36,7 @@ namespace powerups {
         template <DiscreteDistr T> uint8_t get_random() {
             constexpr int count = (T::max - T::min) / T::step + 1;
             static_assert(count == std::extent_v<decltype(T::weights)>, "weights array size mismatch, go fix");
-            static std::discrete_distribution<int> dist(std::begin(T::weights), std::end(T::weights));
+            static std::discrete_distribution<uint8_t> dist(std::begin(T::weights), std::end(T::weights));
 
             return T::min + dist(rng::get()) * T::step;
         }

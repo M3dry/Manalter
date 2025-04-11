@@ -3,7 +3,6 @@
 #include <cassert>
 #include <cstddef>
 #include <optional>
-#include <print>
 #include <vector>
 
 namespace ringbuffer {

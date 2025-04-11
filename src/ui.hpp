@@ -59,7 +59,7 @@ namespace hud {
 
         std::vector<ui::Draggable<const SpellBook&, const SpellBookUI&>> hitboxes;
         // [first, second)
-        std::pair<std::size_t, std::size_t> spells;
+        std::pair<uint64_t, uint64_t> spells;
 
         Rectangle area;
         Vector2 spell_dims;
@@ -67,9 +67,9 @@ namespace hud {
         SpellBookUI(const SpellBook& spellbook, const Vector2& screen);
 
         // returns the coords of where the spell was dropped
-        std::optional<std::pair<std::size_t, Vector2>> update(assets::Store& assets, const SpellBook& spellbook, Mouse& mouse, std::optional<Vector2> screen);
+        std::optional<std::pair<uint64_t, Vector2>> update(assets::Store& assets, const SpellBook& spellbook, Mouse& mouse, std::optional<Vector2> screen);
 
-        void draw_spell(Vector2 origin, std::size_t id, const SpellBook& spellbook) const;
+        void draw_spell(Vector2 origin, uint64_t id, const SpellBook& spellbook) const;
     };
 
     void draw(assets::Store& assets, const Player& player, const SpellBook& spellbook, const Vector2& screen);
@@ -77,7 +77,7 @@ namespace hud {
     struct SpellBar {
         // dims.xy - top left corner
         // dim.z - height
-        int dragged(Vector2 point, Vector3 dims, std::size_t unlocked_count);
-        void draw(Vector3 dims, assets::Store& assets, const SpellBook& spellbook, std::span<uint32_t> equipped);
+        int8_t dragged(Vector2 point, Vector3 dims, uint8_t unlocked_count);
+        void draw(Vector3 dims, assets::Store& assets, const SpellBook& spellbook, std::span<std::size_t> equipped);
     };
 }

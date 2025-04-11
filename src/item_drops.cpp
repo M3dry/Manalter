@@ -5,13 +5,13 @@
 ItemDrop::ItemDrop(Vector2 center, Spell&& spell) : item(std::move(spell)), hitbox(center, hitbox_radius) {
 }
 
-ItemDrop::ItemDrop(uint16_t level, const Vector2& pos) : item(Spell::random(level)), hitbox(pos, hitbox_radius) {
+ItemDrop::ItemDrop(uint32_t level, const Vector2& pos) : item(Spell::random(level)), hitbox(pos, hitbox_radius) {
 }
 
 void ItemDrop::draw_name(std::function<Vector2(Vector3)> to_screen_coords) const {
     Vector2 pos = to_screen_coords((Vector3){hitbox.center.x, 0.0f, hitbox.center.y});
     auto name = get_name().data();
-    DrawText(name, pos.x, pos.y, 20, WHITE);
+    DrawText(name, static_cast<int>(pos.x), static_cast<int>(pos.y), 20, WHITE);
 }
 
 std::string_view ItemDrop::get_name() const {
@@ -26,7 +26,7 @@ std::string_view ItemDrop::get_name() const {
         item);
 }
 
-ItemDrop ItemDrop::random(uint16_t level, const Vector2& pos) {
+ItemDrop ItemDrop::random(uint32_t level, const Vector2& pos) {
     return ItemDrop(pos, Spell::random(level));
 }
 

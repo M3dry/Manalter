@@ -27,10 +27,10 @@ struct Enemies {
     bool spawn(const EnemyModels& enemy_models, const Vector2& player_pos);
 
     template <Shape S>
-    void deal_damage(S shape, uint32_t damage, Element element, std::vector<ItemDrop>& item_drop_pusher) {
+    void deal_damage(S shape, uint64_t damage, Element element, std::vector<ItemDrop>& item_drop_pusher) {
         enemies.search_by(
             [&shape](const quadtree::Box& bbox) -> bool {
-                shapes::Polygon rec = (Rectangle)bbox;
+                shapes::Polygon rec = static_cast<Rectangle>(bbox);
 
                 for (const auto& origin : {Vector2Zero(), arena::top_origin, arena::right_origin, arena::bottom_origin,
                                            arena::left_origin}) {

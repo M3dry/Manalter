@@ -1,6 +1,8 @@
 #include "effects.hpp"
 #include "particle_system.hpp"
 
+#include <print>
+
 namespace effect {
     particle_system::System Plosion::operator()(Vector2 _origin) {
         using namespace particle_system;
@@ -52,7 +54,7 @@ namespace effect {
         system.add_updater(updaters::Lifetime());
         system.add_updater(
             updaters::ColorByVelocity(color.first.first, color.second.first, color.first.second, color.second.second));
-        system.add_updater([origin, scale = particle_size_scale](Particles& particles, float dt) {
+        system.add_updater([scale = particle_size_scale](Particles& particles, float dt) {
             for (std::size_t i = 0; i < particles.alive_count; i++) {
                 particles.size[i] = scale * Vector3Length(particles.velocity[i]);
             }
@@ -68,13 +70,14 @@ namespace effects {
 
     Id push_effect(particle_system::System&& eff, bool reset_after_end) {
         _effects.emplace_back(next_id, std::forward<particle_system::System>(eff), reset_after_end);
+        std::get<1>(_effects.back()).reset();
 
         return next_id++;
     }
 
     void pop_effect(Id id) {
-        if (_effects.size() < id && std::get<0>(_effects[id]) == id) {
-            std::swap(_effects[id], _effects[_effects.size() - 1]);
+        if (_effects.size() > id && std::get<0>(_effects[id]) == id) {
+            _effects[id] = std::move(_effects.back());
             _effects.pop_back();
             return;
         }
@@ -82,7 +85,7 @@ namespace effects {
         for (std::size_t i = 0; i < _effects.size(); i++) {
             if (std::get<0>(_effects[i]) != id) continue;
 
-            std::swap(_effects[id], _effects[_effects.size() - 1]);
+            _effects[i] = std::move(_effects.back());
             _effects.pop_back();
             return;
         }

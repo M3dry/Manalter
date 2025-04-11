@@ -104,9 +104,9 @@ struct Loop {
     Loop(int width, int height);
     void operator()();
 
-    double prev_time = 0.0f;
-    double delta_time = 0.0f;
-    double accum_time = 0.0f;
+    double prev_time = 0;
+    double delta_time = 0;
+    double accum_time = 0;
 
     void update();
 
