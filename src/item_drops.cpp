@@ -1,11 +1,52 @@
 #include "item_drops.hpp"
+#include "effects.hpp"
 #include "hitbox.hpp"
 #include "raylib.h"
+#include "spell.hpp"
+#include <limits>
+#include <print>
 
-ItemDrop::ItemDrop(Vector2 center, Spell&& spell) : item(std::move(spell)), hitbox(center, hitbox_radius) {
+effects::Id effect_from_rarity(const Rarity& rarity, const Vector2& center) {
+    Color init_color = rarity::get_rarity_info(rarity).color;
+    /*auto eff = effect::Plosion{*/
+    /*    .type = effect::Plosion::Im,*/
+    /*    .radius = 40.0f,*/
+    /*    .particle_count = 350,*/
+    /*    .particle_size_scale = 0.1f,*/
+    /*    .floor_y = 0.0f,*/
+    /*    .lifetime = {0.1f, 0.7f},*/
+    /*    .velocity_scale = {70.0f, 90.0f},*/
+    /*    .acceleration = {200.0f, 200.0f, 200.0f},*/
+    /*    .color = {{PURPLE, 80.0f}, {BLACK, 130.0f}},*/
+    /*};*/
+    auto eff = effect::Plosion{
+        .type = effect::Plosion::Ex,
+        .radius = 2.0f,
+        .particle_count = 200,
+        .max_emit = std::numeric_limits<std::size_t>::max(),
+        .emit_rate = 50000,
+        .particle_size_scale = 0.1f,
+        .floor_y = 0.0f,
+        .lifetime = {0.1f, 0.3f},
+        .velocity_scale = {30.0f, 50.0f},
+        .acceleration = {100.0f, -50.0f, 100.0f},
+        .color = {{init_color, 35.0f}, {WHITE, 200.0f}},
+    };
+    auto system = eff(center);
+    system.reset_on_done = std::numeric_limits<std::size_t>::max();
+    return effects::push_effect(std::move(system));
 }
 
-ItemDrop::ItemDrop(uint32_t level, const Vector2& pos) : item(Spell::random(level)), hitbox(pos, hitbox_radius) {
+ItemDrop::ItemDrop(Vector2 center, Spell&& spell) : item(std::move(spell)), hitbox(center, hitbox_radius) {
+    make_effect();
+}
+
+ItemDrop::ItemDrop(uint32_t level, const Vector2& center) : item(Spell::random(level)), hitbox(center, hitbox_radius) {
+    make_effect();
+}
+
+ItemDrop::~ItemDrop() {
+    effects::pop_effect(effect_id);
 }
 
 void ItemDrop::draw_name(std::function<Vector2(Vector3)> to_screen_coords) const {
@@ -26,14 +67,27 @@ std::string_view ItemDrop::get_name() const {
         item);
 }
 
-ItemDrop ItemDrop::random(uint32_t level, const Vector2& pos) {
-    return ItemDrop(pos, Spell::random(level));
+ItemDrop ItemDrop::random(uint32_t level, const Vector2& center) {
+    return ItemDrop(center, Spell::random(level));
+}
+
+void ItemDrop::make_effect() {
+    std::visit(
+        [&](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
+
+            if constexpr (std::same_as<T, Spell>) {
+                effect_id = effect_from_rarity(arg.rarity, hitbox.center);
+                std::println("effect: {{ ID: {}, IX: {} }}", effect_id.first, effect_id.second);
+            }
+        },
+        item);
 }
 
 void ItemDrops::draw_item_drops(const Vector3& offset) const {
     for (const auto& drop : item_drops) {
-        DrawCircle3D((Vector3){drop.hitbox.center.x + offset.x, 1.0f + offset.y, drop.hitbox.center.y + offset.z}, drop.hitbox.radius,
-                     (Vector3){1.0f, 0.0f, 0.0f}, 90.0f, RED);
+        DrawCircle3D((Vector3){drop.hitbox.center.x + offset.x, 1.0f + offset.y, drop.hitbox.center.y + offset.z},
+                     drop.hitbox.radius, (Vector3){1.0f, 0.0f, 0.0f}, 90.0f, RED);
     }
 }
 

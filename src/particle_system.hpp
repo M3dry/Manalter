@@ -11,7 +11,6 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <vector>
-#include <print>
 
 #include "glad.h"
 #include "rlgl.h"
@@ -153,7 +152,7 @@ namespace particle_system {
             CustomEmitter(CustomEmitter&&) noexcept = default;
             CustomEmitter& operator=(CustomEmitter&&) noexcept = default;
 
-            void emit(Particles& particles, float dt) {
+            bool emit(Particles& particles, float dt) {
                 std::size_t max_particles =
                     std::max<std::size_t>(std::min(static_cast<std::size_t>(dt * emit_rate), particles.max_size), 0);
 
@@ -164,7 +163,7 @@ namespace particle_system {
                     max_emit -= max_particles;
                 }
 
-                if (max_particles == 0) return;
+                if (max_particles == 0) return max_emit != 0;
 
                 std::size_t start_ix = particles.alive_count;
                 std::size_t end_ix =
@@ -186,6 +185,8 @@ namespace particle_system {
                 for (std::size_t i = start_ix; i < end_ix; i++) {
                     particles.wake(i);
                 }
+
+                return max_emit != 0;
             }
 
             void add_generator(generators::Generator&& gen) {
@@ -253,7 +254,28 @@ namespace particle_system {
                 p.col_vbo_id = 0;
                 p.shader.id = 0;
             };
-            Point& operator=(Point&&) noexcept = default;
+            Point& operator=(Point&& p) noexcept {
+                if (this != &p) {
+                    particle_circle = p.particle_circle;
+                    max_size = p.max_size;
+                    pos_vertex_data = std::move(p.pos_vertex_data);
+                    size_vertex_data = std::move(p.size_vertex_data);
+                    col_vertex_data = std::move(p.col_vertex_data);
+                    vao_id = p.vao_id;
+                    pos_vbo_id = p.pos_vbo_id;
+                    size_vbo_id = p.size_vbo_id;
+                    col_vbo_id = p.col_vbo_id;
+                    shader = p.shader;
+                    p.particle_circle.id = 0;
+                    p.vao_id = 0;
+                    p.pos_vbo_id = 0;
+                    p.size_vbo_id = 0;
+                    p.col_vbo_id = 0;
+                    p.shader.id = 0;
+                }
+
+                return *this;
+            };
             ~Point();
 
             void operator()(Particles& particles);
@@ -265,6 +287,7 @@ namespace particle_system {
     }
 
     struct System {
+        std::optional<std::size_t> reset_on_done = false;
         std::vector<emitters::Emitter> emitters;
         std::vector<updaters::Updater> updaters;
         renderers::Renderer renderer;
@@ -275,9 +298,11 @@ namespace particle_system {
         System(System&& s) noexcept = default;
         System& operator=(System&& s) noexcept = default;
 
-        void update(float dt);
+        // false - simulation ended
+        bool update(float dt);
         void draw();
         void reset();
+        void reset(std::optional<std::size_t> max_emit);
         void add_emitter(emitters::Emitter&& emitter);
         void add_updater(updaters::Updater&& updater);
     };

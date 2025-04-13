@@ -1,6 +1,5 @@
 #include "effects.hpp"
 #include "particle_system.hpp"
-
 #include <print>
 
 namespace effect {
@@ -15,10 +14,10 @@ namespace effect {
 
         System system(particle_count, renderers::Point(particle_count));
 
-        emitters::CustomEmitter emitter;
-        emitter.add_generator(generators::pos::OnSphere(origin, { radius*0.7f, radius + 1.0f }));
+        emitters::CustomEmitter emitter(emit_rate, max_emit);
+        emitter.add_generator(generators::pos::OnSphere(origin, {radius * 0.7f, radius + 1.0f}));
         emitter.add_generator(
-            [origin = origin, type = type](Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
+            [origin = origin, type = type](Particles& particles, float _, std::size_t start_ix, std::size_t end_ix) {
                 for (std::size_t i = start_ix; i < end_ix; i++) {
                     switch (type) {
                         case Ex:
@@ -34,14 +33,14 @@ namespace effect {
         emitter.add_generator(generators::acceleration::Uniform(acceleration));
         emitter.add_generator(generators::color::Fixed(WHITE));
         emitter.add_generator(generators::lifetime::Range(lifetime.first, lifetime.second));
-        emitter.add_generator([](Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
+        emitter.add_generator([](Particles& particles, float _, std::size_t start_ix, std::size_t end_ix) {
             for (std::size_t i = start_ix; i < end_ix; i++) {
                 particles.size[i] = Vector3Length(particles.velocity[i]);
             }
         });
         system.add_emitter(std::move(emitter));
 
-        system.add_updater([y = floor_y, origin = origin](Particles& particles, float dt) {
+        system.add_updater([y = floor_y, origin = origin](Particles& particles, float _) {
             auto end_ix = particles.alive_count;
             for (std::size_t i = 0; i < end_ix; i++) {
                 if ((y && particles.pos[i].y < *y) || Vector3Distance(origin, particles.pos[i]) <= 0.1f) {
@@ -54,7 +53,7 @@ namespace effect {
         system.add_updater(updaters::Lifetime());
         system.add_updater(
             updaters::ColorByVelocity(color.first.first, color.second.first, color.first.second, color.second.second));
-        system.add_updater([scale = particle_size_scale](Particles& particles, float dt) {
+        system.add_updater([scale = particle_size_scale](Particles& particles, float _) {
             for (std::size_t i = 0; i < particles.alive_count; i++) {
                 particles.size[i] = scale * Vector3Length(particles.velocity[i]);
             }
@@ -65,25 +64,31 @@ namespace effect {
 }
 
 namespace effects {
-    Id next_id = 0;
-    std::vector<std::tuple<Id, particle_system::System, bool>> _effects;
+    std::size_t next_id = 0;
+    std::vector<std::pair<std::size_t, particle_system::System>> _effects;
 
-    Id push_effect(particle_system::System&& eff, bool reset_after_end) {
-        _effects.emplace_back(next_id, std::forward<particle_system::System>(eff), reset_after_end);
-        std::get<1>(_effects.back()).reset();
+    Id push_effect(particle_system::System&& eff) {
+        _effects.emplace_back(next_id, std::forward<particle_system::System>(eff));
 
-        return next_id++;
+        return {next_id++, _effects.size() - 1};
     }
 
-    void pop_effect(Id id) {
-        if (_effects.size() > id && std::get<0>(_effects[id]) == id) {
-            _effects[id] = std::move(_effects.back());
+    void pop_effect(Id _id) {
+        auto [id, ix] = _id;
+        std::println("POPPED-> id: {}, ix: {}", id, ix);
+
+        if (ix == std::size_t(-1) || id == std::size_t(-1)) {
+            return;
+        }
+
+        if (_effects.size() > ix && _effects[ix].first == id) {
+            _effects[ix] = std::move(_effects.back());
             _effects.pop_back();
             return;
         }
 
         for (std::size_t i = 0; i < _effects.size(); i++) {
-            if (std::get<0>(_effects[i]) != id) continue;
+            if (_effects[i].first != ix) continue;
 
             _effects[i] = std::move(_effects.back());
             _effects.pop_back();
@@ -94,16 +99,7 @@ namespace effects {
     void update(float dt) {
         std::size_t i = 0;
         while (i < _effects.size()) {
-            auto& [id, eff, reset] = _effects[i];
-            eff.update(dt);
-
-            if (eff.particles.alive_count != 0) {
-                i++;
-                continue;
-            }
-
-            if (reset) {
-                eff.reset();
+            if (_effects[i].second.update(dt)) {
                 i++;
                 continue;
             }
@@ -114,8 +110,13 @@ namespace effects {
     }
 
     void draw() {
-        for (auto& [id, eff, reset] : _effects) {
+        for (auto& [_, eff] : _effects) {
             eff.draw();
         }
+    }
+
+    void clean() {
+        _effects.clear();
+        _effects.shrink_to_fit();
     }
 }

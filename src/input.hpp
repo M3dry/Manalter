@@ -7,10 +7,10 @@
 
 class Keys {
   private:
-      std::vector<int> registered;
-      std::vector<std::pair<int, bool /* if handled */>> pressed;
+    std::vector<int> registered;
+    std::vector<std::pair<int, bool /* if handled */>> pressed;
 
-      bool is_pressed(int key) const;
+    bool is_pressed(int key) const;
 
   public:
     void register_key(int key);
@@ -25,6 +25,8 @@ class Keys {
 };
 
 struct Mouse {
+    struct Dummy {};
+
     enum struct Button {
         Left,
         Right,
@@ -36,11 +38,15 @@ struct Mouse {
         std::optional<Vector2> released_at;
     };
 
-    std::optional<State> button_press;
-    Vector2 mouse_pos;
-    float wheel_movement;
+    std::optional<State> button_press = std::nullopt;
+    Vector2 mouse_pos = {-1.0f, -1.0f};
+    float wheel_movement = 0.0f;
 
     Mouse();
+    template <typename T>
+        requires std::same_as<T, Dummy>
+    Mouse(T) {
+    }
 
     void poll();
 };

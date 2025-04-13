@@ -159,7 +159,7 @@ namespace caster {
                     effect_origin = *origin;
                 }
 
-                std::visit([&](auto&& eff) { effects::push_effect(eff(effect_origin), false); }, info.effect);
+                std::visit([&](auto&& eff) { effects::push_effect(eff(effect_origin)); }, info.effect);
                 return true;
             },
             info.movement);

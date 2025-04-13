@@ -1,6 +1,7 @@
 #include "effects.hpp"
 #include "particle_system.hpp"
 
+#include <limits>
 #include <raylib.h>
 #include <raymath.h>
 
@@ -15,15 +16,19 @@ int main(void) {
     cam.projection = CAMERA_PERSPECTIVE;
 
     auto system = effect::Plosion{
-        .type = effect::Plosion::Im,
-        .radius = 10.0f,
-        .particle_count = 350,
+        .type = effect::Plosion::Ex,
+        .radius = 5.0f,
+        .particle_count = 200,
+        .max_emit = std::numeric_limits<std::size_t>::max(),
+        .emit_rate = 50000,
+        .particle_size_scale = 0.1f,
         .floor_y = 0.0f,
-        .lifetime = { 0.5f, 1.0f},
-        .velocity_scale = { 5.0f, 15.0f },
-        .acceleration = {20.0f, 20.0f, 20.0f },
-        .color = { {PURPLE, 10.0f}, { BLACK, 20.0f} },
+        .lifetime = {0.1f, 0.8f},
+        .velocity_scale = {30.0f, 50.0f},
+        .acceleration = {100.0f, 100.0f, -50.0f},
+        .color = {{(Color){252, 12, 12, 255}, 45.0f}, {WHITE, 100.0f}},
     }({0.0f, 0.0f});
+    system.reset_on_done = std::numeric_limits<std::size_t>::max();
 
     bool start = false;
     double prev_time = 0.;
@@ -53,13 +58,14 @@ int main(void) {
         if (!start && IsKeyPressed(KEY_SPACE)) {
             start = true;
 
-            system.reset();
+            /*system.reset(false);*/
         }
 
         if (start) {
-            system.update(static_cast<float>(delta_time));
+            if (!system.update(static_cast<float>(delta_time))) {
+                start = false;
+            }
 
-            if (system.particles.alive_count == 0) start = false;
         }
     }
 

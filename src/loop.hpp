@@ -60,7 +60,7 @@ struct Arena {
     void update(Loop& loop);
 
     template <typename T>
-    bool curr_state() const {
+    inline bool curr_state() const {
         return std::holds_alternative<T>(state);
     }
 };
@@ -92,6 +92,7 @@ struct Loop {
     Vector2 screen;
     Keys keys;
     Mouse mouse;
+    Mouse dummy_mouse = Mouse(Mouse::Dummy{});
     assets::Store assets;
 
     EnemyModels enemy_models;

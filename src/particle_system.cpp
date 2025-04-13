@@ -66,7 +66,8 @@ namespace particle_system::generators::pos {
         }
     }
 
-    OnSphere::OnSphere(Vector3 center, std::pair<float, float> radius) : center(center), radiusDist(radius.first, radius.second) {
+    OnSphere::OnSphere(Vector3 center, std::pair<float, float> radius)
+        : center(center), radiusDist(radius.first, radius.second) {
     }
 
     void OnSphere::gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
@@ -235,15 +236,17 @@ namespace particle_system::renderers {
         std::memcpy(size_vertex_data.get(), particles.size.get(), size_vertex_size * particles.alive_count);
         std::memcpy(col_vertex_data.get(), particles.color.get(), col_vertex_size * particles.alive_count);
 
-        rlUpdateVertexBuffer(pos_vbo_id, pos_vertex_data.get(), static_cast<int>(pos_vertex_size * particles.alive_count), 0);
-        rlUpdateVertexBuffer(size_vbo_id, size_vertex_data.get(), static_cast<int>(size_vertex_size * particles.alive_count), 0);
-        rlUpdateVertexBuffer(col_vbo_id, col_vertex_data.get(), static_cast<int>(col_vertex_size * particles.alive_count), 0);
+        rlUpdateVertexBuffer(pos_vbo_id, pos_vertex_data.get(),
+                             static_cast<int>(pos_vertex_size * particles.alive_count), 0);
+        rlUpdateVertexBuffer(size_vbo_id, size_vertex_data.get(),
+                             static_cast<int>(size_vertex_size * particles.alive_count), 0);
+        rlUpdateVertexBuffer(col_vbo_id, col_vertex_data.get(),
+                             static_cast<int>(col_vertex_size * particles.alive_count), 0);
 
         auto mvp = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
         SetShaderValueMatrix(shader, GetShaderLocation(shader, "mvp"), mvp);
 
         glUniform1i(glGetUniformLocation(shader.id, "circle"), 0);
-
 
         glDepthMask(GL_FALSE);
         glEnable(GL_PROGRAM_POINT_SIZE);
@@ -301,9 +304,11 @@ namespace particle_system {
         : renderer(std::forward<renderers::Renderer>(renderer)), particles(max_particles) {
     }
 
-    void System::update(float dt) {
+    bool System::update(float dt) {
+        bool can_emit = true;
+
         for (auto& e : emitters) {
-            std::visit([&](auto&& arg) { arg.emit(particles, dt); }, e);
+            std::visit([&](auto&& arg) { can_emit = arg.emit(particles, dt) && can_emit; }, e);
         }
 
         for (auto& u : updaters) {
@@ -317,6 +322,14 @@ namespace particle_system {
                 },
                 u);
         }
+
+        auto simulating = can_emit || particles.alive_count != 0;
+        if (reset_on_done && !simulating) {
+            reset(*reset_on_done);
+            return true;
+        }
+
+        return simulating;
     }
 
     void System::draw() {
@@ -324,11 +337,21 @@ namespace particle_system {
     }
 
     void System::reset() {
+        if (reset_on_done) {
+            reset(*reset_on_done);
+        } else {
+            reset(particles.max_size);
+        }
+    }
+
+    void System::reset(std::optional<std::size_t> max_emit) {
         particles.alive_count = 0;
+
+        if (!max_emit) return;
 
         for (auto& emitter : emitters) {
             if (std::holds_alternative<emitters::CustomEmitter>(emitter)) {
-                std::get<emitters::CustomEmitter>(emitter).max_emit = particles.max_size;
+                std::get<emitters::CustomEmitter>(emitter).max_emit = *max_emit;
             }
         }
     }

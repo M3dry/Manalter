@@ -11,6 +11,7 @@
 #include <variant>
 
 #include "assets.hpp"
+#include "effects.hpp"
 #include "item_drops.hpp"
 #include "player.hpp"
 #include "power_up.hpp"
@@ -143,7 +144,8 @@ Arena::Arena(Keys& keys, assets::Store& assets)
 }
 
 void Arena::draw(assets::Store& assets, Loop& loop) {
-    if (curr_state<Playing>()) {
+    bool playing = curr_state<Playing>();
+    if (playing) {
         player.update_interpolated_pos(loop.accum_time);
         mouse_xz = mouse_xz_in_world(GetMouseRay(loop.mouse.mouse_pos, player.camera));
     }
@@ -191,7 +193,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
 
     EndMode3D();
 
-    effects::update(static_cast<float>(loop.delta_time));
+    if (playing) effects::update(static_cast<float>(loop.delta_time));
     BeginMode3D(player.camera);
     effects::draw();
     EndMode3D();
@@ -234,7 +236,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
                   std::span(player.equipped_spells.get(), player.unlocked_spell_count));
 
     if (spellbook_ui) {
-        if (auto dropped = spellbook_ui->update(assets, loop.player_stats->spellbook, loop.mouse, std::nullopt);
+        if (auto dropped = spellbook_ui->update(assets, loop.player_stats->spellbook, playing ? loop.mouse : loop.dummy_mouse, std::nullopt);
             dropped) {
             auto [spell, pos] = *dropped;
 
@@ -522,4 +524,5 @@ void Loop::update() {
 
 Loop::~Loop() {
     UnloadShader(skinning_shader);
+    effects::clean();
 }

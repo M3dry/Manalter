@@ -1,6 +1,7 @@
 #pragma once
 
 #include "particle_system.hpp"
+#include <limits>
 #include <raylib.h>
 
 namespace effect {
@@ -13,6 +14,8 @@ namespace effect {
         Type type;
         float radius;
         std::size_t particle_count = 5000;
+        std::size_t max_emit = particle_count;
+        float emit_rate = static_cast<float>(std::numeric_limits<std::size_t>::max());
         float particle_size_scale = 1.0f;
         std::optional<float> floor_y = std::nullopt;
         float center_y = 0.0f;
@@ -40,11 +43,14 @@ namespace effect {
 using Effect = std::variant<effect::Plosion>;
 
 namespace effects {
-    using Id = std::size_t;
+    // .first = id
+    // .second = ix
+    using Id = std::pair<std::size_t, std::size_t>;
 
-    Id push_effect(particle_system::System&& eff, bool reset_after_end);
+    Id push_effect(particle_system::System&& eff);
     void pop_effect(Id id);
 
     void update(float dt);
     void draw();
+    void clean();
 }
