@@ -17,18 +17,15 @@ int main(void) {
 
     auto system = effect::Plosion{
         .type = effect::Plosion::Ex,
-        .radius = 5.0f,
-        .particle_count = 200,
-        .max_emit = std::numeric_limits<std::size_t>::max(),
-        .emit_rate = 50000,
+        .radius = 0.0f,
+        .particle_count = 350,
         .particle_size_scale = 0.1f,
         .floor_y = 0.0f,
-        .lifetime = {0.1f, 0.8f},
-        .velocity_scale = {30.0f, 50.0f},
-        .acceleration = {100.0f, 100.0f, -50.0f},
-        .color = {{(Color){252, 12, 12, 255}, 45.0f}, {WHITE, 100.0f}},
+        .lifetime = {0.1f, 0.3f},
+        .velocity_scale = {70.0f, 90.0f},
+        .acceleration = {200.0f, 200.0f, 200.0f},
+        .color = {{WHITE, 80.0f}, {BLUE, 130.0f}},
     }({0.0f, 0.0f});
-    system.reset_on_done = std::numeric_limits<std::size_t>::max();
 
     bool start = false;
     double prev_time = 0.;
@@ -58,14 +55,13 @@ int main(void) {
         if (!start && IsKeyPressed(KEY_SPACE)) {
             start = true;
 
-            /*system.reset(false);*/
+            /*system.reset();*/
         }
 
         if (start) {
             if (!system.update(static_cast<float>(delta_time))) {
                 start = false;
             }
-
         }
     }
 

@@ -66,7 +66,13 @@ namespace quadtree {
         uint64_t id;
         T val;
 
-        IDed(T&& val) : id(++last_id), val(std::forward<T>(val)) {
+        template <typename U>
+            requires(!std::same_as<std::decay_t<U>, IDed>)
+        IDed(U&& val) : id(++last_id), val(std::forward<T>(val)) {
+        }
+
+        IDed(IDed&& i) noexcept : id(i.id), val(std::move(i.val)) {
+            i.id = static_cast<uint64_t>(-1);
         }
     };
 
@@ -150,7 +156,9 @@ namespace quadtree {
         std::vector<IDed<Node>> nodes;
         std::vector<IDed<T>> data;
 
-        QuadTree(Box bbox) : nodes({Node(bbox)}) {};
+        QuadTree(Box bbox) : nodes() {
+            nodes.emplace_back(Node(bbox));
+        };
 
         operator QuadTree<MaxPerNode, T, false>&() {
             return reinterpret_cast<QuadTree<MaxPerNode, T, false>&>(*this);
@@ -172,7 +180,8 @@ namespace quadtree {
         void remove(std::size_t data_ix) {
             if (data_ix >= data.size()) return;
 
-            data[data_ix] = std::move(data.back());
+            data[data_ix].~IDed();
+            new (&data[data_ix]) IDed(std::move(data.back()));
             data.pop_back();
         }
 
@@ -380,7 +389,9 @@ namespace quadtree {
                 while (i < node.data_ixs_ided.size()) {
                     auto& [data_ix, data_id] = node.data_ixs_ided[i];
                     if (!lookup(data, data_ix, data_id)) {
-                        node.data_ixs_ided[i] = std::move(node.data_ixs_ided.back());
+
+                        node.data_ixs_ided[i].~pair();
+                        new (&node.data_ixs_ided[i]) std::pair(std::move(node.data_ixs_ided.back()));
                         node.data_ixs_ided.pop_back();
                         continue;
                     }
@@ -421,9 +432,11 @@ namespace quadtree {
 
                     auto& child = nodes[child_ix].val;
                     nodes[ix].val.data_ixs_ided.insert(nodes[ix].val.data_ixs_ided.end(), child.data_ixs_ided.begin(),
-                                              child.data_ixs_ided.end());
+                                                       child.data_ixs_ided.end());
                     bool moved = nodes.back().id == node_id;
-                    nodes[child_ix] = std::move(nodes.back());
+
+                    nodes[child_ix].~IDed();
+                    new (&nodes[child_ix]) IDed(std::move(nodes.back()));
                     nodes.pop_back();
 
                     if (moved) {

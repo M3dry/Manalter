@@ -8,17 +8,6 @@
 
 effects::Id effect_from_rarity(const Rarity& rarity, const Vector2& center) {
     Color init_color = rarity::get_rarity_info(rarity).color;
-    /*auto eff = effect::Plosion{*/
-    /*    .type = effect::Plosion::Im,*/
-    /*    .radius = 40.0f,*/
-    /*    .particle_count = 350,*/
-    /*    .particle_size_scale = 0.1f,*/
-    /*    .floor_y = 0.0f,*/
-    /*    .lifetime = {0.1f, 0.7f},*/
-    /*    .velocity_scale = {70.0f, 90.0f},*/
-    /*    .acceleration = {200.0f, 200.0f, 200.0f},*/
-    /*    .color = {{PURPLE, 80.0f}, {BLACK, 130.0f}},*/
-    /*};*/
     auto eff = effect::Plosion{
         .type = effect::Plosion::Ex,
         .radius = 2.0f,
@@ -78,7 +67,6 @@ void ItemDrop::make_effect() {
 
             if constexpr (std::same_as<T, Spell>) {
                 effect_id = effect_from_rarity(arg.rarity, hitbox.center);
-                std::println("effect: {{ ID: {}, IX: {} }}", effect_id.first, effect_id.second);
             }
         },
         item);

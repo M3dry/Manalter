@@ -287,7 +287,7 @@ namespace particle_system {
     }
 
     struct System {
-        std::optional<std::size_t> reset_on_done = false;
+        std::optional<std::size_t> reset_on_done = std::nullopt;
         std::vector<emitters::Emitter> emitters;
         std::vector<updaters::Updater> updaters;
         renderers::Renderer renderer;

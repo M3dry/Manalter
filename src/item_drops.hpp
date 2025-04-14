@@ -15,7 +15,7 @@ class ItemDrop {
     Item item;
     shapes::Circle hitbox;
 
-    effects::Id effect_id = {-1, -1};
+    effects::Id effect_id;
 
     ItemDrop(Vector2 center, Spell&& spell);
     ItemDrop(uint32_t level, const Vector2& center);
@@ -66,7 +66,8 @@ struct ItemDrops {
             }
 
             std::visit(handler, std::move(item_drops[i].item));
-            item_drops[i] = std::move(item_drops.back());
+            item_drops[i].~ItemDrop();
+            new (&item_drops[i]) ItemDrop(std::move(item_drops.back()));
             item_drops.pop_back();
         }
 

@@ -1,6 +1,7 @@
 #include "effects.hpp"
 #include "particle_system.hpp"
 #include <print>
+#include <ranges>
 
 namespace effect {
     particle_system::System Plosion::operator()(Vector2 _origin) {
@@ -70,12 +71,12 @@ namespace effects {
     Id push_effect(particle_system::System&& eff) {
         _effects.emplace_back(next_id, std::forward<particle_system::System>(eff));
 
-        return {next_id++, _effects.size() - 1};
+        Id id = {next_id++, _effects.size() - 1};
+        return id;
     }
 
     void pop_effect(Id _id) {
         auto [id, ix] = _id;
-        std::println("POPPED-> id: {}, ix: {}", id, ix);
 
         if (ix == std::size_t(-1) || id == std::size_t(-1)) {
             return;
@@ -88,12 +89,13 @@ namespace effects {
         }
 
         for (std::size_t i = 0; i < _effects.size(); i++) {
-            if (_effects[i].first != ix) continue;
+            if (_effects[i].first != id) continue;
 
             _effects[i] = std::move(_effects.back());
             _effects.pop_back();
             return;
         }
+
     }
 
     void update(float dt) {
@@ -104,14 +106,15 @@ namespace effects {
                 continue;
             }
 
-            _effects[i] = std::move(_effects.back());
+            _effects[i].~pair();
+            new (&_effects[i]) std::pair(std::move(_effects.back()));
             _effects.pop_back();
         }
     }
 
     void draw() {
-        for (auto& [_, eff] : _effects) {
-            eff.draw();
+        for (std::size_t i = 0; i < _effects.size(); i++) {
+            std::get<1>(_effects[i]).draw();
         }
     }
 
