@@ -18,8 +18,6 @@ Vector2 xz_component(const Vector3& vec);
 Vector2 mouse_xz_in_world(Ray mouse);
 float wrap(float value, float modulus);
 std::string format_to_time(double time);
-void DrawBillboardProRotAxis(Camera camera, Texture2D texture, Rectangle source, Vector3 position, Vector3 up,
-                             Vector2 size, float rotation, Vector3 rotationAxis, Color tint);
 
 template <typename T, bool Zero = true> inline constexpr int sgn(T val) {
     T ret = (T(0) < val) - (val < T(0));

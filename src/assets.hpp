@@ -43,6 +43,7 @@ namespace assets {
         ExitButtonHover,
         Floor,
         PowerUpBackground,
+        SoulPortalArrow,
         GeneralIdSize,
     };
 

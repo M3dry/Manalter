@@ -4,9 +4,11 @@
 #include <cassert>
 #include <cmath>
 
+#include <complex>
 #include <format>
 #include <optional>
 #include <print>
+#include <random>
 #include <raylib.h>
 #include <raymath.h>
 #include <utility>
@@ -16,6 +18,7 @@
 #include "effects.hpp"
 #include "hitbox.hpp"
 #include "item_drops.hpp"
+#include "particle_system.hpp"
 #include "player.hpp"
 #include "power_up.hpp"
 #include "spell.hpp"
@@ -149,6 +152,16 @@ Arena::Arena(Keys& keys, assets::Store& assets)
     player.equipped_spells[0] = 0;
 
     player.exp = 90;
+
+    auto arrow_tex = assets[assets::SoulPortalArrow];
+    auto arrow_mesh = GenMeshPlane(16, 16, 1, 1);
+    soul_portal_arrow = LoadModelFromMesh(arrow_mesh);
+    soul_portal_arrow.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = arrow_tex;
+    soul_portal_arrow.materials[0].maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
+}
+
+Arena::~Arena() {
+    UnloadModel(soul_portal_arrow);
 }
 
 void Arena::draw(assets::Store& assets, Loop& loop) {
@@ -204,11 +217,23 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     DrawSphere({circle.center.x, 0.0f, circle.center.y}, 3.0f, BLUE);
     caster::draw_hitbox(1.0f);
 #endif
-
     EndMode3D();
 
     if (playing) effects::update(static_cast<float>(loop.delta_time));
     BeginMode3D(player.camera);
+    if (soul_portal && !check_collision(soul_portal->hitbox, xz_component(player.interpolated_position))) {
+        auto tex = assets[assets::SoulPortalArrow];
+        auto angle = angle_from_point(xz_component(player.interpolated_position), soul_portal->hitbox.center);
+
+        static constexpr auto r = 50.0f;
+        auto normalized_dir = Vector2Normalize(soul_portal->hitbox.center - xz_component(player.interpolated_position));
+        auto pos = Vector3{player.interpolated_position.x, 1.0f, player.interpolated_position.z};
+        pos.x += r * normalized_dir.x;
+        pos.z += r * normalized_dir.y;
+
+        DrawModelEx(soul_portal_arrow, pos, Vector3{0.0f, 1.0f, 0.0f}, angle, Vector3{1.0f, 1.0f, 1.0f}, WHITE);
+    }
+
     effects::draw();
     EndMode3D();
 

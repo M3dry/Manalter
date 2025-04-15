@@ -52,6 +52,7 @@ struct Arena {
     double game_time = 0.0;
     double to_next_soul_portal;
     std::optional<SoulPortal> soul_portal;
+    Model soul_portal_arrow;
 
     std::optional<hud::SpellBookUI> spellbook_ui;
     hud::SpellBar spellbar;
@@ -65,6 +66,8 @@ struct Arena {
 
     Arena(Arena&&) noexcept = default;
     Arena& operator=(Arena&&) noexcept = default;
+
+    ~Arena();
 
     void draw(assets::Store& assets, Loop& loop);
     void update(Loop& loop);

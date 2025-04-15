@@ -233,6 +233,11 @@ namespace assets {
         SetTextureFilter(texture_map[PowerUpBackground], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
+        img = LoadImage("./assets/arrow.png");
+        texture_map[SoulPortalArrow] = LoadTextureFromImage(img);
+        SetTextureFilter(texture_map[SoulPortalArrow], TEXTURE_FILTER_BILINEAR);
+        UnloadImage(img);
+
         for (std::size_t tag_i = 0; tag_i < static_cast<int>(spells::Tag::Size); tag_i++) {
             img = LoadImage((std::string(spell::icon_path) + "/" + spells::infos[tag_i].icon).c_str());
             texture_map[tag_i + GeneralIdSize] = LoadTextureFromImage(img);
