@@ -2,7 +2,10 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <random>
+#include <raylib.h>
+#include <rlgl.h>
 
 std::pair<int, Vector2> max_font_size(const Font& font, float spacing, const Vector2& max_dims, std::string_view text) {
     int font_size = 100;
@@ -50,6 +53,80 @@ Vector2 mouse_xz_in_world(Ray mouse) {
 
 float wrap(float value, float modulus) {
     return value - modulus * std::floor(value / modulus);
+}
+
+std::string format_to_time(double time) {
+    uint64_t total_seconds = static_cast<uint64_t>(time);
+    uint64_t hours = total_seconds / 3600;
+    uint64_t minutes = (total_seconds % 3600) / 60;
+    uint64_t seconds = total_seconds % 60;
+
+    return std::format("{:02}:{:02}:{:02}", hours, minutes, seconds);
+}
+
+void DrawBillboardProRotAxis(Camera camera, Texture2D texture, Rectangle source, Vector3 position, Vector3 up,
+                             Vector2 size, float rotation, Vector3 rotationAxis, Color tint) {
+    // Compute billboard basis vectors
+    Matrix matView = MatrixLookAt(camera.position, camera.target, camera.up);
+    Vector3 right = {matView.m0, matView.m4, matView.m8};
+    right = Vector3Normalize(right);
+    up = Vector3Normalize(up);
+
+    // Handle negative size flipping
+    if (size.x < 0.0f) {
+        source.x += size.x;
+        source.width *= -1.0f;
+        right = Vector3Negate(right);
+    }
+    if (size.y < 0.0f) {
+        source.y += size.y;
+        source.height *= -1.0f;
+        up = Vector3Negate(up);
+    }
+
+    // Scale up and right vectors by size
+    right = Vector3Scale(right, size.x);
+    up = Vector3Scale(up, size.y);
+
+    // Compute 3D origin shift
+    Vector3 origin3D =
+        Vector3Add(Vector3Normalize(right), Vector3Normalize(up));
+
+    // Define quad corners before applying world position and rotation
+    Vector3 corners[4] = {Vector3Zero(), right, Vector3Add(right, up), up};
+
+    // Apply origin shift and arbitrary axis rotation
+    for (int i = 0; i < 4; i++) {
+        // Move to origin
+        corners[i] = Vector3Subtract(corners[i], origin3D);
+
+        // Rotate around axis if needed
+        if (rotation != 0.0f) {
+            corners[i] = Vector3RotateByAxisAngle(corners[i], rotationAxis, rotation * DEG2RAD);
+        }
+
+        // Translate to final position
+        corners[i] = Vector3Add(corners[i], position);
+    }
+
+    // Compute texture coordinates
+    Vector2 texcoords[4] = {
+        {static_cast<float>(source.x) / texture.width, static_cast<float>(source.y + source.height) / texture.height},
+        {static_cast<float>(source.x + source.width) / texture.width,
+         static_cast<float>(source.y + source.height) / texture.height},
+        {static_cast<float>(source.x + source.width) / texture.width, static_cast<float>(source.y) / texture.height},
+        {static_cast<float>(source.x) / texture.width, static_cast<float>(source.y) / texture.height}};
+
+    // Render the quad
+    rlSetTexture(texture.id);
+    rlBegin(RL_QUADS);
+    rlColor4ub(tint.r, tint.g, tint.b, tint.a);
+    for (int i = 0; i < 4; i++) {
+        rlTexCoord2f(texcoords[i].x, texcoords[i].y);
+        rlVertex3f(corners[i].x, corners[i].y, corners[i].z);
+    }
+    rlEnd();
+    rlSetTexture(0);
 }
 
 void arena::loop_around(float& x, float& y) {

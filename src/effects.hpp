@@ -38,6 +38,14 @@ namespace effect {
 
         particle_system::System operator()(Vector2 origin);
     };
+
+    struct ItemDrop {
+        float y = 0.0f;
+        std::size_t particle_count = 200;
+        float emit_rate = 50000;
+
+        particle_system::System operator()(Vector2 origin, const Color& rarity_color);
+    };
 }
 
 using Effect = std::variant<effect::Plosion>;

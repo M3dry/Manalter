@@ -3,27 +3,9 @@
 #include "hitbox.hpp"
 #include "raylib.h"
 #include "spell.hpp"
-#include <limits>
-#include <print>
 
 effects::Id effect_from_rarity(const Rarity& rarity, const Vector2& center) {
-    Color init_color = rarity::get_rarity_info(rarity).color;
-    auto eff = effect::Plosion{
-        .type = effect::Plosion::Ex,
-        .radius = 2.0f,
-        .particle_count = 200,
-        .max_emit = std::numeric_limits<std::size_t>::max(),
-        .emit_rate = 50000,
-        .particle_size_scale = 0.1f,
-        .floor_y = 0.0f,
-        .lifetime = {0.1f, 0.3f},
-        .velocity_scale = {30.0f, 50.0f},
-        .acceleration = {100.0f, -50.0f, 100.0f},
-        .color = {{init_color, 35.0f}, {WHITE, 200.0f}},
-    };
-    auto system = eff(center);
-    system.reset_on_done = std::numeric_limits<std::size_t>::max();
-    return effects::push_effect(std::move(system));
+    return effects::push_effect(effect::ItemDrop{ .y = 1.0f }(center, rarity::get_rarity_info(rarity).color));
 }
 
 ItemDrop::ItemDrop(Vector2 center, Spell&& spell) : item(std::move(spell)), hitbox(center, hitbox_radius) {

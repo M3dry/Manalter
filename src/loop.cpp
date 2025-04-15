@@ -5,6 +5,8 @@
 #include <cmath>
 
 #include <format>
+#include <optional>
+#include <print>
 #include <raylib.h>
 #include <raymath.h>
 #include <utility>
@@ -12,6 +14,7 @@
 
 #include "assets.hpp"
 #include "effects.hpp"
+#include "hitbox.hpp"
 #include "item_drops.hpp"
 #include "player.hpp"
 #include "power_up.hpp"
@@ -41,8 +44,6 @@ bool resize_handler(int event_type, const EmscriptenUiEvent* e, void* data_ptr) 
 Arena::Playing::Playing(Keys& keys) {
     keys.unregister_all();
     keys.register_key(KEY_ESCAPE);
-    keys.register_key(KEY_N);
-    keys.register_key(KEY_M);
     keys.register_key(KEY_B);
     keys.register_key(KEY_ONE);
     keys.register_key(KEY_TWO);
@@ -53,6 +54,12 @@ Arena::Playing::Playing(Keys& keys) {
     keys.register_key(KEY_EIGHT);
     keys.register_key(KEY_NINE);
     keys.register_key(KEY_ZERO);
+
+#ifdef DEBUG
+    keys.register_key(KEY_P);
+    keys.register_key(KEY_O);
+    keys.register_key(KEY_I);
+#endif
 }
 
 Arena::PowerUpSelection::PowerUpSelection(assets::Store& assets, Keys& keys, Vector2 screen)
@@ -137,7 +144,8 @@ void Arena::Paused::update(Arena& arena, Loop& loop) {
 }
 
 Arena::Arena(Keys& keys, assets::Store& assets)
-    : state(Playing(keys)), player({0.0f, 10.0f, 0.0f}, assets), enemies(30) {
+    : state(Playing(keys)), player({0.0f, 10.0f, 0.0f}, assets), enemies(30), to_next_soul_portal(5.0 * 60.0),
+      soul_portal(std::nullopt) {
     player.equipped_spells[0] = 0;
 
     player.exp = 90;
@@ -148,6 +156,8 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     if (playing) {
         player.update_interpolated_pos(loop.accum_time);
         mouse_xz = mouse_xz_in_world(GetMouseRay(loop.mouse.mouse_pos, player.camera));
+
+        incr_time(loop.delta_time);
     }
 
     BeginTextureMode(loop.assets[assets::Target, false]);
@@ -182,6 +192,10 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
 
         enemies.draw(loop.enemy_models, v, circle);
         item_drops.draw_item_drops(v);
+
+        if (soul_portal) {
+            soul_portal->hitbox.draw_3D(BLACK, 1.0f, xz_component(v));
+        }
     }
     player.draw_model(assets);
 
@@ -207,7 +221,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     EndTextureMode();
     EndTextureModeMSAA(loop.assets[assets::Target, false], loop.assets[assets::Target, true]);
 
-    hud::draw(loop.assets, player, loop.player_stats->spellbook, loop.screen);
+    hud::draw(loop.assets, player, loop.player_save->spellbook, loop.screen);
 
     // int textureLoc = GetShaderLocation(fxaa_shader, "texture0");
     // SetShaderValueTexture(fxaa_shader, textureLoc, target.texture);
@@ -232,24 +246,38 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
         .y = loop.screen.y - spell_dim,
         .z = spell_dim,
     };
-    spellbar.draw(spellbar_dims, loop.assets, loop.player_stats->spellbook,
+    spellbar.draw(spellbar_dims, loop.assets, loop.player_save->spellbook,
                   std::span(player.equipped_spells.get(), player.unlocked_spell_count));
 
     if (spellbook_ui) {
-        if (auto dropped = spellbook_ui->update(assets, loop.player_stats->spellbook, playing ? loop.mouse : loop.dummy_mouse, std::nullopt);
+        if (auto dropped = spellbook_ui->update(assets, loop.player_save->spellbook,
+                                                playing ? loop.mouse : loop.dummy_mouse, std::nullopt);
             dropped) {
             auto [spell, pos] = *dropped;
 
             auto slot = spellbar.dragged(pos, spellbar_dims, player.unlocked_spell_count);
             if (slot != -1) {
                 player.equip_spell(static_cast<uint32_t>(spell), static_cast<uint8_t>(slot),
-                                   loop.player_stats->spellbook);
+                                   loop.player_save->spellbook);
             };
         }
     }
 
     DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
     DrawText(std::format("ENEMIES: {}", enemies.enemies.data.size()).c_str(), 10, 30, 20, BLACK);
+
+    auto time = format_to_time(game_time);
+    DrawText(time.c_str(), static_cast<int>(loop.screen.x) - MeasureText(time.c_str(), 20) - 5, 10, 20, BLACK);
+
+    DrawText(std::format("SOULS: {}", souls).c_str(), 10, static_cast<int>(loop.screen.y) - 50, 20, BLACK);
+    DrawText(std::format("CLAIMED SOULS: {}", loop.player_save->souls).c_str(), 10,
+             static_cast<int>(loop.screen.y) - 30, 20, BLACK);
+
+    if (soul_portal && soul_portal->time_remaining >= 58.0) {
+        auto text = "A new soul portal has spawned";
+        DrawText(text, static_cast<int>(loop.screen.x / 2.0f - static_cast<float>(MeasureText(text, 40)) / 2.0f), 70,
+                 40, BLACK);
+    }
 
     if (curr_state<PowerUpSelection>()) {
         std::get<PowerUpSelection>(state).draw(assets, loop, *this);
@@ -295,31 +323,37 @@ void Arena::update(Loop& loop) {
             case KEY_ESCAPE:
                 state.emplace<Paused>(loop.keys);
                 return;
-            case KEY_N:
-                player.mana -= 1;
-                return;
-            case KEY_M:
-                player.mana += 1;
-                return;
             case KEY_B:
                 if (spellbook_ui)
                     spellbook_ui = std::nullopt;
                 else
-                    spellbook_ui = hud::SpellBookUI(loop.player_stats->spellbook, loop.screen);
+                    spellbook_ui = hud::SpellBookUI(loop.player_save->spellbook, loop.screen);
                 return;
+#ifdef DEBUG
+            case KEY_P:
+                incr_time(100.0);
+                break;
+            case KEY_O:
+                incr_time(10.0);
+                break;
+            case KEY_I:
+                incr_time(1.0);
+                break;
+#endif
         }
 
         for (const auto& [k, num] : spell_keys) {
             if (k == key) {
                 player.cast_equipped(num, (Vector2){player.position.x, player.position.z}, mouse_xz,
-                                     loop.player_stats->spellbook, enemies);
+                                     loop.player_save->spellbook, enemies);
                 return;
             }
         }
     });
 
-    player.tick((Vector2){movement.x, movement.y}, angle.x / angle.y, loop.player_stats->spellbook);
+    player.tick((Vector2){movement.x, movement.y}, angle.x / angle.y, loop.player_save->spellbook);
     auto damage_done = enemies.tick(player.hitbox, loop.enemy_models);
+    souls += enemies.take_souls();
     if (player.health <= damage_done) {
         player.health = 0;
     } else {
@@ -329,19 +363,50 @@ void Arena::update(Loop& loop) {
         }
     }
 
-    caster::tick(loop.player_stats->spellbook, enemies, item_drops.item_drops);
+    if (soul_portal && check_collision(soul_portal->hitbox, xz_component(player.position))) {
+        loop.player_save->souls += souls;
+        souls = 0;
+    }
+
+    caster::tick(loop.player_save->spellbook, enemies, item_drops.item_drops);
 
     item_drops.pickup(player.hitbox, [&](auto&& arg) {
         using Item = std::decay_t<decltype(arg)>;
 
         if constexpr (std::is_same_v<Item, Spell>) {
-            loop.player_stats->spellbook.emplace_back(std::move(arg));
+            loop.player_save->spellbook.emplace_back(std::move(arg));
         }
     });
 
     if (player.health == 0) {
         loop.scene.emplace<Hub>(loop.keys);
         return;
+    }
+}
+
+void Arena::incr_time(double delta) {
+    game_time += delta;
+    to_next_soul_portal = std::max(to_next_soul_portal - delta, 0.0);
+
+    if (to_next_soul_portal == 0) {
+        if (soul_portal) {
+            soul_portal->time_remaining = std::max(soul_portal->time_remaining - delta, 0.0);
+        } else {
+            soul_portal = SoulPortal{
+                .time_remaining = 60.0,
+                .hitbox = shapes::Circle({static_cast<float>(GetRandomValue(static_cast<int>(-ARENA_WIDTH / 2.0f),
+                                                                            static_cast<int>(ARENA_WIDTH / 2.0f))),
+                                          static_cast<float>(GetRandomValue(static_cast<int>(-ARENA_HEIGHT / 2.0f),
+                                                                            static_cast<int>(ARENA_HEIGHT / 2.0f)))},
+                                         20.0f),
+            };
+            std::println("SOUL PORTAL SPAWNED @[{}, {}]", soul_portal->hitbox.center.x, soul_portal->hitbox.center.y);
+        }
+
+        if (soul_portal->time_remaining == 0) {
+            soul_portal = std::nullopt;
+            to_next_soul_portal = 4.0 * 60.0;
+        }
     }
 }
 
@@ -366,7 +431,7 @@ void Hub::update(Loop& loop) {
                 loop.scene.emplace<Arena>(loop.keys, loop.assets);
                 return;
             case KEY_ESCAPE:
-                loop.player_stats = std::nullopt;
+                loop.player_save = std::nullopt;
                 loop.scene.emplace<Main>(loop.assets, loop.keys, loop.screen);
                 return;
         }
@@ -433,9 +498,9 @@ void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
                    Vector2Zero(), 0.0f, WHITE);
 
     if (play_button->update(loop.mouse)) {
-        loop.player_stats = PlayerSave();
-        loop.player_stats->add_spell_to_spellbook(Spell(spells::VoidImplosion{}, Rarity::Common, 10));
-        loop.player_stats->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Common, 10));
+        loop.player_save = PlayerSave();
+        loop.player_save->add_spell_to_spellbook(Spell(spells::VoidImplosion{}, Rarity::Common, 10));
+        loop.player_save->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Common, 10));
 
         loop.scene.emplace<Hub>(loop.keys);
         return;

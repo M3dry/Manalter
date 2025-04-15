@@ -32,12 +32,11 @@ bool Enemies::spawn(const EnemyModels& enemy_models, const Vector2& player_pos) 
     arena::loop_around(enemy_pos.x, enemy_pos.y);
 
     uint16_t base_level = static_cast<uint16_t>(std::ceil(static_cast<float>(killed) / 5.0f));
-    std::uniform_int_distribution<uint16_t> dist(base_level < 2 ? 1 : base_level - 2, base_level + 2);
+    std::uniform_int_distribution<uint16_t> dist(base_level <= 2 ? 1 : base_level - 2, base_level + 2);
     uint16_t lvl = dist(rng::get());
 
     auto bone_data = enemy_models.get_bone_transforms(*enemy);
-    auto _enemy = Enemy(enemy_pos, lvl, false, std::move(enemy.value()), std::move(bone_data));
-    enemies.insert(std::move(_enemy));
+    enemies.insert(enemy_pos, lvl, false, std::move(enemy.value()), std::move(bone_data));
     return true;
 }
 
@@ -75,4 +74,10 @@ uint32_t Enemies::take_exp() {
     auto exp = stored_exp;
     stored_exp = 0;
     return exp;
+}
+
+uint64_t Enemies::take_souls() {
+    auto souls = stored_souls;
+    stored_souls = 0;
+    return souls;
 }

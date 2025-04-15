@@ -38,10 +38,20 @@ struct Arena {
         void update(Arena& arena, Loop& loop);
     };
 
+    struct SoulPortal {
+        double time_remaining;
+        shapes::Circle hitbox;
+    };
+
     std::variant<Playing, PowerUpSelection, Paused> state;
     Player player;
     Enemies enemies;
     ItemDrops item_drops;
+
+    uint64_t souls = 0;
+    double game_time = 0.0;
+    double to_next_soul_portal;
+    std::optional<SoulPortal> soul_portal;
 
     std::optional<hud::SpellBookUI> spellbook_ui;
     hud::SpellBar spellbar;
@@ -58,6 +68,8 @@ struct Arena {
 
     void draw(assets::Store& assets, Loop& loop);
     void update(Loop& loop);
+
+    void incr_time(double delta);
 
     template <typename T>
     inline bool curr_state() const {
@@ -100,7 +112,7 @@ struct Loop {
 
     // scene isn't Main or SplashScreen -> player_stats has value
     std::variant<Arena, Hub, Main, SplashScreen> scene;
-    std::optional<PlayerSave> player_stats;
+    std::optional<PlayerSave> player_save;
 
     Loop(int width, int height);
     void operator()();

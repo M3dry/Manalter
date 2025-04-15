@@ -49,9 +49,9 @@ namespace particle_system {
 
             struct OnCircle {
                 Vector3 center;
-                float radius;
+                std::uniform_real_distribution<float> radiusDist;
 
-                OnCircle(Vector3 center, float radius);
+                OnCircle(Vector3 center, std::pair<float, float> radius);
 
                 void gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix);
             };

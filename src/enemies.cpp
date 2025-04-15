@@ -27,17 +27,17 @@ namespace enemies {
     }
 
     uint32_t Zombie::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
-                     [[maybe_unused]] const shapes::Circle target_hitbox) {
+                          [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
 
     uint32_t Heraklios::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
-                        [[maybe_unused]] const shapes::Circle target_hitbox) {
+                             [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
 
     uint32_t Maw::tick([[maybe_unused]] QT<true>& enemies, [[maybe_unused]] std::size_t ix,
-                  [[maybe_unused]] const shapes::Circle target_hitbox) {
+                       [[maybe_unused]] const shapes::Circle target_hitbox) {
         return 0;
     }
 
@@ -193,13 +193,17 @@ void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix)
     if (Vector2LengthSqr(attraction_force) > 1e-6f) {
         attraction_force = Vector2Normalize(attraction_force);
     }
-    angle = std::fmod(270 - std::atan2(-attraction_force.y, -attraction_force.x) * 180.0f / static_cast<float>(std::numbers::pi), 360.0f);
+    angle = std::fmod(270 - std::atan2(-attraction_force.y, -attraction_force.x) * 180.0f / std::numbers::pi_v<float>,
+                      360.0f);
 
     Vector2 separation_force = Vector2Zero();
 
-    // FIXME: I don't think this gets all the neighbouring enemies correctly as using the for loop the enemies don't go inside each other at all
+    // FIXME: I don't think this gets all the neighbouring enemies correctly as using the for loop the enemies don't go
+    // inside each other at all
     enemies.search_by(
-        [&circle_hitbox](const auto& bbox) -> bool { return check_collision(static_cast<Rectangle>(bbox), circle_hitbox); },
+        [&circle_hitbox](const auto& bbox) -> bool {
+            return check_collision(static_cast<Rectangle>(bbox), circle_hitbox);
+        },
         [&circle_hitbox](const auto& enemy) -> bool { return check_collision(enemy.simple_hitbox, circle_hitbox); },
         [&](const auto& e, auto e_ix) {
             if (e_ix == ix || enemies.data[e_ix].id == id) return;
@@ -256,11 +260,12 @@ uint32_t Enemy::tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hi
         state);
 }
 
-std::optional<uint32_t> Enemy::take_damage(uint64_t taken_damage, [[maybe_unused]] Element element) {
+std::optional<std::pair<uint32_t, uint64_t>> Enemy::take_damage(uint64_t taken_damage,
+                                                                [[maybe_unused]] Element element) {
     // TODO: Elemental damage scaling
     if (health <= taken_damage) {
         health = 0;
-        return dropped_exp();
+        return std::make_pair(dropped_exp(), dropped_souls());
     }
 
     damage_tint_left = damage_tint_init;
@@ -286,4 +291,10 @@ uint32_t Enemy::dropped_exp() const {
     auto info = enemies::get_info(state);
 
     return info.base_exp_dropped * level * (boss ? 10 : 1);
+}
+
+uint64_t Enemy::dropped_souls() const {
+    auto info = enemies::get_info(state);
+
+    return info.base_soul_dropped * level * (boss ? 10 : 1);
 }

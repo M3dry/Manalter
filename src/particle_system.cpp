@@ -52,7 +52,7 @@ namespace particle_system::generators::pos {
         }
     }
 
-    OnCircle::OnCircle(Vector3 center, float radius) : center(center), radius(radius) {
+    OnCircle::OnCircle(Vector3 center, std::pair<float, float> radius) : center(center), radiusDist(radius.first, radius.second) {
     }
 
     void OnCircle::gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
@@ -61,6 +61,7 @@ namespace particle_system::generators::pos {
         auto& gen = rng::get();
         for (std::size_t i = start_ix; i < end_ix; i++) {
             auto angle = distAngle(gen);
+            auto radius = radiusDist(gen);
             particles.pos[i].x = center.x + radius * std::cos(angle);
             particles.pos[i].y = center.y;
             particles.pos[i].z = center.z + radius * std::sin(angle);

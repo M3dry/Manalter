@@ -1,6 +1,5 @@
 #include "effects.hpp"
 #include "particle_system.hpp"
-#include <print>
 #include <ranges>
 
 namespace effect {
@@ -41,15 +40,17 @@ namespace effect {
         });
         system.add_emitter(std::move(emitter));
 
-        system.add_updater([y = floor_y, origin = origin](Particles& particles, float _) {
-            auto end_ix = particles.alive_count;
-            for (std::size_t i = 0; i < end_ix; i++) {
-                if ((y && particles.pos[i].y < *y) || Vector3Distance(origin, particles.pos[i]) <= 0.1f) {
-                    particles.kill(i);
-                    end_ix = particles.alive_count < particles.max_size ? particles.alive_count : particles.max_size;
+        if (floor_y || type == Im) {
+            system.add_updater([y = floor_y, type = type, origin = origin](Particles& particles, float _) {
+                auto end_ix = particles.alive_count;
+                for (std::size_t i = 0; i < end_ix; i++) {
+                    if ((y && particles.pos[i].y < *y) || (type == Im && Vector3Distance(origin, particles.pos[i]) <= 0.1f)) {
+                        particles.kill(i);
+                        end_ix = particles.alive_count < particles.max_size ? particles.alive_count : particles.max_size;
+                    }
                 }
-            }
-        });
+            });
+        }
         system.add_updater(updaters::Position());
         system.add_updater(updaters::Lifetime());
         system.add_updater(
@@ -57,6 +58,48 @@ namespace effect {
         system.add_updater([scale = particle_size_scale](Particles& particles, float _) {
             for (std::size_t i = 0; i < particles.alive_count; i++) {
                 particles.size[i] = scale * Vector3Length(particles.velocity[i]);
+            }
+        });
+
+        return system;
+    }
+
+    particle_system::System ItemDrop::operator()(Vector2 _origin, const Color& rarity_color) {
+        using namespace particle_system;
+
+        auto origin = Vector3{
+            .x = _origin.x,
+            .y = y,
+            .z = _origin.y,
+        };
+
+        System system(particle_count, renderers::Point(particle_count));
+
+        emitters::CustomEmitter emitter(emit_rate, std::numeric_limits<std::size_t>::max());
+        emitter.add_generator(generators::pos::OnCircle(origin, {2.0f * 0.7f, 3.0f}));
+        emitter.add_generator(
+            [origin = origin](Particles& particles, float _, std::size_t start_ix, std::size_t end_ix) {
+                for (std::size_t i = start_ix; i < end_ix; i++) {
+                    particles.velocity[i] = Vector3Normalize(Vector3Subtract(particles.pos[i], origin));
+                }
+            });
+        emitter.add_generator(generators::velocity::ScaleRange(30.0f, 50.0f));
+        emitter.add_generator(generators::acceleration::Uniform({100.0f, 0.0f, 100.0f}));
+        emitter.add_generator(generators::color::Fixed(WHITE));
+        emitter.add_generator(generators::lifetime::Range(0.1f, 0.3f));
+        emitter.add_generator([](Particles& particles, float _, std::size_t start_ix, std::size_t end_ix) {
+            for (std::size_t i = start_ix; i < end_ix; i++) {
+                particles.size[i] = Vector3Length(particles.velocity[i]);
+            }
+        });
+        system.add_emitter(std::move(emitter));
+
+        system.add_updater(updaters::Position());
+        system.add_updater(updaters::Lifetime());
+        system.add_updater(updaters::ColorByVelocity(rarity_color, WHITE, 35.0f, 200.0f));
+        system.add_updater([](Particles& particles, float _) {
+            for (std::size_t i = 0; i < particles.alive_count; i++) {
+                particles.size[i] = 0.1f * Vector3Length(particles.velocity[i]);
             }
         });
 
@@ -95,7 +138,6 @@ namespace effects {
             _effects.pop_back();
             return;
         }
-
     }
 
     void update(float dt) {

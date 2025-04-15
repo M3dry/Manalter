@@ -81,6 +81,7 @@ struct Player {
 
 struct PlayerSave {
     SpellBook spellbook = {};
+    uint64_t souls = 0;
 
     uint64_t add_spell_to_spellbook(Spell&& spell);
 };

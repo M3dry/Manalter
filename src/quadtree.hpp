@@ -3,6 +3,7 @@
 #include "hitbox.hpp"
 #include "print"
 #include <cassert>
+#include <concepts>
 #include <cstdint>
 #include <format>
 #include <functional>
@@ -69,6 +70,11 @@ namespace quadtree {
         template <typename U>
             requires(!std::same_as<std::decay_t<U>, IDed>)
         IDed(U&& val) : id(++last_id), val(std::forward<T>(val)) {
+        }
+
+        template <typename... Args>
+            requires std::constructible_from<T, Args...>
+        IDed(Args... args) : id(++last_id), val(std::forward<Args>(args)...) {
         }
 
         IDed(IDed&& i) noexcept : id(i.id), val(std::move(i.val)) {
@@ -168,9 +174,10 @@ namespace quadtree {
             return reinterpret_cast<QuadTree<MaxPerNode, T, true>&>(*this);
         }
 
-        std::pair<std::size_t, uint64_t> insert(T&& t) {
-            data.emplace_back(std::forward<T>(t));
-            if (!insert(0, data.size() - 1, data.back().id)) {
+        template <typename... Args> std::pair<std::size_t, uint64_t> insert(Args... args) {
+            data.emplace_back(std::forward<Args>(args)...);
+
+            if (!_insert(0, data.size() - 1, data.back().id)) {
                 assert(false && "How???");
             }
 
@@ -221,13 +228,13 @@ namespace quadtree {
             nodes.emplace_back(Node(root_bbox));
 
             for (std::size_t ix = 0; ix < data.size(); ix++) {
-                insert(0, ix, data[ix].id);
+                _insert(0, ix, data[ix].id);
             }
         }
 
         void reinsert(std::size_t data_ix) {
             data[data_ix].id = ++data[data_ix].last_id;
-            insert(0, data_ix, data[data_ix].id);
+            _insert(0, data_ix, data[data_ix].id);
         }
 
         void prune() {
@@ -270,7 +277,7 @@ namespace quadtree {
         }
 
       private:
-        std::optional<node_ix> insert(node_ix parent_ix, std::size_t dat_ix, uint64_t dat_id) {
+        std::optional<node_ix> _insert(node_ix parent_ix, std::size_t dat_ix, uint64_t dat_id) {
             const auto& parent = nodes[parent_ix].val;
 
             if (!parent.bbox.contains(data[dat_ix].val.position())) return std::nullopt;
@@ -293,7 +300,7 @@ namespace quadtree {
                         assert(false && "I'm going home");
                     }
 
-                    if (auto new_ix = insert(child_ix, dat_ix, dat_id); new_ix) {
+                    if (auto new_ix = _insert(child_ix, dat_ix, dat_id); new_ix) {
                         nodes[parent_ix].val[i, j].first = *new_ix;
                         return parent_ix;
                     }

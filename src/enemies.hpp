@@ -35,6 +35,7 @@ namespace enemies {
         uint32_t max_health;
         float simple_hitbox_radius;
         uint32_t base_exp_dropped;
+        uint64_t base_soul_dropped;
     };
 
     struct Paladin {
@@ -57,6 +58,7 @@ namespace enemies {
             .max_health = 100,
             .simple_hitbox_radius = 10.0f,
             .base_exp_dropped = 20,
+            .base_soul_dropped = 10,
         };
     };
 
@@ -75,6 +77,7 @@ namespace enemies {
             .max_health = 50,
             .simple_hitbox_radius = 5.0f,
             .base_exp_dropped = 10,
+            .base_soul_dropped = 5,
         };
     };
 
@@ -93,6 +96,7 @@ namespace enemies {
             .max_health = 300,
             .simple_hitbox_radius = 5.0f,
             .base_exp_dropped = 100,
+            .base_soul_dropped = 50,
         };
     };
 
@@ -111,6 +115,7 @@ namespace enemies {
             .max_health = 500,
             .simple_hitbox_radius = 10.0f,
             .base_exp_dropped = 200,
+            .base_soul_dropped = 100,
         };
     };
 
@@ -297,10 +302,11 @@ struct Enemy {
     // returned number is the amount of damage taken by the player
     uint32_t tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hitbox, EnemyModels& enemy_models);
 
-    // if not nullopt, then the enemy is dead and dropped uint32_t amount of exp
-    std::optional<uint32_t> take_damage(uint64_t damage, Element element);
+    // if not nullopt, then the enemy is dead and dropped uint32_t amount of exp and uint64_t amount of souls
+    std::optional<std::pair<uint32_t, uint64_t>> take_damage(uint64_t damage, Element element);
 
     Vector2 position() const;
     void set_position(const Vector2& p);
     uint32_t dropped_exp() const;
+    uint64_t dropped_souls() const;
 };

@@ -18,6 +18,7 @@ struct Enemies {
     QT<false> enemies;
     uint64_t killed = 0;
     uint32_t stored_exp = 0;
+    uint64_t stored_souls = 0;
 
     Enemies(uint32_t max_cap) : max_cap(max_cap), cap(0), enemies(arena::arena_rec) {
     }
@@ -60,8 +61,9 @@ struct Enemies {
                 return false;
             },
             [&](auto& enemy, auto ix) {
-                auto exp = enemy.take_damage(damage, element);
-                if (!exp) return;
+                auto dropped = enemy.take_damage(damage, element);
+                if (!dropped) return;
+                auto [exp, souls] = *dropped;
 
                 item_drop_pusher.emplace_back(enemy.level, xz_component(enemy.pos));
                 if (auto enemy_cap = enemies::get_info(enemy.state).cap_value; enemy_cap < cap) {
@@ -71,7 +73,8 @@ struct Enemies {
                 }
 
                 killed++;
-                stored_exp += *exp;
+                stored_exp += exp;
+                stored_souls += souls;
                 enemies.remove(ix);
             });
     }
@@ -81,4 +84,5 @@ struct Enemies {
     void draw(EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle);
 
     uint32_t take_exp();
+    uint64_t take_souls();
 };
