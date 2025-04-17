@@ -2,10 +2,12 @@
 
 #include "effects.hpp"
 #include "raylib.h"
+#include "seria_deser.hpp"
 #include "stats.hpp"
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <ostream>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -110,17 +112,18 @@ namespace spells {
                     .increase_duration = 5,
                     .duration = 0,
                 },
-            .effect = effect::Plosion{
-                .type = effect::Plosion::Ex,
-                .radius = 0.0f,
-                .particle_count = 350,
-                .particle_size_scale = 0.1f,
-                .floor_y = 0.0f,
-                .lifetime = { 0.1f, 0.3f},
-                .velocity_scale = { 70.0f, 90.0f },
-                .acceleration = {200.0f, 200.0f, 200.0f },
-                .color = { {WHITE, 80.0f}, { BLUE, 130.0f} },
-            },
+            .effect =
+                effect::Plosion{
+                    .type = effect::Plosion::Ex,
+                    .radius = 0.0f,
+                    .particle_count = 350,
+                    .particle_size_scale = 0.1f,
+                    .floor_y = 0.0f,
+                    .lifetime = {0.1f, 0.3f},
+                    .velocity_scale = {70.0f, 90.0f},
+                    .acceleration = {200.0f, 200.0f, 200.0f},
+                    .color = {{WHITE, 80.0f}, {BLUE, 130.0f}},
+                },
             .element = Element::Ice,
             .cooldown = 20,
             .base_manacost = 20,
@@ -173,17 +176,18 @@ namespace spells {
                     .maximal_radius = 5,
                     .increase_duration = 5,
                 },
-            .effect = effect::Plosion{
-                .type = effect::Plosion::Im,
-                .radius = 40.0f,
-                .particle_count = 350,
-                .particle_size_scale = 0.1f,
-                .floor_y = 0.0f,
-                .lifetime = { 0.1f, 0.7f},
-                .velocity_scale = { 70.0f, 90.0f },
-                .acceleration = {200.0f, 200.0f, 200.0f },
-                .color = { {PURPLE, 80.0f}, { BLACK, 130.0f} },
-            },
+            .effect =
+                effect::Plosion{
+                    .type = effect::Plosion::Im,
+                    .radius = 40.0f,
+                    .particle_count = 350,
+                    .particle_size_scale = 0.1f,
+                    .floor_y = 0.0f,
+                    .lifetime = {0.1f, 0.7f},
+                    .velocity_scale = {70.0f, 90.0f},
+                    .acceleration = {200.0f, 200.0f, 200.0f},
+                    .color = {{PURPLE, 80.0f}, {BLACK, 130.0f}},
+                },
             .element = Element::Shadow,
             .cooldown = 40,
             .base_manacost = 75,
@@ -215,7 +219,7 @@ namespace spells {
     F(LightningStrike)                                                                                                 \
     F(VoidImplosion)
 
-    enum class Tag {
+    enum class Tag : uint16_t {
 #define SPELL_TAG_FIRST(name) name = 0,
 #define SPELL_TAG(name) name,
         EACH_SPELL(SPELL_TAG, SPELL_TAG_FIRST) Size
@@ -262,6 +266,7 @@ namespace spells {
 #define SPELL_CASE(name)                                                                                               \
     case Tag::name:                                                                                                    \
         return spells::name();
+
             EACH_SPELL(SPELL_CASE, SPELL_CASE)
 #undef SPELL_CASE
             case Tag::Size:
@@ -269,6 +274,27 @@ namespace spells {
         }
 
         std::unreachable();
+    }
+
+    template <typename Spell> Data deserialize_or_default(std::istream& in, version v) {
+        if constexpr (SeriaDeser<Spell>) {
+            return seria_deser::deserialize(in, v, std::type_identity<Spell>{});
+        } else {
+            return Spell{};
+        }
+    }
+
+    inline Data deserialize(std::istream& in, version v, Tag tag) {
+        switch (tag) {
+#define SPELL_CASE(name)                                                                                               \
+    case Tag::name:                                                                                                    \
+        return deserialize_or_default<name>(in, v);
+
+            EACH_SPELL(SPELL_CASE, SPELL_CASE)
+#undef SPELL_CASE
+            case Tag::Size:
+                assert(false && "Not cool");
+        }
     }
 
     static constexpr std::array<spell::Info, static_cast<std::size_t>(Tag::Size)> infos = {
@@ -281,7 +307,7 @@ namespace spells {
     spell::Info get_info(const Data& data);
 }
 
-enum struct Rarity {
+enum struct Rarity : uint8_t {
     Common = 0,
     Uncommon,
     Rare,
@@ -336,7 +362,11 @@ struct SpellStats {
     Stat<uint32_t, 0, 0> manacost;
     Stat<uint64_t, 0, 0> damage;
 
+    SpellStats();
     SpellStats(const spell::Info& info, Rarity rarity, uint32_t level);
+
+    void serialize(std::ostream& out) const;
+    static SpellStats deserialize(std::istream& in, version version);
 };
 
 struct Spell {
@@ -352,8 +382,11 @@ struct Spell {
     SpellStats stats;
 
     Spell(spells::Data&& spell, Rarity rarity, uint32_t level)
-        : spell(spell), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(0), level(level),
+        : spell(std::forward<spells::Data>(spell)), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(0), level(level),
           experience(0), stats(get_info(spell), rarity, level) {};
+    Spell(spells::Data&& spell, Rarity rarity, uint32_t level, uint64_t experience, SpellStats stats)
+        : spell(std::forward<spells::Data>(spell)), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(0), level(level),
+          experience(experience), stats(stats) {};
     Spell(Spell&&) noexcept = default;
     Spell& operator=(Spell&&) noexcept = default;
 
@@ -371,6 +404,9 @@ struct Spell {
     }
 
     static Spell random(uint32_t max_level);
+
+    void serialize(std::ostream& out) const;
+    static Spell deserialize(std::istream& in, version version);
 };
 
 using SpellBook = std::vector<Spell>;

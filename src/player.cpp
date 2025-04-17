@@ -1,7 +1,9 @@
 #include "player.hpp"
+#include "seria_deser.hpp"
 #include "spell_caster.hpp"
 #include "utility.hpp"
 #include <cstdint>
+#include <filesystem>
 #include <limits>
 
 const Vector3 Player::camera_offset = (Vector3){60.0f, 140.0f, 0.0f};
@@ -125,7 +127,8 @@ void Player::tick(Vector2 movement, float new_angle, SpellBook& spellbook) {
 
 void Player::cast_equipped(uint8_t idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook,
                            const Enemies& enemies) {
-    if (idx >= 10 || idx >= unlocked_spell_count || equipped_spells[idx] == std::numeric_limits<uint64_t>::max()) return;
+    if (idx >= 10 || idx >= unlocked_spell_count || equipped_spells[idx] == std::numeric_limits<uint64_t>::max())
+        return;
 
     auto spell_id = equipped_spells[idx];
     Spell& spell = spellbook[spell_id];
@@ -163,8 +166,53 @@ Player::~Player() {
     UnloadModelAnimations(animations, animationsCount);
 }
 
+void PlayerSave::load_save() {
+    namespace fs = std::filesystem;
+
+    if (!fs::exists(save_path.parent_path())) {
+        fs::create_directories(save_path.parent_path());
+    }
+
+    if (!fs::exists(save_path)) {
+        save();
+        return;
+    }
+
+    std::ifstream input(save_path, std::ios::binary);
+    if (!input) {
+        TraceLog(LOG_ERROR, "Couldn't open file for loading");
+        return;
+    }
+
+    version save_version = seria_deser::deserialize_version(input);
+    *this = PlayerSave::deserialize(input, save_version);
+}
+
+void PlayerSave::save() {
+    std::ofstream output(save_path, std::ios::binary);
+    if (!output) {
+        TraceLog(LOG_ERROR, "Couldn't open file for saving");
+        return;
+    }
+
+    seria_deser::serialize(CURRENT_VERSION, output);
+    serialize(output);
+}
+
 uint64_t PlayerSave::add_spell_to_spellbook(Spell&& spell) {
     spellbook.emplace_back(std::move(spell));
 
     return spellbook.size() - 1;
+}
+
+void PlayerSave::serialize(std::ostream& out) const {
+    seria_deser::serialize(spellbook, out);
+    seria_deser::serialize(souls, out);
+}
+
+PlayerSave PlayerSave::deserialize(std::istream& in, version version) {
+    return PlayerSave{
+        .spellbook = seria_deser::deserialize<decltype(std::declval<PlayerSave>().spellbook)>(in, version),
+        .souls = seria_deser::deserialize<uint64_t>(in, version),
+    };
 }

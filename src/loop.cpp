@@ -4,11 +4,9 @@
 #include <cassert>
 #include <cmath>
 
-#include <complex>
 #include <format>
 #include <optional>
 #include <print>
-#include <random>
 #include <raylib.h>
 #include <raymath.h>
 #include <utility>
@@ -18,7 +16,6 @@
 #include "effects.hpp"
 #include "hitbox.hpp"
 #include "item_drops.hpp"
-#include "particle_system.hpp"
 #include "player.hpp"
 #include "power_up.hpp"
 #include "spell.hpp"
@@ -400,10 +397,12 @@ void Arena::update(Loop& loop) {
 
         if constexpr (std::is_same_v<Item, Spell>) {
             loop.player_save->spellbook.emplace_back(std::move(arg));
+            loop.player_save->save();
         }
     });
 
     if (player.health == 0) {
+        loop.player_save->save();
         loop.scene.emplace<Hub>(loop.keys);
         return;
     }
@@ -453,9 +452,11 @@ void Hub::update(Loop& loop) {
     loop.keys.tick([&](auto key) {
         switch (key) {
             case KEY_SPACE:
+                loop.player_save->save();
                 loop.scene.emplace<Arena>(loop.keys, loop.assets);
                 return;
             case KEY_ESCAPE:
+                loop.player_save->save();
                 loop.player_save = std::nullopt;
                 loop.scene.emplace<Main>(loop.assets, loop.keys, loop.screen);
                 return;
@@ -524,8 +525,7 @@ void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
 
     if (play_button->update(loop.mouse)) {
         loop.player_save = PlayerSave();
-        loop.player_save->add_spell_to_spellbook(Spell(spells::VoidImplosion{}, Rarity::Common, 10));
-        loop.player_save->add_spell_to_spellbook(Spell(spells::FrostNova{}, Rarity::Common, 10));
+        loop.player_save->load_save();
 
         loop.scene.emplace<Hub>(loop.keys);
         return;

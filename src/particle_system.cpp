@@ -4,7 +4,6 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <variant>
-#include <print>
 
 namespace particle_system {
     Particles::Particles(std::size_t max_particles) : max_size(max_particles) {

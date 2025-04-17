@@ -3,11 +3,13 @@
 #include "assets.hpp"
 #include "enemies_spawner.hpp"
 #include "hitbox.hpp"
+#include "power_up.hpp"
 #include "raylib.h"
 #include "spell.hpp"
 #include "stats.hpp"
-#include "power_up.hpp"
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 
 struct Player {
@@ -62,7 +64,8 @@ struct Player {
     static uint32_t exp_to_lvl(uint16_t lvl);
     // returns if the player leveled up
     bool add_exp(uint32_t e);
-    std::optional<std::reference_wrapper<const Spell>> get_equipped_spell(uint8_t idx, const SpellBook& spellbook) const;
+    std::optional<std::reference_wrapper<const Spell>> get_equipped_spell(uint8_t idx,
+                                                                          const SpellBook& spellbook) const;
 
     // -2 - slot out of range
     // -1 - spell isn't inside the spellbook
@@ -80,8 +83,16 @@ struct Player {
 };
 
 struct PlayerSave {
+    inline static const std::filesystem::path save_path = std::filesystem::path("./") / "save.bin";
+
     SpellBook spellbook = {};
     uint64_t souls = 0;
 
+    void load_save();
+    void save();
+
     uint64_t add_spell_to_spellbook(Spell&& spell);
+
+    void serialize(std::ostream& out) const;
+    static PlayerSave deserialize(std::istream& in, version version);
 };

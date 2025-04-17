@@ -1,17 +1,19 @@
 #pragma once
 
+#include "seria_deser.hpp"
 #include <cstdint>
+#include <ostream>
 
-template <typename Int, Int points_def, Int percetange_def>
-class Stat {
+template <SeriaDeser Int, Int points_def, Int percetange_def> class Stat {
   private:
     Int points = points_def;
     Int percentage = percetange_def;
     Int value = update();
 
     inline constexpr Int update() {
-        return value = static_cast<Int>(static_cast<float>(points) * static_cast<float>(percentage)/100.0f);
+        return value = static_cast<Int>(static_cast<float>(points) * static_cast<float>(percentage) / 100.0f);
     }
+
   public:
     inline constexpr void add_points(Int p) {
         points += p;
@@ -33,6 +35,21 @@ class Stat {
 
     inline constexpr Int get() const {
         return value;
+    }
+
+    void serialize(std::ostream& out) const {
+        seria_deser::serialize(points, out);
+        seria_deser::serialize(percentage, out);
+    }
+
+    static Stat deserialize(std::istream& in, version version) {
+        Stat stat;
+
+        stat.points = seria_deser::deserialize<Int>(in, version),
+        stat.percentage = seria_deser::deserialize<Int>(in, version),
+        stat.update();
+
+        return stat;
     }
 };
 
