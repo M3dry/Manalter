@@ -74,7 +74,7 @@ namespace quadtree {
 
         template <typename... Args>
             requires std::constructible_from<T, Args...>
-        IDed(Args... args) : id(++last_id), val(std::forward<Args>(args)...) {
+        IDed(Args&&... args) : id(++last_id), val(std::forward<Args>(args)...) {
         }
 
         IDed(IDed&& i) noexcept : id(i.id), val(std::move(i.val)) {
@@ -174,7 +174,7 @@ namespace quadtree {
             return reinterpret_cast<QuadTree<MaxPerNode, T, true>&>(*this);
         }
 
-        template <typename... Args> std::pair<std::size_t, uint64_t> insert(Args... args) {
+        template <typename... Args> std::pair<std::size_t, uint64_t> insert(Args&&... args) {
             data.emplace_back(std::forward<Args>(args)...);
 
             if (!_insert(0, data.size() - 1, data.back().id)) {

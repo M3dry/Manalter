@@ -4,6 +4,7 @@
 #include "utility.hpp"
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 
 const Vector3 Player::camera_offset = (Vector3){60.0f, 140.0f, 0.0f};
@@ -65,11 +66,11 @@ bool Player::add_exp(uint32_t e) {
     return false;
 }
 
-std::optional<std::reference_wrapper<const Spell>> Player::get_equipped_spell(uint8_t idx,
-                                                                              const SpellBook& spellbook) const {
-    if (idx >= unlocked_spell_count || equipped_spells[idx] == std::numeric_limits<uint64_t>::max()) return {};
+uint64_t Player::get_equipped_spell(uint8_t idx) const {
+    if (idx >= unlocked_spell_count || equipped_spells[idx] == std::numeric_limits<uint64_t>::max())
+        return std::numeric_limits<uint64_t>::max();
 
-    return spellbook[equipped_spells[idx]];
+    return equipped_spells[idx];
 }
 
 int Player::equip_spell(uint64_t spellbook_idx, uint8_t slot_id, const SpellBook& spellbook) {
@@ -81,7 +82,7 @@ int Player::equip_spell(uint64_t spellbook_idx, uint8_t slot_id, const SpellBook
     return 0;
 }
 
-void Player::tick(Vector2 movement, float new_angle, SpellBook& spellbook) {
+void Player::tick(Vector2 movement, float new_angle) {
     int lastIndex = animationIndex;
     if (movement.x == 0 && movement.y == 0) {
         animationIndex = 0;
@@ -113,31 +114,18 @@ void Player::tick(Vector2 movement, float new_angle, SpellBook& spellbook) {
         if (mana > stats.max_mana.get()) mana = stats.max_mana.get();
     }
 
-    for (std::size_t i = 0; i < 10 && i < unlocked_spell_count; i++) {
-        if (equipped_spells[i] == std::numeric_limits<uint64_t>::max()) continue;
-
-        Spell& spell = spellbook[equipped_spells[i]];
-
-        if (spell.current_cooldown == 0) continue;
-        spell.current_cooldown--;
-    }
-
     tick_counter++;
 }
 
-void Player::cast_equipped(uint8_t idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook,
-                           const Enemies& enemies) {
+uint64_t Player::can_cast(uint8_t idx, const SpellBook& spellbook) {
     if (idx >= 10 || idx >= unlocked_spell_count || equipped_spells[idx] == std::numeric_limits<uint64_t>::max())
-        return;
+        return std::numeric_limits<uint64_t>::max();
 
     auto spell_id = equipped_spells[idx];
-    Spell& spell = spellbook[spell_id];
-    if (mana < spell.stats.manacost.get() || spell.current_cooldown > 0) return;
+    const auto& spell = spellbook[spell_id];
+    if (mana < spell.stats.manacost.get() || spell.current_cooldown > 0) return std::numeric_limits<uint64_t>::max();
 
-    if (caster::cast(spell_id, spell, player_position, mouse_pos, enemies)) {
-        mana -= spell.stats.manacost.get();
-        spell.current_cooldown = spell.cooldown;
-    }
+    return spell_id;
 }
 
 void Player::add_power_up(PowerUp&& powerup) {
@@ -199,20 +187,72 @@ void PlayerSave::save() {
     serialize(output);
 }
 
+void PlayerSave::create_default_spell() {
+    if (default_spell) return;
+
+    spellbook.emplace_front(spells::FrostNova{}, Rarity::Uncommon, 1);
+    default_spell = true;
+}
+
+void PlayerSave::remove_default_spell() {
+    if (!default_spell) return;
+
+    spellbook.pop_front();
+    default_spell = false;
+}
+
 uint64_t PlayerSave::add_spell_to_spellbook(Spell&& spell) {
     spellbook.emplace_back(std::move(spell));
 
     return spellbook.size() - 1;
 }
 
-void PlayerSave::serialize(std::ostream& out) const {
-    seria_deser::serialize(spellbook, out);
+void PlayerSave::cast_spell(uint64_t spell_id, const Vector2& player_position, const Vector2& mouse_pos,
+                            Enemies& enemies, uint64_t& mana) {
+    if (spell_id == std::numeric_limits<uint64_t>::max()) return;
+
+    auto& spell = spellbook[spell_id];
+
+    if (caster::cast(spell_id, spell, player_position, mouse_pos, enemies)) {
+        mana -= spell.stats.manacost.get();
+        spell.current_cooldown = spell.cooldown;
+        spells_to_tick.emplace_back(spell_id);
+    }
+}
+
+void PlayerSave::tick_spellbook() {
+    std::size_t i = 0;
+    while (i < spells_to_tick.size()) {
+        auto& spell = spellbook[spells_to_tick[i]];
+        if (spell.current_cooldown == 0) {
+            spells_to_tick[i] = spells_to_tick.back();
+            spells_to_tick.pop_back();
+            continue;
+        }
+
+        spell.current_cooldown--;
+        i++;
+    }
+}
+
+void PlayerSave::serialize(std::ostream& out) {
     seria_deser::serialize(souls, out);
+
+    if (default_spell) {
+        auto spell = std::move(spellbook.front());
+
+        spellbook.pop_front();
+        seria_deser::serialize(spellbook, out);
+        spellbook.emplace_front(std::move(spell));
+    } else {
+        seria_deser::serialize(spellbook, out);
+    }
 }
 
 PlayerSave PlayerSave::deserialize(std::istream& in, version version) {
-    return PlayerSave{
-        .spellbook = seria_deser::deserialize<decltype(std::declval<PlayerSave>().spellbook)>(in, version),
-        .souls = seria_deser::deserialize<uint64_t>(in, version),
-    };
+    PlayerSave ps;
+    ps.souls = seria_deser::deserialize<uint64_t>(in, version);
+    ps.spellbook = seria_deser::deserialize<decltype(std::declval<PlayerSave>().spellbook)>(in, version);
+
+    return ps;
 }

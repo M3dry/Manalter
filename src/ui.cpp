@@ -235,8 +235,8 @@ namespace hud {
                 continue;
             }
 
-            if (auto spell_opt = player.get_equipped_spell(i, spellbook); spell_opt) {
-                const Spell& spell = *spell_opt;
+            if (auto spell_opt = player.get_equipped_spell(i); spell_opt != std::numeric_limits<std::size_t>::max()) {
+                const Spell& spell = spellbook[spell_opt];
 
                 // TODO: rn ignoring the fact that the frame draws over the spell
                 // icon

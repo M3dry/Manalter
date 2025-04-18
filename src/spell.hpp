@@ -2,6 +2,7 @@
 
 #include "effects.hpp"
 #include "raylib.h"
+#include "ringbuffer.hpp"
 #include "seria_deser.hpp"
 #include "stats.hpp"
 #include <array>
@@ -11,7 +12,6 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
-#include <vector>
 
 enum struct Element {
     Fire = 0,
@@ -409,4 +409,4 @@ struct Spell {
     static Spell deserialize(std::istream& in, version version);
 };
 
-using SpellBook = std::vector<Spell>;
+using SpellBook = RingBuffer<Spell>;

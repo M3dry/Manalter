@@ -243,7 +243,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     EndTextureMode();
     EndTextureModeMSAA(loop.assets[assets::Target, false], loop.assets[assets::Target, true]);
 
-    hud::draw(loop.assets, player, loop.player_save->spellbook, loop.screen);
+    hud::draw(loop.assets, player, loop.player_save->get_spellbook(), loop.screen);
 
     // int textureLoc = GetShaderLocation(fxaa_shader, "texture0");
     // SetShaderValueTexture(fxaa_shader, textureLoc, target.texture);
@@ -268,11 +268,11 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
         .y = loop.screen.y - spell_dim,
         .z = spell_dim,
     };
-    spellbar.draw(spellbar_dims, loop.assets, loop.player_save->spellbook,
+    spellbar.draw(spellbar_dims, loop.assets, loop.player_save->get_spellbook(),
                   std::span(player.equipped_spells.get(), player.unlocked_spell_count));
 
     if (spellbook_ui) {
-        if (auto dropped = spellbook_ui->update(assets, loop.player_save->spellbook,
+        if (auto dropped = spellbook_ui->update(assets, loop.player_save->get_spellbook(),
                                                 playing ? loop.mouse : loop.dummy_mouse, std::nullopt);
             dropped) {
             auto [spell, pos] = *dropped;
@@ -280,7 +280,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
             auto slot = spellbar.dragged(pos, spellbar_dims, player.unlocked_spell_count);
             if (slot != -1) {
                 player.equip_spell(static_cast<uint32_t>(spell), static_cast<uint8_t>(slot),
-                                   loop.player_save->spellbook);
+                                   loop.player_save->get_spellbook());
             };
         }
     }
@@ -292,7 +292,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     DrawText(time.c_str(), static_cast<int>(loop.screen.x) - MeasureText(time.c_str(), 20) - 5, 10, 20, BLACK);
 
     DrawText(std::format("SOULS: {}", souls).c_str(), 10, static_cast<int>(loop.screen.y) - 50, 20, BLACK);
-    DrawText(std::format("CLAIMED SOULS: {}", loop.player_save->souls).c_str(), 10,
+    DrawText(std::format("CLAIMED SOULS: {}", loop.player_save->get_souls()).c_str(), 10,
              static_cast<int>(loop.screen.y) - 30, 20, BLACK);
 
     if (soul_portal && soul_portal->time_remaining >= 58.0) {
@@ -349,7 +349,7 @@ void Arena::update(Loop& loop) {
                 if (spellbook_ui)
                     spellbook_ui = std::nullopt;
                 else
-                    spellbook_ui = hud::SpellBookUI(loop.player_save->spellbook, loop.screen);
+                    spellbook_ui = hud::SpellBookUI(loop.player_save->get_spellbook(), loop.screen);
                 return;
 #ifdef DEBUG
             case KEY_P:
@@ -366,14 +366,16 @@ void Arena::update(Loop& loop) {
 
         for (const auto& [k, num] : spell_keys) {
             if (k == key) {
-                player.cast_equipped(num, (Vector2){player.position.x, player.position.z}, mouse_xz,
-                                     loop.player_save->spellbook, enemies);
+                auto spell_id = player.can_cast(num, loop.player_save->get_spellbook());
+                loop.player_save->cast_spell(spell_id, (Vector2){player.position.x, player.position.z}, mouse_xz,
+                                             enemies, player.mana);
                 return;
             }
         }
     });
 
-    player.tick((Vector2){movement.x, movement.y}, angle.x / angle.y, loop.player_save->spellbook);
+    player.tick((Vector2){movement.x, movement.y}, angle.x / angle.y);
+    loop.player_save->tick_spellbook();
     auto damage_done = enemies.tick(player.hitbox, loop.enemy_models);
     souls += enemies.take_souls();
     if (player.health <= damage_done) {
@@ -386,22 +388,24 @@ void Arena::update(Loop& loop) {
     }
 
     if (soul_portal && check_collision(soul_portal->hitbox, xz_component(player.position))) {
-        loop.player_save->souls += souls;
+        loop.player_save->add_souls(souls);
+        loop.player_save->save();
         souls = 0;
     }
 
-    caster::tick(loop.player_save->spellbook, enemies, item_drops.item_drops);
+    caster::tick(loop.player_save->get_spellbook(), enemies, item_drops.item_drops);
 
     item_drops.pickup(player.hitbox, [&](auto&& arg) {
         using Item = std::decay_t<decltype(arg)>;
 
         if constexpr (std::is_same_v<Item, Spell>) {
-            loop.player_save->spellbook.emplace_back(std::move(arg));
+            loop.player_save->add_spell_to_spellbook(std::move(arg));
             loop.player_save->save();
         }
     });
 
     if (player.health == 0) {
+        loop.player_save->remove_default_spell();
         loop.player_save->save();
         loop.scene.emplace<Hub>(loop.keys);
         return;
@@ -453,6 +457,7 @@ void Hub::update(Loop& loop) {
         switch (key) {
             case KEY_SPACE:
                 loop.player_save->save();
+                loop.player_save->create_default_spell();
                 loop.scene.emplace<Arena>(loop.keys, loop.assets);
                 return;
             case KEY_ESCAPE:

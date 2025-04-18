@@ -4,6 +4,7 @@ SET(TESTS
     enemy_spawner.t.cpp
     hitbox.t.cpp
     seria_deser.t.cpp
+    ringbuffer.t.cpp
 )
 
 add_executable(tests ${TESTS})

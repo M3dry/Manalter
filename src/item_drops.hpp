@@ -51,7 +51,7 @@ class ItemDrop {
 struct ItemDrops {
     std::vector<ItemDrop> item_drops;
 
-    template <typename... Args> void add_item_drop(Args... args) {
+    template <typename... Args> void add_item_drop(Args&&... args) {
         item_drops.emplace_back(std::forward<Args>(args)...);
     }
 

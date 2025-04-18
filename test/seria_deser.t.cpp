@@ -68,19 +68,25 @@ struct S {
     }
 };
 
-TEST_CASE("Optional", "[seria_deser]") {
-    std::optional<bool> o = true;
-
-    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
-    seria_deser::serialize(o, ss);
-    auto deserialized_o = seria_deser::deserialize(ss, CURRENT_VERSION, std::type_identity<std::optional<bool>>{});
-
-    REQUIRE(o == deserialized_o);
-}
-
 TEST_CASE("Struct", "[seria_deser]") {
     S s = S{
-
+        .e = E::A,
+        .f = false,
+        .str = "skibidi",
+        .ss = {{
+            S{
+                .e = E::B,
+                .f = true,
+                .str = "bombardiro",
+                .ss = std::nullopt,
+            },
+            S{
+                .e = E::C,
+                .f = false,
+                .str = "crocodilo",
+                .ss = std::nullopt,
+            },
+        }},
     };
 
     std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);

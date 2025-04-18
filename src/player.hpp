@@ -9,7 +9,6 @@
 #include "stats.hpp"
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <memory>
 
 struct Player {
@@ -64,16 +63,14 @@ struct Player {
     static uint32_t exp_to_lvl(uint16_t lvl);
     // returns if the player leveled up
     bool add_exp(uint32_t e);
-    std::optional<std::reference_wrapper<const Spell>> get_equipped_spell(uint8_t idx,
-                                                                          const SpellBook& spellbook) const;
+    uint64_t get_equipped_spell(uint8_t idx) const;
 
     // -2 - slot out of range
     // -1 - spell isn't inside the spellbook
     // 0 - ok
     int equip_spell(uint64_t spellbook_idx, uint8_t slot_id, const SpellBook& spellbook);
-    void tick(Vector2 movement, float angle, SpellBook& spellbook);
-    void cast_equipped(uint8_t idx, const Vector2& player_position, const Vector2& mouse_pos, SpellBook& spellbook,
-                       const Enemies& enemies);
+    void tick(Vector2 movement, float angle);
+    uint64_t can_cast(uint8_t idx, const SpellBook& spellbook);
 
     void add_power_up(PowerUp&& powerup);
 
@@ -82,17 +79,35 @@ struct Player {
     ~Player();
 };
 
-struct PlayerSave {
+class PlayerSave {
+  public:
     inline static const std::filesystem::path save_path = std::filesystem::path("./") / "save.bin";
-
-    SpellBook spellbook = {};
-    uint64_t souls = 0;
 
     void load_save();
     void save();
 
-    uint64_t add_spell_to_spellbook(Spell&& spell);
+    inline const SpellBook& get_spellbook() const {
+        return spellbook;
+    }
+    inline uint64_t get_souls() const {
+        return souls;
+    }
 
-    void serialize(std::ostream& out) const;
+    void create_default_spell();
+    void remove_default_spell();
+    uint64_t add_spell_to_spellbook(Spell&& spell);
+    void cast_spell(uint64_t spell_id, const Vector2& player_position, const Vector2& mouse_pos, Enemies& enemies, uint64_t& mana);
+    void tick_spellbook();
+
+    inline void add_souls(uint64_t s) {
+        souls += s;
+    }
+
+    void serialize(std::ostream& out);
     static PlayerSave deserialize(std::istream& in, version version);
+  private:
+    SpellBook spellbook;
+    std::vector<uint64_t> spells_to_tick;
+    uint64_t souls = 0;
+    bool default_spell = false;
 };

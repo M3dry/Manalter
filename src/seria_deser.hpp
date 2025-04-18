@@ -13,7 +13,7 @@ inline constexpr version CURRENT_VERSION = 1;
 
 namespace seria_deser {
     template <typename T>
-    concept _SeriaDeser = requires(const T& t, std::ostream& out, std::istream& in, version v) {
+    concept _SeriaDeser = requires(T& t, std::ostream& out, std::istream& in, version v) {
         { t.serialize(out) } -> std::same_as<void>;
         { T::deserialize(in, v) } -> std::same_as<T>;
     };

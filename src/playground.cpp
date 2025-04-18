@@ -129,6 +129,8 @@
 #include <sstream>
 #include <print>
 
+#include "ringbuffer.hpp"
+
 int main(void) {
     int x = 10;
 
