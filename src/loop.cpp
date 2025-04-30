@@ -130,7 +130,11 @@ Arena::Paused::Paused(Keys& keys) {
 }
 
 void Arena::Paused::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
-    DrawText("PAUSED", static_cast<int>(loop.screen.x / 2.0f), static_cast<int>(loop.screen.y / 2.0f), 30, WHITE);
+    assets.draw_texture(assets::PauseBackground);
+    DrawText("PAUSED",
+             static_cast<int>(loop.screen.x / 2.0f) -
+                 static_cast<int>(static_cast<float>(MeasureText("PAUSED", 30)) / 2.0f),
+             static_cast<int>(loop.screen.y / 2.0f) - 15, 30, WHITE);
 }
 
 void Arena::Paused::update(Arena& arena, Loop& loop) {
@@ -405,7 +409,6 @@ void Arena::update(Loop& loop) {
     });
 
     if (player.health == 0) {
-        loop.player_save->remove_default_spell();
         loop.player_save->save();
         loop.scene.emplace<Hub>(loop.keys);
         return;

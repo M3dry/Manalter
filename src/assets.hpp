@@ -44,6 +44,8 @@ namespace assets {
         Floor,
         PowerUpBackground,
         SoulPortalArrow,
+        SpellBookBackground,
+        PauseBackground,
         GeneralIdSize,
     };
 
@@ -71,7 +73,7 @@ namespace assets {
         Store(const Store&) = delete;
         ~Store();
 
-        template <ToTexture2D Id> void draw_texture(Id texture_id, std::optional<Rectangle> dest) {
+        template <ToTexture2D Id> void draw_texture(Id texture_id, std::optional<Rectangle> dest = std::nullopt) {
             auto tex = (*this)[texture_id];
             DrawTexturePro(
                 tex, (Rectangle){0.0f, 0.0f, static_cast<float>(tex.width), static_cast<float>(tex.height)},

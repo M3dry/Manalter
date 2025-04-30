@@ -30,8 +30,8 @@ namespace hud {
         : spells(0, std::min(page_size, spellbook.size())) {
         area.width = screen.x * 0.27f;
         area.height = screen.y * 0.9f;
-        area.x = screen.x * 0.01f;
-        area.y = (screen.y - area.height) * 0.5f;
+        area.x = 0;
+        area.y = 0;
 
         spell_dims.x = area.width;
         spell_dims.y = area.height / page_size;
@@ -50,7 +50,8 @@ namespace hud {
     std::optional<std::pair<uint64_t, Vector2>> SpellBookUI::update([[maybe_unused]] assets::Store& assets,
                                                                     const SpellBook& spellbook, Mouse& mouse,
                                                                     [[maybe_unused]] std::optional<Vector2> screen) {
-        DrawRectangleRec(area, WHITE);
+        /*DrawRectangleRec(area, WHITE);*/
+        assets.draw_texture(assets::SpellBookBackground, area);
 
         auto& [first, second] = spells;
         auto spellbook_size = spellbook.size();
