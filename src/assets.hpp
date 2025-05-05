@@ -18,9 +18,6 @@
 // TODO: make this a runtime variable
 #define MSAA 16
 
-#define SpellBookWidth(screen) static_cast<int>(screen.x * 0.25f)
-#define SpellBookHeight(screen) static_cast<int>(screen.y * 0.95f)
-
 RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples);
 void EndTextureModeMSAA(RenderTexture2D target, RenderTexture2D resolveTarget);
 
@@ -46,14 +43,16 @@ namespace assets {
         SoulPortalArrow,
         SpellBookBackground,
         PauseBackground,
+        HubBackground,
+        SpellTileBackground,
+        SpellTileRarityFrame,
+        SpellIconRarityFrame,
         GeneralIdSize,
     };
 
     enum RenderId {
         Target = 0,
         CircleUI,
-        SpellBarUI,
-        SpellBookUI,
         RenderIdSize,
     };
 

@@ -1,5 +1,6 @@
 #include "effects.hpp"
 #include "particle_system.hpp"
+#include <algorithm>
 #include <ranges>
 
 namespace effect {
@@ -44,9 +45,11 @@ namespace effect {
             system.add_updater([y = floor_y, type = type, origin = origin](Particles& particles, float _) {
                 auto end_ix = particles.alive_count;
                 for (std::size_t i = 0; i < end_ix; i++) {
-                    if ((y && particles.pos[i].y < *y) || (type == Im && Vector3Distance(origin, particles.pos[i]) <= 0.1f)) {
+                    if ((y && particles.pos[i].y < *y) ||
+                        (type == Im && Vector3Distance(origin, particles.pos[i]) <= 0.1f)) {
                         particles.kill(i);
-                        end_ix = particles.alive_count < particles.max_size ? particles.alive_count : particles.max_size;
+                        end_ix =
+                            particles.alive_count < particles.max_size ? particles.alive_count : particles.max_size;
                     }
                 }
             });

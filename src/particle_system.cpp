@@ -51,7 +51,8 @@ namespace particle_system::generators::pos {
         }
     }
 
-    OnCircle::OnCircle(Vector3 center, std::pair<float, float> radius) : center(center), radiusDist(radius.first, radius.second) {
+    OnCircle::OnCircle(Vector3 center, std::pair<float, float> radius)
+        : center(center), radiusDist(radius.first, radius.second) {
     }
 
     void OnCircle::gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
@@ -215,7 +216,7 @@ namespace particle_system::updaters {
 }
 
 namespace particle_system::renderers {
-    Point::Point(std::size_t max_size) : max_size(max_size) {
+    Point::Point(std::size_t max_size, Vector3 pos_offset) : pos_offset(pos_offset), max_size(max_size) {
         setup_gl();
     }
 
@@ -246,6 +247,7 @@ namespace particle_system::renderers {
 
         auto mvp = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
         SetShaderValueMatrix(shader, GetShaderLocation(shader, "mvp"), mvp);
+        SetShaderValue(shader, GetShaderLocation(shader, "offset"), &pos_offset, SHADER_UNIFORM_VEC3);
 
         glUniform1i(glGetUniformLocation(shader.id, "circle"), 0);
 

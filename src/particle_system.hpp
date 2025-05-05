@@ -227,6 +227,8 @@ namespace particle_system {
             static constexpr std::size_t size_vertex_size = sizeof(float);
             static constexpr std::size_t col_vertex_size = 4 * sizeof(uint8_t);
 
+            Vector3 pos_offset = Vector3Zero();
+
             Texture2D particle_circle;
 
             std::size_t max_size;
@@ -239,11 +241,11 @@ namespace particle_system {
             unsigned int col_vbo_id = 0;
             Shader shader;
 
-            Point(std::size_t max_size);
+            Point(std::size_t max_size, Vector3 pos_offset = Vector3Zero());
             Point(const Point&) = delete;
             Point& operator=(const Point&) = delete;
             Point(Point&& p) noexcept
-                : particle_circle(p.particle_circle), max_size(p.max_size),
+                : pos_offset(p.pos_offset), particle_circle(p.particle_circle), max_size(p.max_size),
                   pos_vertex_data(std::move(p.pos_vertex_data)), size_vertex_data(std::move(p.size_vertex_data)),
                   col_vertex_data(std::move(p.col_vertex_data)), vao_id(p.vao_id), pos_vbo_id(p.pos_vbo_id),
                   size_vbo_id(p.size_vbo_id), col_vbo_id(p.col_vbo_id), shader(p.shader) {
@@ -256,6 +258,7 @@ namespace particle_system {
             };
             Point& operator=(Point&& p) noexcept {
                 if (this != &p) {
+                    pos_offset = p.pos_offset;
                     particle_circle = p.particle_circle;
                     max_size = p.max_size;
                     pos_vertex_data = std::move(p.pos_vertex_data);

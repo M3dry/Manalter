@@ -4,9 +4,7 @@
 #include "hitbox.hpp"
 #include "raylib.h"
 #include "spell.hpp"
-#include "utility.hpp"
 #include <cstdint>
-#include <format>
 #include <limits>
 
 namespace ui {
@@ -26,23 +24,24 @@ namespace ui {
 }
 
 namespace hud {
-    SpellBookUI::SpellBookUI(const SpellBook& spellbook, const Vector2& screen)
-        : spells(0, std::min(page_size, spellbook.size())) {
+    SpellBookUI::SpellBookUI(Vector2 tile_dims, const SpellBook& spellbook, const Vector2& screen) {
         area.width = screen.x * 0.27f;
         area.height = screen.y * 0.9f;
         area.x = 0;
         area.y = 0;
 
-        spell_dims.x = area.width;
-        spell_dims.y = area.height / page_size;
+        spell_dims.x = area.width * 0.7f;
+        spell_dims.y = spell_dims.x * tile_dims.y / tile_dims.x;
+        page_size = static_cast<std::size_t>((area.height * 0.9f) / spell_dims.y);
+        spells = {0, std::min(page_size, spellbook.size())};
 
         hitboxes.reserve(page_size);
         for (std::size_t i = 0; i < page_size; i++) {
-            hitboxes.emplace_back(ui::Draggable<const SpellBook&, const SpellBookUI&>(
+            hitboxes.emplace_back(ui::Draggable<assets::Store&, const Spell&, const SpellBookUI&>(
                 {area.x, area.y + i * spell_dims.y},
                 (Rectangle){area.x, area.y + i * spell_dims.y, area.width, spell_dims.y},
-                [i](auto origin, const SpellBook& spellbook, const auto& ui) {
-                    return ui.draw_spell(origin, i, spellbook);
+                [](auto origin, auto& assets, const Spell& spell, const auto& ui) {
+                    return ui.draw_spell(assets, origin, spell);
                 }));
         }
     }
@@ -55,48 +54,66 @@ namespace hud {
 
         auto& [first, second] = spells;
         auto spellbook_size = spellbook.size();
-        /*if (mouse.wheel_movement != 0) {*/
-        /*    if (mouse.wheel_movement < 0) {*/
-        /*        if (first <= mouse.wheel_movement)*/
-        /*            first = 0;*/
-        /*        else*/
-        /*            first += mouse.wheel_movement;*/
-        /**/
-        /*        if (second <= mouse.wheel_movement)*/
-        /*            second = 0;*/
-        /*        else*/
-        /*            second += mouse.wheel_movement;*/
-        /*    } else {*/
-        /*        first += mouse.wheel_movement;*/
-        /*        second += mouse.wheel_movement;*/
-        /*    }*/
-        /**/
-        /*    if (first == 0) {*/
-        /*        second = std::min(page_size, spellbook_size);*/
-        /*    } else if (second > spellbook_size) {*/
-        /*        first = spellbook_size <= page_size ? 0 : spellbook.size() - page_size;*/
-        /*        second = spellbook_size;*/
-        /*    }*/
-        /*}*/
+        if (mouse.wheel_movement != 0) {
+            if (mouse.wheel_movement < 0) {
+                first += static_cast<std::size_t>(-mouse.wheel_movement);
+                second += static_cast<std::size_t>(-mouse.wheel_movement);
+
+                if (second > spellbook_size) {
+                    first = spellbook_size - page_size;
+                    second = spellbook_size;
+                }
+            } else if (first >= static_cast<std::size_t>(mouse.wheel_movement)) {
+                first -= static_cast<std::size_t>(mouse.wheel_movement);
+                second -= static_cast<std::size_t>(mouse.wheel_movement);
+            } else {
+                first = 0;
+                second = std::min(page_size, spellbook_size);
+            }
+        }
 
         std::optional<std::pair<uint64_t, Vector2>> ret;
         for (std::size_t spell_id = first; spell_id < second; spell_id++) {
-            if (auto vec = hitboxes[spell_id - first].update(mouse, spellbook, *this); vec) {
+            if (auto vec = hitboxes[spell_id - first].update(mouse, assets, spellbook[spell_id], *this); vec) {
                 assert(!ret && "the impossible happened"); // shouldn't be possible to drag two things at once
                 ret = {spell_id, *vec};
             }
         }
-        DrawText(std::format("[{}, {}); MAX: {}", first, second, spellbook.size()).c_str(), static_cast<int>(area.x),
-                 static_cast<int>(area.y), 20, RED);
 
         return ret;
     }
 
-    void SpellBookUI::draw_spell(Vector2 origin, uint64_t id, [[maybe_unused]] const SpellBook& spellbook) const {
-        DrawRectangle(static_cast<int>(origin.x), static_cast<int>(origin.y), static_cast<int>(spell_dims.x),
-                      static_cast<int>(spell_dims.y), BLACK);
-        DrawText(std::format("ORDER: {}", id).c_str(), static_cast<int>(origin.x + spell_dims.x / 2.0f),
-                 static_cast<int>(origin.y + spell_dims.y / 2.0f), 10, BLACK);
+    void SpellBookUI::draw_spell(assets::Store& assets, Vector2 origin, const Spell& spell) const {
+        auto working_area = Rectangle{
+            .x = origin.x,
+            .y = origin.y,
+            .width = spell_dims.x,
+            .height = spell_dims.y,
+        };
+        DrawRectangleRec(working_area, WHITE);
+
+        working_area.x += 3;
+        working_area.y += 3;
+        working_area.width -= 6;
+        working_area.height -= 6;
+        assets.draw_texture(assets::SpellTileBackground, working_area);
+
+        auto spell_info = spell.get_spell_info();
+        auto spell_icon = assets[spell.get_spell_tag()];
+        assets.draw_texture(spell.get_spell_tag(), Rectangle{
+               .x = working_area.x,
+               .y = working_area.y,
+               .width = working_area.height * 0.7f,
+               .height = working_area.height * 0.7f,
+        });
+        DrawTexturePro(assets[assets::SpellTileRarityFrame],
+                       Rectangle{
+                           .x = 0.0f,
+                           .y = 0.0f,
+                           .width = static_cast<float>(assets[assets::SpellTileRarityFrame].width),
+                           .height = static_cast<float>(assets[assets::SpellTileRarityFrame].height),
+                       },
+                       working_area, Vector2Zero(), 0.0f, rarity::get_rarity_info(spell.rarity).color);
     }
 
     int8_t SpellBar::dragged(Vector2 point, Vector3 dims, uint8_t unlocked_count) {
@@ -140,12 +157,20 @@ namespace hud {
                           static_cast<int>(cooldown_height), {130, 130, 130, 128});
             EndBlendMode();
 
-            assets.draw_texture(spell.rarity, Rectangle{
-                                                  .x = dims.x + i * dims.z,
-                                                  .y = dims.y,
-                                                  .width = dims.z,
-                                                  .height = dims.z,
-                                              });
+            DrawTexturePro(assets[assets::SpellIconRarityFrame],
+                           Rectangle{
+                               .x = 0,
+                               .y = 0,
+                               .width = static_cast<float>(assets[assets::SpellIconRarityFrame].width),
+                               .height = static_cast<float>(assets[assets::SpellIconRarityFrame].height),
+                           },
+                           Rectangle{
+                               .x = dims.x + i * dims.z,
+                               .y = dims.y,
+                               .width = dims.z,
+                               .height = dims.z,
+                           },
+                           Vector2Zero(), 0.0f, rarity::get_rarity_info(spell.rarity).color);
         }
 
         for (std::size_t i = equipped.size(); i < 10; i++) {
@@ -217,123 +242,5 @@ namespace hud {
         DrawLineEx((Vector2){center.x, 0.0f}, (Vector2){center.y, 1022.0f - 6 * padding}, 10.0f, BLACK);
         EndTextureMode();
         EndTextureModeMSAA(assets[assets::CircleUI, false], assets[assets::CircleUI, true]);
-
-        // Spell Bar
-        BeginTextureMode(assets[assets::SpellBarUI, false]);
-        ClearBackground(BLANK);
-
-        DrawRectangle(0, 0, 512, 128, RED);
-
-        const int spell_dim = 128 / 2; // 2x5 spells
-
-        for (int i = 0; i < 10; i++) {
-            int row = i / 5;
-            int col = i - 5 * row;
-
-            if (i >= player.unlocked_spell_count) {
-                assets.draw_texture(assets::LockedSlot, (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
-                                                                    (float)spell_dim, (float)spell_dim});
-                continue;
-            }
-
-            if (auto spell_opt = player.get_equipped_spell(i); spell_opt != std::numeric_limits<std::size_t>::max()) {
-                const Spell& spell = spellbook[spell_opt];
-
-                // TODO: rn ignoring the fact that the frame draws over the spell
-                // icon
-                assets.draw_texture(spell.get_spell_tag(), (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
-                                                                       (float)spell_dim, (float)spell_dim});
-                BeginBlendMode(BLEND_ADDITIVE);
-                float cooldown_height = spell_dim * (float)spell.current_cooldown / spell.cooldown;
-                DrawRectangle(col * spell_dim, spell_dim * row + (spell_dim - cooldown_height), spell_dim,
-                              cooldown_height, {130, 130, 130, 128});
-                EndBlendMode();
-
-                assets.draw_texture(spell.rarity, (Rectangle){(float)col * spell_dim, (float)spell_dim * row,
-                                                              (float)spell_dim, (float)spell_dim});
-            } else {
-                assets.draw_texture(assets::EmptySpellSlot, (Rectangle){(float)col * spell_dim, (float)row * spell_dim,
-                                                                        (float)spell_dim, (float)spell_dim});
-            }
-        }
-
-        // RADAR/MAP???
-        DrawRectangle(spell_dim * 5, 0, 512 - spell_dim * 5, 128, GRAY);
-        EndTextureMode();
-        EndTextureModeMSAA(assets[assets::SpellBarUI, false], assets[assets::SpellBarUI, true]);
-
-        Vector2 spellbook_dims =
-            (Vector2){static_cast<float>(SpellBookWidth(screen)), static_cast<float>(SpellBookHeight(screen))};
-        BeginTextureMode(assets[assets::SpellBookUI, true]);
-        DrawRectangle(0, 0, spellbook_dims.x, spellbook_dims.y, BLACK);
-        spellbook_dims -= 2.0f;
-        DrawRectangle(1, 1, spellbook_dims.x, spellbook_dims.y, WHITE);
-
-        spellbook_dims -= 6.0f;
-        int spell_height = spellbook_dims.x / 5.0f;
-        Rectangle spell_dims;
-        std::size_t total_spells = spellbook.size();
-        std::size_t page_size =
-            std::min(static_cast<std::size_t>(spellbook_dims.y / static_cast<float>(spell_height) - 1.0f),
-                     static_cast<std::size_t>(total_spells));
-        for (std::size_t i = 0; i < page_size; i++) {
-            auto rarity_color = rarity::get_rarity_info(spellbook[i].rarity).color;
-
-            // outer border
-            spell_dims = (Rectangle){4.0f, 4.0f + i * 2.0f + i * spell_height, spellbook_dims.x, (float)spell_height};
-            DrawRectangleRec(spell_dims, rarity_color);
-
-            // usable space for spell info
-            spell_dims.x += 3.0f;
-            spell_dims.y += 3.0f;
-            spell_dims.width -= 6.0f;
-            spell_dims.height -= 6.0f;
-            DrawRectangleRec(spell_dims, WHITE);
-
-            // spell icon
-            assets.draw_texture(spellbook[i].get_spell_tag(),
-                                (Rectangle){spell_dims.x, spell_dims.y, spell_dims.height, spell_dims.height});
-            spell_dims.x += spell_dims.height;
-            spell_dims.width -= spell_dims.height + 3.0f;
-            DrawRectangle(static_cast<int>(spell_dims.x), static_cast<int>(spell_dims.y), 3.0f,
-                          static_cast<int>(spell_dims.height), rarity_color);
-            spell_dims.x += 3.0f;
-
-            // name bar
-            Rectangle name_dims = spell_dims;
-            name_dims.height = std::floor(spell_dims.height / 3);
-
-            // stat bar
-            Rectangle stat_bar = spell_dims;
-            stat_bar.height = spell_dims.height - name_dims.height;
-            stat_bar.y += name_dims.height;
-
-            // element icon
-            Rectangle icon_dims = stat_bar;
-            icon_dims.width = icon_dims.height;
-            stat_bar.x += icon_dims.width;
-            stat_bar.width -= icon_dims.width;
-
-            // exp bar
-            Rectangle exp_dims = stat_bar;
-            exp_dims.height = std::floor(stat_bar.height / 3);
-            stat_bar.height -= exp_dims.height;
-            stat_bar.y += exp_dims.height;
-
-            DrawRectangleRec(icon_dims, YELLOW);
-            DrawRectangleRec(exp_dims, GREEN);
-            DrawRectangleRec(stat_bar, RED);
-
-            auto spell_name = spellbook[i].get_spell_info().name;
-            auto [name_font_size, name_text_dims] =
-                max_font_size(assets[assets::Macondo], 1.0f, (Vector2){name_dims.width, name_dims.height}, spell_name);
-            name_text_dims.x = name_dims.x + name_dims.width / 2.0f - name_text_dims.x / 2.0f;
-            name_text_dims.y = name_dims.y;
-            DrawTextEx(assets[assets::Macondo], spell_name, name_text_dims, static_cast<float>(name_font_size), 1.0f,
-                       rarity_color);
-        }
-        EndTextureMode();
-        // EndTextureModeMSAA(assets[assets::SpellBookUI, false],
-        // assets[assets::SpellBookUI, true]);
     }
 }

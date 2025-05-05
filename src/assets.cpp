@@ -158,12 +158,6 @@ namespace assets {
         index_render_map(Target, false) =
             CreateRenderTextureMSAA(static_cast<int>(screen.x), static_cast<int>(screen.y), MSAA);
         index_render_map(Target, true) = LoadRenderTexture(static_cast<int>(screen.x), static_cast<int>(screen.y));
-
-        UnloadRenderTexture((*this)[SpellBarUI, true]);
-        UnloadRenderTexture((*this)[SpellBarUI, false]);
-        index_render_map(SpellBarUI, false) =
-            CreateRenderTextureMSAA(SpellBookWidth(screen), SpellBookHeight(screen), MSAA);
-        index_render_map(SpellBarUI, true) = LoadRenderTexture(SpellBookWidth(screen), SpellBookHeight(screen));
     }
 
     RenderTexture2D& Store::index_render_map(RenderId id, bool resolved) {
@@ -185,82 +179,91 @@ namespace assets {
     void Store::add_textures() {
         Image img = LoadImage("./assets/spell-icons/empty-slot.png");
         texture_map[EmptySpellSlot] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[EmptySpellSlot], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/spell-icons/locked-slot.png");
         texture_map[LockedSlot] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[LockedSlot], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/splash-screen.png");
         texture_map[SplashScreen] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[SplashScreen], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/main-menu.png");
         texture_map[MainMenu] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[MainMenu], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/play-button.png");
         texture_map[PlayButton] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[PlayButton], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/play-button-hover.png");
         texture_map[PlayButtonHover] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[PlayButtonHover], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/exit-button.png");
         texture_map[ExitButton] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[ExitButton], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/exit-button-hover.png");
         texture_map[ExitButtonHover] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[ExitButtonHover], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/floor.png");
         texture_map[Floor] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[Floor], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/powerup-background.png");
         texture_map[PowerUpBackground] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[PowerUpBackground], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/arrow.png");
         texture_map[SoulPortalArrow] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[SoulPortalArrow], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/spellbook-background.png");
         texture_map[SpellBookBackground] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[SpellBookBackground], TEXTURE_FILTER_BILINEAR);
         UnloadImage(img);
 
         img = LoadImage("./assets/pause-background.png");
         texture_map[PauseBackground] = LoadTextureFromImage(img);
-        SetTextureFilter(texture_map[PauseBackground], TEXTURE_FILTER_BILINEAR);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/hub-background.png");
+        texture_map[HubBackground] = LoadTextureFromImage(img);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/spell-tile-background.png");
+        texture_map[SpellTileBackground] = LoadTextureFromImage(img);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/spell-tile-rarity.png");
+        texture_map[SpellTileRarityFrame] = LoadTextureFromImage(img);
+        UnloadImage(img);
+
+        img = LoadImage("./assets/spellicon-rarity.png");
+        texture_map[SpellIconRarityFrame] = LoadTextureFromImage(img);
         UnloadImage(img);
 
         for (std::size_t tag_i = 0; tag_i < static_cast<int>(spells::Tag::Size); tag_i++) {
             img = LoadImage((std::string(spell::icon_path) + "/" + spells::infos[tag_i].icon).c_str());
             texture_map[tag_i + GeneralIdSize] = LoadTextureFromImage(img);
-            SetTextureFilter(texture_map[tag_i + GeneralIdSize], TEXTURE_FILTER_BILINEAR);
             UnloadImage(img);
         }
 
         for (std::size_t rarity_i = 0; rarity_i < static_cast<int>(Rarity::Size); rarity_i++) {
             img = LoadImage((std::string(rarity::frame_path) + "/" + rarity::info[rarity_i].frame).c_str());
             texture_map[rarity_i + static_cast<int>(spells::Tag::Size) + GeneralIdSize] = LoadTextureFromImage(img);
-            SetTextureFilter(texture_map[rarity_i + static_cast<int>(spells::Tag::Size) + GeneralIdSize],
-                             TEXTURE_FILTER_BILINEAR);
             UnloadImage(img);
+        }
+
+        for (auto& t : texture_map) {
+            GenTextureMipmaps(&t);
+            SetTextureFilter(t, TEXTURE_FILTER_TRILINEAR);
+
+            glBindTexture(GL_TEXTURE_2D, t.id);
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, -1.5f);
+            glBindTexture(GL_TEXTURE_2D, 0);
         }
     }
 
@@ -270,12 +273,6 @@ namespace assets {
         index_render_map(Target, true) = LoadRenderTexture(static_cast<int>(screen.x), static_cast<int>(screen.y));
         index_render_map(CircleUI, false) = CreateRenderTextureMSAA(1023, 1023, MSAA); // odd, to have a center pixel
         index_render_map(CircleUI, true) = LoadRenderTexture(1023, 1023);
-        index_render_map(SpellBarUI, false) = CreateRenderTextureMSAA(512, 128, MSAA);
-        index_render_map(SpellBarUI, true) = LoadRenderTexture(512, 128);
-
-        index_render_map(SpellBookUI, false) =
-            CreateRenderTextureMSAA(SpellBookWidth(screen), SpellBookHeight(screen), MSAA);
-        index_render_map(SpellBookUI, true) = LoadRenderTexture(SpellBookWidth(screen), SpellBookHeight(screen));
     }
 
     void Store::add_fonts() {

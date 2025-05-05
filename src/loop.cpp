@@ -130,7 +130,12 @@ Arena::Paused::Paused(Keys& keys) {
 }
 
 void Arena::Paused::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
-    assets.draw_texture(assets::PauseBackground);
+    assets.draw_texture(assets::PauseBackground, Rectangle{
+                                                     .x = 0.0f,
+                                                     .y = 0.0f,
+                                                     .width = loop.screen.x,
+                                                     .height = loop.screen.y,
+                                                 });
     DrawText("PAUSED",
              static_cast<int>(loop.screen.x / 2.0f) -
                  static_cast<int>(static_cast<float>(MeasureText("PAUSED", 30)) / 2.0f),
@@ -353,7 +358,10 @@ void Arena::update(Loop& loop) {
                 if (spellbook_ui)
                     spellbook_ui = std::nullopt;
                 else
-                    spellbook_ui = hud::SpellBookUI(loop.player_save->get_spellbook(), loop.screen);
+                    spellbook_ui =
+                        hud::SpellBookUI({static_cast<float>(loop.assets[assets::SpellTileBackground].width),
+                                          static_cast<float>(loop.assets[assets::SpellTileBackground].height)},
+                                         loop.player_save->get_spellbook(), loop.screen);
                 return;
 #ifdef DEBUG
             case KEY_P:
@@ -450,7 +458,12 @@ Hub::Hub(Keys& keys) {
 void Hub::draw([[maybe_unused]] assets::Store& assets, [[maybe_unused]] Loop& loop) {
     BeginDrawing();
 
-    ClearBackground(BLUE);
+    assets.draw_texture(assets::HubBackground, Rectangle{
+                                                   .x = 0.0f,
+                                                   .y = 0.0f,
+                                                   .width = loop.screen.x,
+                                                   .height = loop.screen.y,
+                                               });
 
     EndDrawing();
 }

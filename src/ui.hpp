@@ -55,21 +55,21 @@ namespace ui {
 
 namespace hud {
     struct SpellBookUI {
-        static constexpr std::size_t page_size = 12;
+        std::size_t page_size = 12;
 
-        std::vector<ui::Draggable<const SpellBook&, const SpellBookUI&>> hitboxes;
+        std::vector<ui::Draggable<assets::Store&, const Spell&, const SpellBookUI&>> hitboxes;
         // [first, second)
         std::pair<uint64_t, uint64_t> spells;
 
         Rectangle area;
         Vector2 spell_dims;
 
-        SpellBookUI(const SpellBook& spellbook, const Vector2& screen);
+        SpellBookUI(Vector2 tile_dims, const SpellBook& spellbook, const Vector2& screen);
 
         // returns the coords of where the spell was dropped
         std::optional<std::pair<uint64_t, Vector2>> update(assets::Store& assets, const SpellBook& spellbook, Mouse& mouse, std::optional<Vector2> screen);
 
-        void draw_spell(Vector2 origin, uint64_t id, const SpellBook& spellbook) const;
+        void draw_spell(assets::Store& assets, Vector2 origin, const Spell& spell) const;
     };
 
     void draw(assets::Store& assets, const Player& player, const SpellBook& spellbook, const Vector2& screen);
