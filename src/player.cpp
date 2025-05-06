@@ -250,10 +250,39 @@ void PlayerSave::serialize(std::ostream& out) {
     }
 }
 
+struct PlayerSaveV1 {
+    uint64_t souls;
+    SpellBook spellbook;
+
+    static PlayerSaveV1 deserialize(std::istream& in, version version) {
+        assert(version == 1);
+
+        return PlayerSaveV1{
+            .souls = seria_deser::deserialize<uint64_t>(in, version),
+            .spellbook = seria_deser::deserialize<SpellBook>(in, version),
+        };
+    }
+};
+
 PlayerSave PlayerSave::deserialize(std::istream& in, version version) {
     PlayerSave ps;
-    ps.souls = seria_deser::deserialize<uint64_t>(in, version);
-    ps.spellbook = seria_deser::deserialize<decltype(std::declval<PlayerSave>().spellbook)>(in, version);
 
-    return ps;
+    switch (version) {
+        case 1: {
+            auto ps1 = PlayerSaveV1::deserialize(in, version);
+
+            ps.souls = ps1.souls;
+            ps.spellbook = std::move(ps1.spellbook);
+            return ps;
+        }
+        case 2: {
+            ps.souls = seria_deser::deserialize<uint64_t>(in, version);
+            ps.spellbook = seria_deser::deserialize<SpellBook>(in, version);
+            ps.stash_book = seria_deser::deserialize<SpellBook>(in, version);
+
+            return ps;
+        }
+        default:
+            assert(false && "Can't handle this version");
+    }
 }

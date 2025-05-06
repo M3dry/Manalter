@@ -28,7 +28,8 @@ struct Enemies {
     bool spawn(const EnemyModels& enemy_models, const Vector2& player_pos);
 
     template <Shape S>
-    void deal_damage(S shape, uint64_t damage, Element element, std::vector<ItemDrop>& item_drop_pusher) {
+    uint32_t deal_damage(S shape, uint64_t damage, Element element, std::vector<ItemDrop>& item_drop_pusher) {
+        uint32_t spell_exp = 0;
         enemies.search_by(
             [&shape](const quadtree::Box& bbox) -> bool {
                 shapes::Polygon rec = static_cast<Rectangle>(bbox);
@@ -74,9 +75,12 @@ struct Enemies {
 
                 killed++;
                 stored_exp += exp;
+                spell_exp += exp;
                 stored_souls += souls;
                 enemies.remove(ix);
             });
+
+        return spell_exp;
     }
 
     uint32_t tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models);

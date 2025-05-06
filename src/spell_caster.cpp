@@ -58,8 +58,9 @@ namespace caster {
                 till_stopped--;
             }
 
-            enemies.deal_damage(hitbox, spellbook[spell_id].stats.damage.get(),
-                                spellbook[spell_id].get_spell_info().element, item_drops);
+            auto spell_exp = enemies.deal_damage(hitbox, spellbook[spell_id].stats.damage.get(),
+                                                 spellbook[spell_id].get_spell_info().element, item_drops);
+            spellbook[spell_id].add_exp(spell_exp);
 
             if (till_stopped <= 0)
                 return till_removal-- == 0;
@@ -95,8 +96,9 @@ namespace caster {
                 until_max--;
             }
 
-            enemies.deal_damage(hitbox, spellbook[spell_id].stats.damage.get(),
+            auto spell_exp = enemies.deal_damage(hitbox, spellbook[spell_id].stats.damage.get(),
                                 spellbook[spell_id].get_spell_info().element, item_drops);
+            spellbook[spell_id].add_exp(spell_exp);
 
             if (until_max == 0) return wait-- == 0;
             return false;

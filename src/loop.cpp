@@ -281,8 +281,10 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
                   std::span(player.equipped_spells.get(), player.unlocked_spell_count));
 
     if (spellbook_ui) {
-        if (auto dropped = spellbook_ui->update(assets, loop.player_save->get_spellbook(),
-                                                playing ? loop.mouse : loop.dummy_mouse, std::nullopt);
+        if (auto dropped =
+                spellbook_ui->update(assets, std::span(player.equipped_spells.get(), player.unlocked_spell_count),
+                                     loop.player_save->get_spellbook(), playing ? loop.mouse : loop.dummy_mouse,
+                                     loop.screen_updated ? std::make_optional(loop.screen) : std::nullopt);
             dropped) {
             auto [spell, pos] = *dropped;
 

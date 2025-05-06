@@ -89,8 +89,8 @@ template <typename T> class RingBuffer {
             return iter1.normalized_ix - iter2.normalized_ix;
         }
 
-        value_type& operator[](const difference_type& i) const {
-            return (*rb)[normalized_ix + i];
+        decltype(auto) operator[](const difference_type& i) const {
+            return (*rb)[static_cast<std::size_t>(normalized_ix + i)];
         }
 
         friend std::strong_ordering operator<=>(const Iter& lhs, const Iter& rhs) {
@@ -110,6 +110,39 @@ template <typename T> class RingBuffer {
 
     RingBuffer(std::size_t capacity) : capacity(capacity), raw_buffer() {
         raw_buffer.reset(static_cast<std::byte*>(::operator new(capacity * sizeof(T), std::align_val_t{alignof(T)})));
+    }
+
+    RingBuffer(RingBuffer&& rb)
+        : start_ix(rb.start_ix), end_ix(rb.end_ix), capacity(rb.capacity), raw_buffer(std::move(rb.raw_buffer)) {
+    }
+    RingBuffer& operator=(RingBuffer&& rb) {
+        if (this != &rb) {
+            start_ix = rb.start_ix;
+            end_ix = rb.end_ix;
+            capacity = rb.capacity;
+            raw_buffer = std::move(rb.raw_buffer);
+
+            rb.start_ix = 0;
+            rb.end_ix = std::nullopt;
+            rb.capacity = 0;
+        }
+
+        return *this;
+    }
+
+    ~RingBuffer() {
+        if (!raw_buffer) return;
+
+        clear();
+        raw_buffer.reset();
+    }
+
+    operator RingBuffer<const T>&() const {
+        return *reinterpret_cast<const RingBuffer<const T>*>(this);
+    }
+
+    operator const RingBuffer<const T>&() const {
+        return *reinterpret_cast<const RingBuffer<const T>*>(this);
     }
 
     inline bool empty() const {
@@ -137,27 +170,15 @@ template <typename T> class RingBuffer {
         }
     }
 
-    T& operator[](std::size_t normalized_ix) {
+    T& operator[](std::size_t normalized_ix) const {
         return buffer()[from_normalized(normalized_ix)];
     }
 
-    const T& operator[](std::size_t normalized_ix) const {
-        return buffer()[from_normalized(normalized_ix)];
-    }
-
-    T& front() {
+    T& front() const {
         return buffer()[start_ix];
     }
 
-    const T& front() const {
-        return buffer()[start_ix];
-    }
-
-    T& back() {
-        return buffer()[*end_ix];
-    }
-
-    const T& back() const {
+    T& back() const {
         return buffer()[*end_ix];
     }
 
@@ -279,11 +300,18 @@ template <typename T> class RingBuffer {
     std::size_t capacity = 0;
     std::unique_ptr<std::byte[], Deleter> raw_buffer;
 
-    inline T* buffer() {
+    template <typename U = T>
+    inline typename std::enable_if<!std::is_const_v<U>, T*>::type buffer() {
         return reinterpret_cast<T*>(raw_buffer.get());
     }
 
-    inline const T* buffer() const {
+    template <typename U = T>
+    inline typename std::enable_if<!std::is_const_v<U>, T* const>::type buffer() const {
+        return reinterpret_cast<T*>(raw_buffer.get());
+    }
+
+    template <typename U = T>
+    inline typename std::enable_if<std::is_const_v<U>, T const* const>::type buffer() const {
         return reinterpret_cast<T*>(raw_buffer.get());
     }
 

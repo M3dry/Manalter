@@ -24,7 +24,8 @@ namespace ui {
 }
 
 namespace hud {
-    SpellBookUI::SpellBookUI(Vector2 tile_dims, const SpellBook& spellbook, const Vector2& screen) {
+    SpellBookUI::SpellBookUI(Vector2 tile_dims, const SpellBook& spellbook, const Vector2& screen)
+        : tile_dims(tile_dims) {
         area.width = screen.x * 0.27f;
         area.height = screen.y * 0.9f;
         area.x = 0;
@@ -39,19 +40,40 @@ namespace hud {
 
         hitboxes.reserve(page_size);
         for (std::size_t i = 0; i < page_size; i++) {
-            hitboxes.emplace_back(ui::Draggable<assets::Store&, const Spell&, bool, const SpellBookUI&>(
-                {area.x + padding_x, area.y + (i + 1) * padding_y + i * spell_dims.y},
-                (Rectangle){area.x + padding_x, area.y + (i + 1) * padding_y + i * spell_dims.y, spell_dims.x, spell_dims.y},
-                [](auto origin, auto& assets, const Spell& spell, bool hover, const auto& ui) {
-                    return ui.draw_spell(assets, origin, spell, hover);
-                }));
+            hitboxes.emplace_back(
+                Vector2{
+                    area.x + padding_x,
+                    area.y + (i + 1) * padding_y + i * spell_dims.y,
+                },
+                Rectangle{
+                    area.x + padding_x,
+                    area.y + (i + 1) * padding_y + i * spell_dims.y,
+                    spell_dims.x,
+                    spell_dims.y,
+                },
+                [](auto origin, auto& assets, const Spell& spell, TileState tile_state, const auto& ui) {
+                    return ui.draw_spell(assets, origin, spell, tile_state);
+                });
         }
     }
 
-    std::optional<std::pair<uint64_t, Vector2>> SpellBookUI::update([[maybe_unused]] assets::Store& assets,
+    std::optional<std::pair<uint64_t, Vector2>> SpellBookUI::update(assets::Store& assets,
+                                                                    std::span<uint64_t> equipped_ids,
                                                                     const SpellBook& spellbook, Mouse& mouse,
-                                                                    [[maybe_unused]] std::optional<Vector2> screen) {
-        /*DrawRectangleRec(area, WHITE);*/
+                                                                    std::optional<Vector2> screen) {
+        if (screen) {
+            auto [first, second] = spells;
+            *this = SpellBookUI(tile_dims, spellbook, *screen);
+
+            spells.first = first;
+            spells.second = first + page_size;
+
+            if (spells.second > spellbook.size()) {
+                spells.second = spellbook.size();
+                spells.first = spells.second - page_size;
+            }
+        }
+
         assets.draw_texture(assets::SpellBookBackground, area);
 
         auto& [first, second] = spells;
@@ -77,7 +99,21 @@ namespace hud {
         std::optional<std::pair<uint64_t, Vector2>> ret;
         for (std::size_t spell_id = first; spell_id < second; spell_id++) {
             auto hover = check_collision(hitboxes[spell_id - first].hitbox, mouse.mouse_pos);
-            if (auto vec = hitboxes[spell_id - first].update(mouse, assets, spellbook[spell_id], hover, *this); vec) {
+            auto equipped = false;
+            if (!hover) {
+                for (const auto& id : equipped_ids) {
+                    if (id == spell_id) {
+                        equipped = true;
+                        break;
+                    }
+                }
+            }
+            if (auto vec = hitboxes[spell_id - first].update(mouse, assets, spellbook[spell_id],
+                                                             hover      ? Hover
+                                                             : equipped ? Equipped
+                                                                        : Normal,
+                                                             *this);
+                vec) {
                 assert(!ret && "the impossible happened"); // shouldn't be possible to drag two things at once
                 ret = {spell_id, *vec};
             }
@@ -86,14 +122,15 @@ namespace hud {
         return ret;
     }
 
-    void SpellBookUI::draw_spell(assets::Store& assets, Vector2 origin, const Spell& spell, bool hover) const {
+    void SpellBookUI::draw_spell(assets::Store& assets, Vector2 origin, const Spell& spell,
+                                 TileState tile_state) const {
         auto working_area = Rectangle{
             .x = origin.x,
             .y = origin.y,
             .width = spell_dims.x,
             .height = spell_dims.y,
         };
-        DrawRectangleRec(working_area, hover ? YELLOW : WHITE);
+        DrawRectangleRec(working_area, color_from_tile_state(tile_state));
 
         working_area.x += 3;
         working_area.y += 3;
@@ -104,11 +141,11 @@ namespace hud {
         auto spell_info = spell.get_spell_info();
         auto spell_icon = assets[spell.get_spell_tag()];
         assets.draw_texture(spell.get_spell_tag(), Rectangle{
-               .x = working_area.x,
-               .y = working_area.y,
-               .width = working_area.height * 0.7f,
-               .height = working_area.height * 0.7f,
-        });
+                                                       .x = working_area.x,
+                                                       .y = working_area.y,
+                                                       .width = working_area.height * 0.7f,
+                                                       .height = working_area.height * 0.7f,
+                                                   });
         DrawTexturePro(assets[assets::SpellTileRarityFrame],
                        Rectangle{
                            .x = 0.0f,
@@ -117,6 +154,17 @@ namespace hud {
                            .height = static_cast<float>(assets[assets::SpellTileRarityFrame].height),
                        },
                        working_area, Vector2Zero(), 0.0f, rarity::get_rarity_info(spell.rarity).color);
+    }
+
+    Color SpellBookUI::color_from_tile_state(const TileState& tile_state) {
+        switch (tile_state) {
+            case Normal:
+                return GRAY;
+            case Equipped:
+                return PURPLE;
+            case Hover:
+                return RED;
+        }
     }
 
     int8_t SpellBar::dragged(Vector2 point, Vector3 dims, uint8_t unlocked_count) {

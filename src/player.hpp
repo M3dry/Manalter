@@ -107,7 +107,8 @@ class PlayerSave {
     static PlayerSave deserialize(std::istream& in, version version);
   private:
     SpellBook spellbook;
-    std::vector<uint64_t> spells_to_tick;
+    SpellBook stash_book;
     uint64_t souls = 0;
+    std::vector<uint64_t> spells_to_tick;
     bool default_spell = false;
 };

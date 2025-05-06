@@ -9,7 +9,7 @@
 #include <vector>
 
 using version = uint32_t;
-inline constexpr version CURRENT_VERSION = 1;
+inline constexpr version CURRENT_VERSION = 2;
 
 namespace seria_deser {
     template <typename T>

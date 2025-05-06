@@ -34,6 +34,10 @@ SpellStats SpellStats::deserialize(std::istream& in, version version) {
     return stats;
 }
 
+void Spell::add_exp(uint32_t e) {
+    e += e;
+}
+
 Spell Spell::random(uint32_t max_level) {
     std::uniform_int_distribution<uint32_t> levelDist(0, max_level);
 

@@ -403,6 +403,8 @@ struct Spell {
             spell);
     }
 
+    void add_exp(uint32_t e);
+
     static Spell random(uint32_t max_level);
 
     void serialize(std::ostream& out) const;

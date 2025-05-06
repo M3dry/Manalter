@@ -388,18 +388,16 @@ namespace quadtree {
         }
 
         std::size_t prune(node_ix ix) {
-            auto& node = nodes[ix].val;
             auto node_id = nodes[ix].id;
 
             {
                 std::size_t i = 0;
-                while (i < node.data_ixs_ided.size()) {
-                    auto& [data_ix, data_id] = node.data_ixs_ided[i];
+                while (i < nodes[ix].val.data_ixs_ided.size()) {
+                    auto& [data_ix, data_id] = nodes[ix].val.data_ixs_ided[i];
                     if (!lookup(data, data_ix, data_id)) {
 
-                        node.data_ixs_ided[i].~pair();
-                        new (&node.data_ixs_ided[i]) std::pair(std::move(node.data_ixs_ided.back()));
-                        node.data_ixs_ided.pop_back();
+                        new (&nodes[ix].val.data_ixs_ided[i]) std::pair(std::move(nodes[ix].val.data_ixs_ided.back()));
+                        nodes[ix].val.data_ixs_ided.pop_back();
                         continue;
                     }
 
@@ -407,14 +405,14 @@ namespace quadtree {
                 }
             }
 
-            auto size = node.data_ixs_ided.size();
-            if (!node.subdivided) return size;
+            auto size = nodes[ix].val.data_ixs_ided.size();
+            if (!nodes[ix].val.subdivided) return size;
 
             bool all_leaf = true;
             std::size_t children_size = 0;
             for (int i = 0; i < 2; i++) {
                 for (int j = 0; j < 2; j++) {
-                    auto& [child_ix, child_id] = node[i, j];
+                    auto& [child_ix, child_id] = nodes[ix].val[i, j];
                     if (!lookup(nodes, child_ix, child_id)) {
                         assert(false && "Michael this is so not right");
                     }
@@ -429,7 +427,7 @@ namespace quadtree {
                 return total_size;
             }
 
-            node.data_ixs_ided.reserve(total_size);
+            nodes[ix].val.data_ixs_ided.reserve(total_size);
             for (int i = 0; i < 2; i++) {
                 for (int j = 0; j < 2; j++) {
                     auto& [child_ix, child_id] = nodes[ix].val[i, j];
