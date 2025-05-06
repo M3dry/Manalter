@@ -29,6 +29,8 @@ namespace hud {
         area.height = screen.y * 0.9f;
         area.x = 0;
         area.y = 0;
+        const auto padding_x = area.width * 0.04f;
+        const auto padding_y = area.width * 0.02f;
 
         spell_dims.x = area.width * 0.7f;
         spell_dims.y = spell_dims.x * tile_dims.y / tile_dims.x;
@@ -37,11 +39,11 @@ namespace hud {
 
         hitboxes.reserve(page_size);
         for (std::size_t i = 0; i < page_size; i++) {
-            hitboxes.emplace_back(ui::Draggable<assets::Store&, const Spell&, const SpellBookUI&>(
-                {area.x, area.y + i * spell_dims.y},
-                (Rectangle){area.x, area.y + i * spell_dims.y, area.width, spell_dims.y},
-                [](auto origin, auto& assets, const Spell& spell, const auto& ui) {
-                    return ui.draw_spell(assets, origin, spell);
+            hitboxes.emplace_back(ui::Draggable<assets::Store&, const Spell&, bool, const SpellBookUI&>(
+                {area.x + padding_x, area.y + (i + 1) * padding_y + i * spell_dims.y},
+                (Rectangle){area.x + padding_x, area.y + (i + 1) * padding_y + i * spell_dims.y, spell_dims.x, spell_dims.y},
+                [](auto origin, auto& assets, const Spell& spell, bool hover, const auto& ui) {
+                    return ui.draw_spell(assets, origin, spell, hover);
                 }));
         }
     }
@@ -74,7 +76,8 @@ namespace hud {
 
         std::optional<std::pair<uint64_t, Vector2>> ret;
         for (std::size_t spell_id = first; spell_id < second; spell_id++) {
-            if (auto vec = hitboxes[spell_id - first].update(mouse, assets, spellbook[spell_id], *this); vec) {
+            auto hover = check_collision(hitboxes[spell_id - first].hitbox, mouse.mouse_pos);
+            if (auto vec = hitboxes[spell_id - first].update(mouse, assets, spellbook[spell_id], hover, *this); vec) {
                 assert(!ret && "the impossible happened"); // shouldn't be possible to drag two things at once
                 ret = {spell_id, *vec};
             }
@@ -83,14 +86,14 @@ namespace hud {
         return ret;
     }
 
-    void SpellBookUI::draw_spell(assets::Store& assets, Vector2 origin, const Spell& spell) const {
+    void SpellBookUI::draw_spell(assets::Store& assets, Vector2 origin, const Spell& spell, bool hover) const {
         auto working_area = Rectangle{
             .x = origin.x,
             .y = origin.y,
             .width = spell_dims.x,
             .height = spell_dims.y,
         };
-        DrawRectangleRec(working_area, WHITE);
+        DrawRectangleRec(working_area, hover ? YELLOW : WHITE);
 
         working_area.x += 3;
         working_area.y += 3;

@@ -1,5 +1,6 @@
 #include "player.hpp"
 #include "seria_deser.hpp"
+#include "spell.hpp"
 #include "spell_caster.hpp"
 #include "utility.hpp"
 #include <cstdint>
@@ -190,7 +191,7 @@ void PlayerSave::save() {
 void PlayerSave::create_default_spell() {
     if (default_spell) return;
 
-    spellbook.emplace_front(spells::FrostNova{}, Rarity::Uncommon, 1);
+    spellbook.emplace_front(spells::FrostNova{}, Rarity::Common, 1);
     default_spell = true;
 }
 
