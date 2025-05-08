@@ -1,4 +1,5 @@
 #include "spell.hpp"
+#include "assets.hpp"
 #include "seria_deser.hpp"
 #include "utility.hpp"
 #include <random>
@@ -36,6 +37,25 @@ SpellStats SpellStats::deserialize(std::istream& in, version version) {
 
 void Spell::add_exp(uint32_t e) {
     e += e;
+}
+
+void Spell::draw(Rectangle working_area, assets::Store& assets) {
+    assets.draw_texture(assets::SpellTileBackground, working_area);
+    assets.draw_texture(get_spell_tag(), Rectangle{
+                                             .x = working_area.x,
+                                             .y = working_area.y,
+                                             .width = working_area.height * 0.7f,
+                                             .height = working_area.height * 0.7f,
+                                         });
+
+    DrawTexturePro(assets[assets::SpellTileRarityFrame],
+                   Rectangle{
+                       .x = 0.0f,
+                       .y = 0.0f,
+                       .width = static_cast<float>(assets[assets::SpellTileRarityFrame].width),
+                       .height = static_cast<float>(assets[assets::SpellTileRarityFrame].height),
+                   },
+                   working_area, Vector2Zero(), 0.0f, rarity::get_rarity_info(rarity).color);
 }
 
 Spell Spell::random(uint32_t max_level) {

@@ -248,6 +248,8 @@ void PlayerSave::serialize(std::ostream& out) {
     } else {
         seria_deser::serialize(spellbook, out);
     }
+
+    seria_deser::serialize(stash_book, out);
 }
 
 struct PlayerSaveV1 {

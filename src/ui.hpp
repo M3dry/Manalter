@@ -1,12 +1,13 @@
 #pragma once
 
+#include "assets.hpp"
 #include "hitbox.hpp"
 #include "input.hpp"
-#include "raylib.h"
-#include "assets.hpp"
 #include "player.hpp"
+#include "raylib.h"
 #include "spell.hpp"
 
+#include <cstdint>
 #include <vector>
 
 namespace ui {
@@ -25,8 +26,7 @@ namespace ui {
         bool update(Mouse& mouse);
     };
 
-    template <typename... Opts>
-    struct Draggable {
+    template <typename... Opts> struct Draggable {
         std::function<void(Vector2, Opts...)> draw;
         // default origin
         Vector2 origin;
@@ -34,53 +34,124 @@ namespace ui {
         // doesn't move, only initiates the dragging
         shapes::Polygon hitbox;
 
-        Draggable(Vector2 origin, shapes::Polygon&& poly, std::function<void(Vector2, Opts...)> draw) : draw(draw), origin(origin), hitbox(std::move(poly)) {
+        Draggable(Vector2 origin, shapes::Polygon&& poly, std::function<void(Vector2, Opts...)> draw)
+            : draw(draw), origin(origin), hitbox(std::move(poly)) {
         }
 
         // returns a mouse position at which the component was dropped
         // doesn't call draw if it returns a Vector2
-        std::optional<Vector2> update(Mouse& mouse, Opts... opts) {
-            if (!mouse.button_press || mouse.button_press->button != Mouse::Button::Left || !check_collision(hitbox, mouse.button_press->pressed_at)) {
-                draw(origin, opts...);
+        template <typename... Args> std::optional<Vector2> update(Mouse& mouse, Args&&... args) {
+            if (!mouse.button_press || mouse.button_press->button != Mouse::Button::Left ||
+                !check_collision(hitbox, mouse.button_press->pressed_at)) {
+                draw(origin, std::forward<Args>(args)...);
                 return std::nullopt;
             }
 
             if (mouse.button_press->released_at) return *mouse.button_press->released_at;
 
-            draw(origin + (mouse.mouse_pos - mouse.button_press->pressed_at), opts...);
+            draw(origin + (mouse.mouse_pos - mouse.button_press->pressed_at), std::forward<Args>(args)...);
             return std::nullopt;
+        }
+    };
+
+    template <typename... Opts> struct InventoryPane {
+        enum State {
+            Normal,
+            Hover,
+        };
+
+        Vector2 origin;
+        float height;
+        // x - initial x padding
+        // y - initial y padding
+        // z - y padding between items
+        Vector3 padding;
+        Vector2 item_dims;
+
+        uint64_t page_size;
+        std::vector<ui::Draggable<const InventoryPane&, uint64_t, State, Opts...>> item_hitboxes;
+        std::pair<uint64_t, uint64_t> item_view;
+        std::function<void(Vector2, State, uint64_t, Opts...)> draw_item;
+
+        InventoryPane(Vector2 origin, float height, Vector3 padding, Vector2 item_dims,
+                      std::function<void(Vector2, State, uint64_t, Opts...)> draw_item, std::size_t items_size)
+            : origin(origin), height(height), padding(padding), item_dims(item_dims), draw_item(draw_item) {
+            page_size = static_cast<uint64_t>((height - padding.y) / item_dims.y);
+            item_view = {0, std::min(page_size, items_size)};
+
+            item_hitboxes.reserve(page_size);
+            for (std::size_t i = 0; i < page_size; i++) {
+                item_hitboxes.emplace_back(
+                    Vector2{
+                        .x = origin.x + padding.x,
+                        .y = origin.y + padding.y + i * padding.z + i * item_dims.y,
+                    },
+                    Rectangle{
+                        .x = origin.x + padding.x,
+                        .y = origin.y + padding.y + i * padding.z + i * item_dims.y,
+                        .width = item_dims.x,
+                        .height = item_dims.y,
+                    },
+                    []<typename... Args>(Vector2 origin, const auto& self, uint64_t item, State state, Args&&... args) {
+                        self.draw_item(origin, state, item, std::forward<Args>(args)...);
+                    });
+            }
+        }
+
+        template <typename... Args>
+        std::optional<std::pair<uint64_t, Vector2>> update(Mouse& mouse, std::size_t items_size,
+                                                           std::optional<Vector2> screen, Args&&... args) {
+            if (screen) {
+                auto [first, second] = item_view;
+                *this = InventoryPane(origin, height, padding, item_dims, draw_item, items_size);
+
+                item_view.first = first;
+                item_view.second = first + page_size;
+                if (item_view.second > page_size) {
+                    item_view.second = items_size;
+                    item_view.first = item_view.second - page_size;
+                }
+            }
+
+            // FIX: scrolling won't work if item_view range is smaller than page_size
+            // FIX: also the item_view won't get updated when the items_size decreases
+            auto& [first, second] = item_view;
+            if (mouse.wheel_movement != 0) {
+                if (mouse.wheel_movement < 0) {
+                    first += static_cast<uint64_t>(-mouse.wheel_movement);
+                    second += static_cast<uint64_t>(-mouse.wheel_movement);
+
+                    if (second > items_size) {
+                        first = items_size - page_size;
+                        second = items_size;
+                    }
+                } else if (first >= static_cast<uint64_t>(mouse.wheel_movement)) {
+                    first -= static_cast<std::size_t>(mouse.wheel_movement);
+                    second -= static_cast<std::size_t>(mouse.wheel_movement);
+                } else {
+                    first = 0;
+                    second = std::min(page_size, items_size);
+                }
+            }
+
+            std::optional<std::pair<uint64_t, Vector2>> ret;
+            for (std::size_t item_ix = first; item_ix < second; item_ix++) {
+                auto hover = check_collision(item_hitboxes[item_ix - first].hitbox, mouse.mouse_pos);
+
+                if (auto pos = item_hitboxes[item_ix - first].update(mouse, *this, item_ix, hover ? Hover : Normal,
+                                                                     std::forward<Args>(args)...);
+                    pos) {
+                    assert(!ret && "Can't drag two things at the same time");
+                    ret = {item_ix, *pos};
+                }
+            }
+
+            return ret;
         }
     };
 }
 
 namespace hud {
-    struct SpellBookUI {
-        enum TileState {
-            Normal,
-            Equipped,
-            Hover,
-        };
-
-        std::size_t page_size = 12;
-        Vector2 tile_dims;
-
-        std::vector<ui::Draggable<assets::Store&, const Spell&, TileState, const SpellBookUI&>> hitboxes;
-        // [first, second)
-        std::pair<uint64_t, uint64_t> spells;
-
-        Rectangle area;
-        Vector2 spell_dims;
-
-        SpellBookUI(Vector2 tile_dims, const SpellBook& spellbook, const Vector2& screen);
-
-        // returns the coords of where the spell was dropped
-        std::optional<std::pair<uint64_t, Vector2>> update(assets::Store& assets, std::span<uint64_t> equipped_ids, const SpellBook& spellbook, Mouse& mouse, std::optional<Vector2> screen);
-
-        void draw_spell(assets::Store& assets, Vector2 origin, const Spell& spell, TileState tile_state) const;
-
-        static Color color_from_tile_state(const TileState& tile_state);
-    };
-
     void draw(assets::Store& assets, const Player& player, const SpellBook& spellbook, const Vector2& screen);
 
     struct SpellBar {

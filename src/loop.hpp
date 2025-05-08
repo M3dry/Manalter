@@ -8,8 +8,8 @@
 #include "enemies_spawner.hpp"
 #include "item_drops.hpp"
 #include "player.hpp"
-#include "ui.hpp"
 #include "power_up.hpp"
+#include "ui.hpp"
 #include <variant>
 
 struct Loop;
@@ -23,9 +23,9 @@ struct Arena {
         std::array<PowerUp, 3> power_ups;
         std::vector<ui::Button> selections;
 
-        PowerUpSelection(assets::Store& assets, Keys& keys, Vector2 screen);
+        PowerUpSelection(Loop& loop);
 
-        void draw(assets::Store& assets, Loop& loop, Arena& arena);
+        void draw(Arena& arena, Loop& loop);
         void update(Arena& arena, Loop& loop);
 
         void update_buttons(assets::Store& assets, Vector2 screen);
@@ -34,13 +34,27 @@ struct Arena {
     struct Paused {
         Paused(Keys& keys);
 
-        void draw(assets::Store& assets, Loop& loop);
+        void draw(Loop& loop);
         void update(Arena& arena, Loop& loop);
     };
 
     struct SoulPortal {
         double time_remaining;
         shapes::Circle hitbox;
+    };
+
+    struct SpellBookUI {
+        Vector2 spellbook_dims;
+        ui::InventoryPane<assets::Store&, std::span<uint64_t>, const SpellBook&> inventory_pane;
+
+        template <typename... Args>
+        SpellBookUI(Vector2 dims, Args&&... args) : spellbook_dims(dims), inventory_pane(std::forward<Args>(args)...) {
+        }
+
+        template <typename... Args>
+        decltype(auto) update(Args&&... args) {
+            return inventory_pane.update(std::forward<Args>(args)...);
+        }
     };
 
     std::variant<Playing, PowerUpSelection, Paused> state;
@@ -54,12 +68,12 @@ struct Arena {
     std::optional<SoulPortal> soul_portal;
     Model soul_portal_arrow;
 
-    std::optional<hud::SpellBookUI> spellbook_ui;
+    std::optional<SpellBookUI> spellbook_ui;
     hud::SpellBar spellbar;
 
     Vector2 mouse_xz;
 
-    Arena(Keys& keys, assets::Store& assets);
+    Arena(Loop& loop);
 
     Arena(Arena&) = delete;
     Arena& operator=(Arena&) = delete;
@@ -69,21 +83,28 @@ struct Arena {
 
     ~Arena();
 
-    void draw(assets::Store& assets, Loop& loop);
+    void draw(Loop& loop);
     void update(Loop& loop);
 
     void incr_time(double delta);
 
-    template <typename T>
-    inline bool curr_state() const {
+    template <typename T> inline bool curr_state() const {
         return std::holds_alternative<T>(state);
     }
 };
 
 struct Hub {
-    Hub(Keys& keys);
+    std::optional<ui::Button> start_button;
 
-    void draw(assets::Store& assets, Loop& loop);
+    Rectangle stash_rec;
+    std::optional<ui::InventoryPane<assets::Store&, const SpellBook&>> stash;
+
+    Rectangle spellbook_rec;
+    std::optional<ui::InventoryPane<assets::Store&, const SpellBook&>> spellbook;
+
+    Hub(Loop& loop);
+
+    void draw(Loop& loop);
     void update(Loop& loop);
 };
 
@@ -91,14 +112,14 @@ struct Main {
     std::optional<ui::Button> play_button;
     std::optional<ui::Button> exit_button;
 
-    Main(assets::Store& assets, Keys& keys, Vector2 screen);
+    Main(Loop& loop);
 
-    void draw(assets::Store& assets, Loop& loop);
+    void draw(Loop& loop);
     void update(Loop& loop);
 };
 
 struct SplashScreen {
-    void draw(assets::Store& assets, Loop& loop);
+    void draw(Loop& loop);
     void update(Loop& loop);
 };
 

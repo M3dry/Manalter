@@ -13,6 +13,10 @@
 #include <utility>
 #include <variant>
 
+namespace assets {
+    class Store;
+}
+
 enum struct Element {
     Fire = 0,
     Ice,
@@ -404,6 +408,8 @@ struct Spell {
     }
 
     void add_exp(uint32_t e);
+
+    void draw(Rectangle working_area, assets::Store& assets);
 
     static Spell random(uint32_t max_level);
 

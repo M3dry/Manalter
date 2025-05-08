@@ -18,6 +18,15 @@ Vector2 xz_component(const Vector3& vec);
 Vector2 mouse_xz_in_world(Ray mouse);
 float wrap(float value, float modulus);
 std::string format_to_time(double time);
+Vector4 spellbook_and_tile_dims(Vector2 screen, Vector2 spellbook_dims, Vector2 tile_dims);
+
+inline float width_from_ratio(Vector2 ratio, float height) {
+    return (height * ratio.x) / ratio.y;
+}
+
+inline float height_from_ratio(Vector2 ratio, float width) {
+    return (width * ratio.y) / ratio.x;
+}
 
 template <typename T, bool Zero = true> inline constexpr int sgn(T val) {
     T ret = (T(0) < val) - (val < T(0));

@@ -64,6 +64,22 @@ std::string format_to_time(double time) {
     return std::format("{:02}:{:02}:{:02}", hours, minutes, seconds);
 }
 
+Vector4 spellbook_and_tile_dims(Vector2 screen, Vector2 spellbook_dims, Vector2 tile_dims) {
+    auto spellbook_width = screen.x * 0.3f;
+    auto spellbook_height = height_from_ratio(spellbook_dims, spellbook_width);
+    if (spellbook_height > screen.y * 0.95f) {
+        spellbook_height = screen.y * 0.95f;
+        spellbook_width = width_from_ratio(spellbook_dims, spellbook_height);
+    }
+
+    return Vector4{
+        spellbook_width,
+        spellbook_height,
+        spellbook_width * 0.75f,
+        height_from_ratio(tile_dims, spellbook_width * 0.75f),
+    };
+}
+
 void arena::loop_around(float& x, float& y) {
     if (x > ARENA_WIDTH / 2.0f) x -= ARENA_WIDTH;
     if (y > ARENA_HEIGHT / 2.0f) y -= ARENA_HEIGHT;

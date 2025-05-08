@@ -62,14 +62,14 @@ Arena::Playing::Playing(Keys& keys) {
 #endif
 }
 
-Arena::PowerUpSelection::PowerUpSelection(assets::Store& assets, Keys& keys, Vector2 screen)
+Arena::PowerUpSelection::PowerUpSelection(Loop& loop)
     : power_ups{PowerUp::random(), PowerUp::random(), PowerUp::random()} {
-    keys.unregister_all();
-    keys.register_key(KEY_ENTER);
-    update_buttons(assets, screen);
+    loop.keys.unregister_all();
+    loop.keys.register_key(KEY_ENTER);
+    update_buttons(loop.assets, loop.screen);
 }
 
-void Arena::PowerUpSelection::draw([[maybe_unused]] assets::Store& assets, Loop& loop, Arena& arena) {
+void Arena::PowerUpSelection::draw(Arena& arena, Loop& loop) {
     for (std::size_t i = 0; i < 3; i++) {
         if (selections[i].update(loop.mouse)) {
             arena.player.add_power_up(std::move(power_ups[i]));
@@ -129,13 +129,13 @@ Arena::Paused::Paused(Keys& keys) {
     keys.register_key(KEY_ESCAPE);
 }
 
-void Arena::Paused::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
-    assets.draw_texture(assets::PauseBackground, Rectangle{
-                                                     .x = 0.0f,
-                                                     .y = 0.0f,
-                                                     .width = loop.screen.x,
-                                                     .height = loop.screen.y,
-                                                 });
+void Arena::Paused::draw(Loop& loop) {
+    loop.assets.draw_texture(assets::PauseBackground, Rectangle{
+                                                          .x = 0.0f,
+                                                          .y = 0.0f,
+                                                          .width = loop.screen.x,
+                                                          .height = loop.screen.y,
+                                                      });
     DrawText("PAUSED",
              static_cast<int>(loop.screen.x / 2.0f) -
                  static_cast<int>(static_cast<float>(MeasureText("PAUSED", 30)) / 2.0f),
@@ -152,14 +152,10 @@ void Arena::Paused::update(Arena& arena, Loop& loop) {
     });
 }
 
-Arena::Arena(Keys& keys, assets::Store& assets)
-    : state(Playing(keys)), player({0.0f, 10.0f, 0.0f}, assets), enemies(30), to_next_soul_portal(5.0 * 60.0),
+Arena::Arena(Loop& loop)
+    : state(Playing(loop.keys)), player({0.0f, 10.0f, 0.0f}, loop.assets), enemies(30), to_next_soul_portal(5.0 * 60.0),
       soul_portal(std::nullopt) {
-    player.equipped_spells[0] = 0;
-
-    player.exp = 90;
-
-    auto arrow_tex = assets[assets::SoulPortalArrow];
+    auto arrow_tex = loop.assets[assets::SoulPortalArrow];
     auto arrow_mesh = GenMeshPlane(16, 16, 1, 1);
     soul_portal_arrow = LoadModelFromMesh(arrow_mesh);
     soul_portal_arrow.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = arrow_tex;
@@ -170,7 +166,7 @@ Arena::~Arena() {
     UnloadModel(soul_portal_arrow);
 }
 
-void Arena::draw(assets::Store& assets, Loop& loop) {
+void Arena::draw(Loop& loop) {
     bool playing = curr_state<Playing>();
     if (playing) {
         player.update_interpolated_pos(loop.accum_time);
@@ -205,7 +201,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
         // RIGHT-UP
         (Vector3){-ARENA_WIDTH, 0.0f, -ARENA_HEIGHT},
     };
-    auto floor_tex = assets[assets::Floor];
+    auto floor_tex = loop.assets[assets::Floor];
     for (const auto& v : vs) {
         DrawPlane(v, (Vector2){ARENA_WIDTH, ARENA_HEIGHT}, GREEN);
 
@@ -216,7 +212,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
             soul_portal->hitbox.draw_3D(BLACK, 1.0f, xz_component(v));
         }
     }
-    player.draw_model(assets);
+    player.draw_model(loop.assets);
 
 #ifdef DEBUG
     circle.draw_3D(BLUE, 1.0f, Vector2Zero());
@@ -228,7 +224,7 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     if (playing) effects::update(static_cast<float>(loop.delta_time));
     BeginMode3D(player.camera);
     if (soul_portal && !check_collision(soul_portal->hitbox, xz_component(player.interpolated_position))) {
-        auto tex = assets[assets::SoulPortalArrow];
+        auto tex = loop.assets[assets::SoulPortalArrow];
         auto angle = angle_from_point(xz_component(player.interpolated_position), soul_portal->hitbox.center);
 
         static constexpr auto r = 50.0f;
@@ -281,10 +277,17 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
                   std::span(player.equipped_spells.get(), player.unlocked_spell_count));
 
     if (spellbook_ui) {
-        if (auto dropped =
-                spellbook_ui->update(assets, std::span(player.equipped_spells.get(), player.unlocked_spell_count),
-                                     loop.player_save->get_spellbook(), playing ? loop.mouse : loop.dummy_mouse,
-                                     loop.screen_updated ? std::make_optional(loop.screen) : std::nullopt);
+        loop.assets.draw_texture(assets::SpellBookBackground, Rectangle{
+                                                                  .x = 0.0f,
+                                                                  .y = 0.0f,
+                                                                  .width = spellbook_ui->spellbook_dims.x,
+                                                                  .height = spellbook_ui->spellbook_dims.y,
+                                                              });
+
+        const auto& spellbook = loop.player_save->get_spellbook();
+        if (auto dropped = spellbook_ui->update(
+                loop.mouse, spellbook.size(), loop.screen_updated ? std::make_optional(loop.screen) : std::nullopt,
+                loop.assets, std::span(player.equipped_spells.get(), player.unlocked_spell_count), spellbook);
             dropped) {
             auto [spell, pos] = *dropped;
 
@@ -313,9 +316,9 @@ void Arena::draw(assets::Store& assets, Loop& loop) {
     }
 
     if (curr_state<PowerUpSelection>()) {
-        std::get<PowerUpSelection>(state).draw(assets, loop, *this);
+        std::get<PowerUpSelection>(state).draw(*this, loop);
     } else if (curr_state<Paused>()) {
-        std::get<Paused>(state).draw(assets, loop);
+        std::get<Paused>(state).draw(loop);
     }
 
     EndDrawing();
@@ -357,13 +360,54 @@ void Arena::update(Loop& loop) {
                 state.emplace<Paused>(loop.keys);
                 return;
             case KEY_B:
-                if (spellbook_ui)
+                if (spellbook_ui) {
                     spellbook_ui = std::nullopt;
-                else
-                    spellbook_ui =
-                        hud::SpellBookUI({static_cast<float>(loop.assets[assets::SpellTileBackground].width),
-                                          static_cast<float>(loop.assets[assets::SpellTileBackground].height)},
-                                         loop.player_save->get_spellbook(), loop.screen);
+                } else {
+                    auto tile_tex = loop.assets[assets::SpellTileBackground];
+                    auto spellbook_tex = loop.assets[assets::SpellBookBackground];
+
+                    auto spellbook_and_tile = spellbook_and_tile_dims(
+                        loop.screen, Vector2{static_cast<float>(spellbook_tex.width), static_cast<float>(spellbook_tex.height)},
+                        Vector2{static_cast<float>(tile_tex.width), static_cast<float>(tile_tex.height)});
+                    auto spellbook = Vector2{spellbook_and_tile.x, spellbook_and_tile.y};
+                    auto tile = Vector2{spellbook_and_tile.z, spellbook_and_tile.w};
+
+                    spellbook_ui.emplace(
+                        Vector2{spellbook.x, spellbook.y}, Vector2Zero(), spellbook.y * 0.85f,
+                        Vector3{spellbook.x * 0.01f, spellbook.x * 0.01f, spellbook.x * 0.02f}, Vector2{tile.x, tile.y},
+                        [tile](Vector2 origin, auto state, auto spell_ix, assets::Store& assets, auto equipped,
+                               const auto& spellbook) {
+                            using State = decltype(state);
+                            auto working_area = Rectangle{
+                                .x = origin.x,
+                                .y = origin.y,
+                                .width = tile.x,
+                                .height = tile.y,
+                            };
+
+                            Color outline = GRAY;
+                            if (state == State::Hover) {
+                                outline = RED;
+                            } else {
+                                for (const auto& ix : equipped) {
+                                    if (ix == spell_ix) {
+                                        outline = PURPLE;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            DrawRectangleRec(working_area, outline);
+
+                            working_area.x += 3;
+                            working_area.y += 3;
+                            working_area.width -= 6;
+                            working_area.height -= 6;
+
+                            spellbook[spell_ix].draw(working_area, assets);
+                        },
+                        loop.player_save->get_spellbook().size());
+                }
                 return;
 #ifdef DEBUG
             case KEY_P:
@@ -397,7 +441,7 @@ void Arena::update(Loop& loop) {
     } else {
         player.health -= damage_done;
         if (player.add_exp(enemies.take_exp())) {
-            state.emplace<PowerUpSelection>(loop.assets, loop.keys, loop.screen);
+            state.emplace<PowerUpSelection>(loop);
         }
     }
 
@@ -420,7 +464,7 @@ void Arena::update(Loop& loop) {
 
     if (player.health == 0) {
         loop.player_save->save();
-        loop.scene.emplace<Hub>(loop.keys);
+        loop.scene.emplace<Hub>(loop);
         return;
     }
 }
@@ -451,21 +495,125 @@ void Arena::incr_time(double delta) {
     }
 }
 
-Hub::Hub(Keys& keys) {
-    keys.unregister_all();
-    keys.register_key(KEY_SPACE);
-    keys.register_key(KEY_ESCAPE);
+Hub::Hub(Loop& loop) {
+    auto button_rec = Rectangle{
+        .x = loop.screen.x / 2.0f - 300 / 2.0f,
+        .y = loop.screen.y / 2.0f - 140 / 2.0f,
+        .width = 300,
+        .height = 140,
+    };
+    start_button.emplace(button_rec, [&, button_rec](auto state) {
+        switch (state) {
+            using enum ui::Button::State;
+            case Normal:
+                DrawRectangleRec(button_rec, WHITE);
+                break;
+            case Hover:
+                DrawRectangleRec(button_rec, YELLOW);
+                break;
+        }
+    });
+
+    auto spellbook_tex = loop.assets[assets::SpellBookBackground];
+    auto tile_tex = loop.assets[assets::SpellTileBackground];
+    auto spellbook_and_tile = spellbook_and_tile_dims(
+        loop.screen, Vector2{static_cast<float>(spellbook_tex.width), static_cast<float>(spellbook_tex.height)},
+        Vector2{static_cast<float>(tile_tex.width), static_cast<float>(tile_tex.height)});
+    auto tile_dims = Vector2{
+        spellbook_and_tile.z,
+        spellbook_and_tile.w,
+    };
+
+    stash_rec = Rectangle{
+        .x = loop.screen.y * 0.1f,
+        .y = loop.screen.y * 0.01f,
+        .width = tile_dims.x,
+        .height = loop.screen.y * 0.9f,
+    };
+
+    stash.emplace(
+        Vector2{stash_rec.x, stash_rec.y}, stash_rec.height, Vector3{0.0f, 0.0f, stash_rec.height * 0.01f}, tile_dims,
+        [tile_dims](Vector2 origin, auto state, auto spell_ix, assets::Store& assets, const auto& spellbook) {
+            auto working_area = Rectangle{
+                .x = origin.x,
+                .y = origin.y,
+                .width = tile_dims.x,
+                .height = tile_dims.y,
+            };
+
+            Color outline = GRAY;
+            if (state == decltype(state)::Hover) outline = RED;
+
+            DrawRectangleRec(working_area, outline);
+
+            working_area.x += 3;
+            working_area.y += 3;
+            working_area.width -= 6;
+            working_area.height -= 6;
+
+            spellbook[spell_ix].draw(working_area, assets);
+        },
+        loop.player_save->get_stash().size());
+
+    spellbook_rec = stash_rec;
+    spellbook_rec.x = loop.screen.x - stash_rec.x - tile_dims.x;
+    spellbook.emplace(
+        Vector2{spellbook_rec.x, spellbook_rec.y}, spellbook_rec.height,
+        Vector3{0.0f, 0.0f, spellbook_rec.height * 0.01f}, tile_dims,
+        [tile_dims](Vector2 origin, auto state, auto spell_ix, assets::Store& assets, const auto& spellbook) {
+            auto working_area = Rectangle{
+                .x = origin.x,
+                .y = origin.y,
+                .width = tile_dims.x,
+                .height = tile_dims.y,
+            };
+
+            Color outline = GRAY;
+            if (state == decltype(state)::Hover) outline = RED;
+
+            DrawRectangleRec(working_area, outline);
+
+            working_area.x += 3;
+            working_area.y += 3;
+            working_area.width -= 6;
+            working_area.height -= 6;
+
+            spellbook[spell_ix].draw(working_area, assets);
+        },
+        loop.player_save->get_stash().size());
+
+    loop.keys.unregister_all();
+    loop.keys.register_key(KEY_SPACE);
+    loop.keys.register_key(KEY_ESCAPE);
 }
 
-void Hub::draw([[maybe_unused]] assets::Store& assets, [[maybe_unused]] Loop& loop) {
+void Hub::draw(Loop& loop) {
     BeginDrawing();
 
-    assets.draw_texture(assets::HubBackground, Rectangle{
-                                                   .x = 0.0f,
-                                                   .y = 0.0f,
-                                                   .width = loop.screen.x,
-                                                   .height = loop.screen.y,
-                                               });
+    loop.assets.draw_texture(assets::HubBackground, Rectangle{
+                                                        .x = 0.0f,
+                                                        .y = 0.0f,
+                                                        .width = loop.screen.x,
+                                                        .height = loop.screen.y,
+                                                    });
+
+    if (start_button->update(loop.mouse)) {
+        loop.player_save->save();
+        loop.player_save->create_default_spell();
+        loop.scene.emplace<Arena>(loop);
+    }
+
+    auto screen = loop.screen_updated ? std::make_optional(loop.screen) : std::nullopt;
+    /*if (auto pos = stash->update(loop.mouse, loop.player_save->get_stash().size(), screen, loop.assets,*/
+    /*                             loop.player_save->get_stash());*/
+    /*    pos) {*/
+    /*    std::println("DROPEPD @{} FROM STASH AT: [{}, {}]", pos->first, pos->second.x, pos->second.y);*/
+    /*}*/
+    if (auto pos = spellbook->update(loop.mouse, loop.player_save->get_spellbook().size(), screen, loop.assets,
+                                     loop.player_save->get_spellbook());
+        pos) {
+        std::println("DROPEPD @{} FROM SPELLBOOK AT: [{}, {}]", pos->first, pos->second.x, pos->second.y);
+    }
 
     EndDrawing();
 }
@@ -476,60 +624,60 @@ void Hub::update(Loop& loop) {
             case KEY_SPACE:
                 loop.player_save->save();
                 loop.player_save->create_default_spell();
-                loop.scene.emplace<Arena>(loop.keys, loop.assets);
+                loop.scene.emplace<Arena>(loop);
                 return;
             case KEY_ESCAPE:
                 loop.player_save->save();
                 loop.player_save = std::nullopt;
-                loop.scene.emplace<Main>(loop.assets, loop.keys, loop.screen);
+                loop.scene.emplace<Main>(loop);
                 return;
         }
     });
 }
 
-Main::Main(assets::Store& assets, Keys& keys, Vector2 screen) {
+Main::Main(Loop& loop) {
     auto play_button_rec = Rectangle{
-        .x = screen.x / 1.5f - assets[assets::PlayButton].width / 2.0f,
-        .y = screen.y / 2.0f * 0.90f,
-        .width = static_cast<float>(assets[assets::PlayButton].width),
-        .height = static_cast<float>(assets[assets::PlayButton].height),
+        .x = loop.screen.x / 1.5f - loop.assets[assets::PlayButton].width / 2.0f,
+        .y = loop.screen.y / 2.0f * 0.90f,
+        .width = static_cast<float>(loop.assets[assets::PlayButton].width),
+        .height = static_cast<float>(loop.assets[assets::PlayButton].height),
     };
     play_button.emplace(play_button_rec, [&, play_button_rec](auto state) {
-        /*DrawRectangleRec(play_button_rec, BLUE);*/
         switch (state) {
-            case ui::Button::State::Normal:
-                assets.draw_texture(assets::PlayButton, play_button_rec);
+            using enum ui::Button::State;
+            case Normal:
+                loop.assets.draw_texture(assets::PlayButton, play_button_rec);
                 break;
-            case ui::Button::State::Hover:
-                assets.draw_texture(assets::PlayButtonHover, play_button_rec);
+            case Hover:
+                loop.assets.draw_texture(assets::PlayButtonHover, play_button_rec);
                 break;
         }
     });
 
     auto exit_button_rec = Rectangle{
-        .x = screen.x / 1.5f - assets[assets::PlayButtonHover].width / 2.0f,
-        .y = screen.y / 2.0f * 0.90f + assets[assets::PlayButton].height * 1.05f,
-        .width = static_cast<float>(assets[assets::PlayButtonHover].width),
-        .height = static_cast<float>(assets[assets::PlayButtonHover].height),
+        .x = loop.screen.x / 1.5f - loop.assets[assets::PlayButtonHover].width / 2.0f,
+        .y = loop.screen.y / 2.0f * 0.90f + loop.assets[assets::PlayButton].height * 1.05f,
+        .width = static_cast<float>(loop.assets[assets::PlayButtonHover].width),
+        .height = static_cast<float>(loop.assets[assets::PlayButtonHover].height),
     };
     exit_button.emplace(exit_button_rec, [&, exit_button_rec](auto state) {
         /*DrawRectangleRec(exit_button_rec, RED);*/
         switch (state) {
             case ui::Button::State::Normal:
-                assets.draw_texture(assets::ExitButton, exit_button_rec);
+                loop.assets.draw_texture(assets::ExitButton, exit_button_rec);
                 break;
             case ui::Button::State::Hover:
-                assets.draw_texture(assets::ExitButtonHover, exit_button_rec);
+                loop.assets.draw_texture(assets::ExitButtonHover, exit_button_rec);
                 break;
         }
     });
 }
 
-void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
+void Main::draw(Loop& loop) {
     BeginDrawing();
     ClearBackground(WHITE);
 
-    auto tex = assets[assets::MainMenu];
+    auto tex = loop.assets[assets::MainMenu];
     auto screen_ratio = loop.screen.x / loop.screen.y;
     DrawTexturePro(tex,
                    Rectangle{
@@ -550,7 +698,7 @@ void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
         loop.player_save = PlayerSave();
         loop.player_save->load_save();
 
-        loop.scene.emplace<Hub>(loop.keys);
+        loop.scene.emplace<Hub>(loop);
         return;
     }
 
@@ -565,19 +713,19 @@ void Main::draw([[maybe_unused]] assets::Store& assets, Loop& loop) {
 
 void Main::update(Loop& loop) {
     if (loop.screen_updated) {
-        *this = Main(loop.assets, loop.keys, loop.screen);
+        *this = Main(loop);
     }
 }
 
-void SplashScreen::draw(assets::Store& assets, Loop& loop) {
+void SplashScreen::draw(Loop& loop) {
     BeginDrawing();
     ClearBackground(WHITE);
-    assets.draw_texture(assets::SplashScreen, Rectangle{
-                                                  .x = 0.0f,
-                                                  .y = 0.0f,
-                                                  .width = loop.screen.x,
-                                                  .height = loop.screen.y,
-                                              });
+    loop.assets.draw_texture(assets::SplashScreen, Rectangle{
+                                                       .x = 0.0f,
+                                                       .y = 0.0f,
+                                                       .width = loop.screen.x,
+                                                       .height = loop.screen.y,
+                                                   });
     EndDrawing();
 
     // NOTE: This is a very ugly hack, the key handling isn't in `update` cuz PollInputEvents gets called every frame.
@@ -586,7 +734,7 @@ void SplashScreen::draw(assets::Store& assets, Loop& loop) {
     auto key = 0;
     while ((key = GetKeyPressed()) != 0) {
         loop.keys.handled_key(key);
-        loop.scene.emplace<Main>(loop.assets, loop.keys, loop.screen);
+        loop.scene.emplace<Main>(loop);
         return;
     }
 }
@@ -613,7 +761,7 @@ void Loop::operator()() {
     keys.poll();
     mouse.poll();
 
-    std::visit([&](auto&& arg) { arg.draw(assets, *this); }, scene);
+    std::visit([&](auto&& arg) { arg.draw(*this); }, scene);
     SwapScreenBuffer();
 
     while (accum_time >= (1.0 / TICKS)) {

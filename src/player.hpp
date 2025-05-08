@@ -89,6 +89,9 @@ class PlayerSave {
     inline const SpellBook& get_spellbook() const {
         return spellbook;
     }
+    inline const SpellBook& get_stash() const {
+        return stash_book;
+    }
     inline uint64_t get_souls() const {
         return souls;
     }
