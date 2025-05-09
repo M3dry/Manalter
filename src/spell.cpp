@@ -1,5 +1,6 @@
 #include "spell.hpp"
 #include "assets.hpp"
+#include "particle_system.hpp"
 #include "seria_deser.hpp"
 #include "utility.hpp"
 #include <random>
@@ -56,6 +57,7 @@ void Spell::draw(Rectangle working_area, assets::Store& assets) {
                        .height = static_cast<float>(assets[assets::SpellTileRarityFrame].height),
                    },
                    working_area, Vector2Zero(), 0.0f, rarity::get_rarity_info(rarity).color);
+
 }
 
 Spell Spell::random(uint32_t max_level) {

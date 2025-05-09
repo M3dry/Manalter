@@ -285,9 +285,9 @@ void Arena::draw(Loop& loop) {
                                                               });
 
         const auto& spellbook = loop.player_save->get_spellbook();
-        if (auto dropped = spellbook_ui->update(
-                loop.mouse, spellbook.size(), loop.screen_updated ? std::make_optional(loop.screen) : std::nullopt,
-                loop.assets, std::span(player.equipped_spells.get(), player.unlocked_spell_count), spellbook);
+        if (auto dropped =
+                spellbook_ui->update(loop.mouse, spellbook.size(), loop.assets,
+                                     std::span(player.equipped_spells.get(), player.unlocked_spell_count), spellbook);
             dropped) {
             auto [spell, pos] = *dropped;
 
@@ -297,6 +297,7 @@ void Arena::draw(Loop& loop) {
                                    loop.player_save->get_spellbook());
             };
         }
+        spellbook_ui->inventory_pane.draw_deffered();
     }
 
     DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
@@ -367,14 +368,21 @@ void Arena::update(Loop& loop) {
                     auto spellbook_tex = loop.assets[assets::SpellBookBackground];
 
                     auto spellbook_and_tile = spellbook_and_tile_dims(
-                        loop.screen, Vector2{static_cast<float>(spellbook_tex.width), static_cast<float>(spellbook_tex.height)},
+                        loop.screen,
+                        Vector2{static_cast<float>(spellbook_tex.width), static_cast<float>(spellbook_tex.height)},
                         Vector2{static_cast<float>(tile_tex.width), static_cast<float>(tile_tex.height)});
                     auto spellbook = Vector2{spellbook_and_tile.x, spellbook_and_tile.y};
                     auto tile = Vector2{spellbook_and_tile.z, spellbook_and_tile.w};
 
                     spellbook_ui.emplace(
-                        Vector2{spellbook.x, spellbook.y}, Vector2Zero(), spellbook.y * 0.85f,
+                        Vector2{spellbook.x, spellbook.y}, loop.screen, Vector2Zero(), spellbook.y * 0.85f,
                         Vector3{spellbook.x * 0.01f, spellbook.x * 0.01f, spellbook.x * 0.02f}, Vector2{tile.x, tile.y},
+                        Rectangle{
+                            .x = 0.0f,
+                            .y = 0.0f,
+                            .width = spellbook.x,
+                            .height = spellbook.y,
+                        },
                         [tile](Vector2 origin, auto state, auto spell_ix, assets::Store& assets, auto equipped,
                                const auto& spellbook) {
                             using State = decltype(state);
@@ -388,6 +396,8 @@ void Arena::update(Loop& loop) {
                             Color outline = GRAY;
                             if (state == State::Hover) {
                                 outline = RED;
+                            } else if (state == State::Drag) {
+                                outline = GREEN;
                             } else {
                                 for (const auto& ix : equipped) {
                                     if (ix == spell_ix) {
@@ -532,7 +542,14 @@ Hub::Hub(Loop& loop) {
     };
 
     stash.emplace(
-        Vector2{stash_rec.x, stash_rec.y}, stash_rec.height, Vector3{0.0f, 0.0f, stash_rec.height * 0.01f}, tile_dims,
+        loop.screen, Vector2{stash_rec.x, stash_rec.y}, stash_rec.height, Vector3{0.0f, 0.0f, stash_rec.height * 0.01f},
+        tile_dims,
+        Rectangle{
+            .x = 0.0f,
+            .y = 0.0f,
+            .width = loop.screen.x / 2.0f,
+            .height = loop.screen.y / 2.0f,
+        },
         [tile_dims](Vector2 origin, auto state, auto spell_ix, assets::Store& assets, const auto& spellbook) {
             auto working_area = Rectangle{
                 .x = origin.x,
@@ -558,8 +575,14 @@ Hub::Hub(Loop& loop) {
     spellbook_rec = stash_rec;
     spellbook_rec.x = loop.screen.x - stash_rec.x - tile_dims.x;
     spellbook.emplace(
-        Vector2{spellbook_rec.x, spellbook_rec.y}, spellbook_rec.height,
+        loop.screen, Vector2{spellbook_rec.x, spellbook_rec.y}, spellbook_rec.height,
         Vector3{0.0f, 0.0f, spellbook_rec.height * 0.01f}, tile_dims,
+        Rectangle{
+            .x = loop.screen.x / 2.0f,
+            .y = 0.0f,
+            .width = loop.screen.x / 2.0f,
+            .height = loop.screen.y,
+        },
         [tile_dims](Vector2 origin, auto state, auto spell_ix, assets::Store& assets, const auto& spellbook) {
             auto working_area = Rectangle{
                 .x = origin.x,
@@ -603,17 +626,23 @@ void Hub::draw(Loop& loop) {
         loop.scene.emplace<Arena>(loop);
     }
 
-    auto screen = loop.screen_updated ? std::make_optional(loop.screen) : std::nullopt;
-    /*if (auto pos = stash->update(loop.mouse, loop.player_save->get_stash().size(), screen, loop.assets,*/
-    /*                             loop.player_save->get_stash());*/
-    /*    pos) {*/
-    /*    std::println("DROPEPD @{} FROM STASH AT: [{}, {}]", pos->first, pos->second.x, pos->second.y);*/
-    /*}*/
-    if (auto pos = spellbook->update(loop.mouse, loop.player_save->get_spellbook().size(), screen, loop.assets,
+    if (auto pos =
+            stash->update(loop.mouse, loop.player_save->get_stash().size(), loop.assets, loop.player_save->get_stash());
+        pos) {
+        auto [ix, p] = *pos;
+
+        std::println("DROPEPD {} FROM STASH AT: @[{}, {}]", ix, p.x, p.y);
+    }
+    if (auto pos = spellbook->update(loop.mouse, loop.player_save->get_spellbook().size(), loop.assets,
                                      loop.player_save->get_spellbook());
         pos) {
-        std::println("DROPEPD @{} FROM SPELLBOOK AT: [{}, {}]", pos->first, pos->second.x, pos->second.y);
+        auto [ix, p] = *pos;
+
+        std::println("DROPEPD {} FROM SPELLBOOK AT: @[{}, {}]", ix, p.x, p.y);
     }
+
+    stash->draw_deffered();
+    spellbook->draw_deffered();
 
     EndDrawing();
 }
@@ -739,7 +768,7 @@ void SplashScreen::draw(Loop& loop) {
     }
 }
 
-void SplashScreen::update(Loop& loop) {
+void SplashScreen::update([[maybe_unused]] Loop& loop) {
 }
 
 Loop::Loop(int width, int height)

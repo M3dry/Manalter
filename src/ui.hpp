@@ -41,8 +41,7 @@ namespace ui {
         // returns a mouse position at which the component was dropped
         // doesn't call draw if it returns a Vector2
         template <typename... Args> std::optional<Vector2> update(Mouse& mouse, Args&&... args) {
-            if (!mouse.button_press || mouse.button_press->button != Mouse::Button::Left ||
-                !check_collision(hitbox, mouse.button_press->pressed_at)) {
+            if (!is_dragged(mouse)) {
                 draw(origin, std::forward<Args>(args)...);
                 return std::nullopt;
             }
@@ -52,14 +51,24 @@ namespace ui {
             draw(origin + (mouse.mouse_pos - mouse.button_press->pressed_at), std::forward<Args>(args)...);
             return std::nullopt;
         }
+
+        bool is_dragged(const Mouse& mouse) const {
+            if (!mouse.button_press || mouse.button_press->button != Mouse::Button::Left ||
+                !check_collision(hitbox, mouse.button_press->pressed_at))
+                return false;
+
+            return true;
+        }
     };
 
     template <typename... Opts> struct InventoryPane {
         enum State {
             Normal,
             Hover,
+            Drag,
         };
 
+        Vector2 screen;
         Vector2 origin;
         float height;
         // x - initial x padding
@@ -68,14 +77,22 @@ namespace ui {
         Vector3 padding;
         Vector2 item_dims;
 
+        shapes::Polygon scroll_poly;
+
         uint64_t page_size;
         std::vector<ui::Draggable<const InventoryPane&, uint64_t, State, Opts...>> item_hitboxes;
         std::pair<uint64_t, uint64_t> item_view;
         std::function<void(Vector2, State, uint64_t, Opts...)> draw_item;
 
-        InventoryPane(Vector2 origin, float height, Vector3 padding, Vector2 item_dims,
-                      std::function<void(Vector2, State, uint64_t, Opts...)> draw_item, std::size_t items_size)
-            : origin(origin), height(height), padding(padding), item_dims(item_dims), draw_item(draw_item) {
+        RenderTexture2D drag_defer;
+        bool is_deferred = false;
+
+        InventoryPane(Vector2 screen, Vector2 origin, float height, Vector3 padding, Vector2 item_dims,
+                      shapes::Polygon&& scroll_box, std::function<void(Vector2, State, uint64_t, Opts...)> draw_item,
+                      std::size_t items_size)
+            : screen(screen), origin(origin), height(height), padding(padding), item_dims(item_dims),
+              scroll_poly(scroll_box), draw_item(draw_item),
+              drag_defer(LoadRenderTexture(static_cast<int>(screen.x), static_cast<int>(screen.y))) {
             page_size = static_cast<uint64_t>((height - padding.y) / item_dims.y);
             item_view = {0, std::min(page_size, items_size)};
 
@@ -98,25 +115,31 @@ namespace ui {
             }
         }
 
+        InventoryPane(const InventoryPane&) = delete;
+        InventoryPane& operator=(const InventoryPane&) = delete;
+
+        InventoryPane(InventoryPane&& ip) noexcept
+            : screen(ip.screen), origin(ip.origin), height(ip.height), padding(ip.padding),
+              item_dims(std::move(ip.item_dims)), item_view(ip.item_view), draw_item(std::move(ip.draw_item)),
+              drag_defer(ip.drag_defer), is_deferred(ip.is_deferred) {
+            ip.drag_defer.texture.id = 0;
+        };
+        InventoryPane& operator=(InventoryPane&&) noexcept = default;
+
+        ~InventoryPane() {
+            if (drag_defer.texture.id != 0) UnloadRenderTexture(drag_defer);
+        }
+
         template <typename... Args>
-        std::optional<std::pair<uint64_t, Vector2>> update(Mouse& mouse, std::size_t items_size,
-                                                           std::optional<Vector2> screen, Args&&... args) {
-            if (screen) {
-                auto [first, second] = item_view;
-                *this = InventoryPane(origin, height, padding, item_dims, draw_item, items_size);
-
-                item_view.first = first;
-                item_view.second = first + page_size;
-                if (item_view.second > page_size) {
-                    item_view.second = items_size;
-                    item_view.first = item_view.second - page_size;
-                }
-            }
-
+        std::optional<std::pair<uint64_t, Vector2>> update(Mouse& mouse, std::size_t items_size, Args&&... args) {
             // FIX: scrolling won't work if item_view range is smaller than page_size
             // FIX: also the item_view won't get updated when the items_size decreases
             auto& [first, second] = item_view;
-            if (mouse.wheel_movement != 0) {
+            if (second < page_size) {
+                first = 0;
+                second = std::min(items_size, page_size);
+            }
+            if (mouse.wheel_movement != 0 && check_collision(scroll_poly, mouse.mouse_pos) && second >= page_size) {
                 if (mouse.wheel_movement < 0) {
                     first += static_cast<uint64_t>(-mouse.wheel_movement);
                     second += static_cast<uint64_t>(-mouse.wheel_movement);
@@ -134,19 +157,49 @@ namespace ui {
                 }
             }
 
-            std::optional<std::pair<uint64_t, Vector2>> ret;
+            is_deferred = false;
+            std::optional<std::tuple<uint64_t, Vector2>> ret;
             for (std::size_t item_ix = first; item_ix < second; item_ix++) {
-                auto hover = check_collision(item_hitboxes[item_ix - first].hitbox, mouse.mouse_pos);
+                auto hover = !mouse.button_press && check_collision(item_hitboxes[item_ix - first].hitbox, mouse.mouse_pos);
 
-                if (auto pos = item_hitboxes[item_ix - first].update(mouse, *this, item_ix, hover ? Hover : Normal,
+                auto dragged = item_hitboxes[item_ix - first].is_dragged(mouse);
+                if (dragged) {
+                    is_deferred = true;
+                    BeginTextureMode(drag_defer);
+                    ClearBackground(BLANK);
+                }
+                if (auto pos = item_hitboxes[item_ix - first].update(mouse, *this, item_ix,
+                                                                     dragged ? Drag
+                                                                     : hover ? Hover
+                                                                             : Normal,
                                                                      std::forward<Args>(args)...);
                     pos) {
-                    assert(!ret && "Can't drag two things at the same time");
+                    assert(!ret);
                     ret = {item_ix, *pos};
                 }
+                if (dragged) EndTextureMode();
             }
 
             return ret;
+        }
+
+        inline void draw_deffered() {
+            if (is_deferred) {
+                DrawTexturePro(drag_defer.texture,
+                               Rectangle{
+                                   .x = 0.0f,
+                                   .y = 0.0f,
+                                   .width = screen.x,
+                                   .height = -screen.y,
+                               },
+                               Rectangle{
+                                   .x = 0.0f,
+                                   .y = 0.0f,
+                                   .width = screen.x,
+                                   .height = screen.y,
+                               },
+                               Vector2Zero(), 0.0f, WHITE);
+            }
         }
     };
 }

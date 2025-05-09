@@ -1,6 +1,5 @@
 #include "effects.hpp"
 #include "particle_system.hpp"
-#include <algorithm>
 #include <ranges>
 
 namespace effect {
