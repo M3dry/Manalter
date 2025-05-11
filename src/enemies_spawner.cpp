@@ -44,12 +44,12 @@ uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_m
     static uint8_t tick_count = 0;
 
     uint32_t acc = 0;
-    for (std::size_t i = 0; i < enemies.data.size(); i++) {
-        acc += enemies.data[i].val.tick(enemies, i, target_hitbox, enemy_models);
+    for (std::size_t i = 0; i < enemies.data->size(); i++) {
+        acc += enemies.data.vec[i].val.tick(enemies, i, target_hitbox, enemy_models);
         enemies.reinsert(i);
     }
 
-    enemies.prune();
+    enemies.rebuild();
 
     if (++tick_count == 20) {
         spawn(enemy_models, target_hitbox.center);
@@ -60,14 +60,16 @@ uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_m
 }
 
 void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle) {
-    for (auto& enemy : enemies.data) {
+    for (auto& enemy : *enemies.data) {
         if (check_collision(visibility_circle, xz_component(Vector3Add(enemy.val.pos, offset)))) {
             enemy.val.update_bones(enemy_models);
             enemy.val.draw(enemy_models, offset);
         }
     }
 
+#ifdef DEBUG
     enemies.draw_bbs(RED);
+#endif
 }
 
 uint32_t Enemies::take_exp() {

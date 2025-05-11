@@ -8,8 +8,8 @@
 #include <raylib.h>
 
 #define TICKS 20
-#define ARENA_WIDTH 5000
-#define ARENA_HEIGHT 5000
+#define ARENA_WIDTH 2000
+#define ARENA_HEIGHT 2000
 
 std::pair<int, Vector2> max_font_size(const Font& font, float spacing, const Vector2& max_dims, std::string_view text);
 
@@ -19,6 +19,7 @@ Vector2 mouse_xz_in_world(Ray mouse);
 float wrap(float value, float modulus);
 std::string format_to_time(double time);
 Vector4 spellbook_and_tile_dims(Vector2 screen, Vector2 spellbook_dims, Vector2 tile_dims);
+Vector3 wrap_lerp(Vector3 a, Vector3 b, float t);
 
 inline float width_from_ratio(Vector2 ratio, float height) {
     return (height * ratio.x) / ratio.y;

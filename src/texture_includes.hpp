@@ -1,0 +1,69 @@
+#pragma once
+
+#include <raylib.h>
+
+namespace texture_includes {
+    constexpr unsigned char splash_screen[] = {
+#embed "../assets/splash-screen.png"
+    };
+
+    constexpr unsigned char spellicon_rarity[] = {
+#embed "../assets/spellicon-rarity.png"
+    };
+
+    constexpr unsigned char spellbook_background[] = {
+#embed "../assets/spellbook-background.png"
+    };
+
+    constexpr unsigned char spell_tile_rarity[] = {
+#embed "../assets/spell-tile-rarity.png"
+    };
+
+    constexpr unsigned char spell_tile_background[] = {
+#embed "../assets/spell-tile-background.png"
+    };
+
+    constexpr unsigned char powerup_background[] = {
+#embed "../assets/powerup-background.png"
+    };
+
+    constexpr unsigned char play_button[] = {
+#embed "../assets/play-button.png"
+    };
+
+    constexpr unsigned char play_button_hover[] = {
+#embed "../assets/play-button-hover.png"
+    };
+
+    constexpr unsigned char pause_background[] = {
+#embed "../assets/pause-background.png"
+    };
+
+    constexpr unsigned char particle_circle[] = {
+#embed "../assets/particle_circle.png"
+    };
+
+    constexpr unsigned char main_menu[] = {
+#embed "../assets/main-menu.png"
+    };
+
+    constexpr unsigned char hub_background[] = {
+#embed "../assets/hub-background.png"
+    };
+
+    constexpr unsigned char floor[] = {
+#embed "../assets/floor.png"
+    };
+
+    constexpr unsigned char exit_button[] = {
+#embed "../assets/exit-button.png"
+    };
+
+    constexpr unsigned char exit_button_hover[] = {
+#embed "../assets/exit-button-hover.png"
+    };
+
+    constexpr unsigned char arrow[] = {
+#embed "../assets/arrow.png"
+    };
+}

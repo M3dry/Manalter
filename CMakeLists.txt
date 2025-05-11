@@ -10,8 +10,9 @@ set(CMAKE_BUILD_TYPE Debug)
 add_compile_options(
     -Wall -Wextra -Wuninitialized -Wmissing-field-initializers
     -Wno-unused-variable -Wshadow -Wconversion -Wsign-conversion
-    -Wdouble-promotion -Wnull-dereference -Wold-style-cast -Woverloaded-virtual
-    -Wnon-virtual-dtor)
+    -Wdouble-promotion -Wnull-dereference -Wold-style-cast -Woverloaded-virtual -Wnon-virtual-dtor
+    -fsanitize=undefined -fsanitize-undefined-trap-on-error -fno-sanitize-recover=undefined -g -fno-omit-frame-pointer)
+add_link_options(-fsanitize=undefined -fsanitize-undefined-trap-on-error -fno-sanitize-recover=undefined -g -fno-omit-frame-pointer)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -19,7 +20,11 @@ set(CMAKE_LINKER lld)
 
 add_subdirectory(src)
 
-add_subdirectory(test)
-set_target_properties(tests PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
-)
+option(TEST "" OFF)
+
+if (TEST)
+    add_subdirectory(test)
+    set_target_properties(tests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+endif()

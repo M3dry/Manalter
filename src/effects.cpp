@@ -85,10 +85,10 @@ namespace effect {
                     particles.velocity[i] = Vector3Normalize(Vector3Subtract(particles.pos[i], origin));
                 }
             });
-        emitter.add_generator(generators::velocity::ScaleRange(30.0f, 50.0f));
-        emitter.add_generator(generators::acceleration::Uniform({100.0f, 0.0f, 100.0f}));
+        emitter.add_generator(generators::velocity::ScaleRange(10.0f, 30.0f));
+        emitter.add_generator(generators::acceleration::Uniform({50.0f, 0.0f, 50.0f}));
         emitter.add_generator(generators::color::Fixed(WHITE));
-        emitter.add_generator(generators::lifetime::Range(0.1f, 0.3f));
+        emitter.add_generator(generators::lifetime::Range(0.1f, 0.6f));
         emitter.add_generator([](Particles& particles, float _, std::size_t start_ix, std::size_t end_ix) {
             for (std::size_t i = start_ix; i < end_ix; i++) {
                 particles.size[i] = Vector3Length(particles.velocity[i]);
@@ -98,10 +98,10 @@ namespace effect {
 
         system.add_updater(updaters::Position());
         system.add_updater(updaters::Lifetime());
-        system.add_updater(updaters::ColorByVelocity(rarity_color, WHITE, 35.0f, 200.0f));
+        system.add_updater(updaters::ColorByVelocity(rarity_color, WHITE, 0.0f, 70.0f));
         system.add_updater([](Particles& particles, float _) {
             for (std::size_t i = 0; i < particles.alive_count; i++) {
-                particles.size[i] = 0.1f * Vector3Length(particles.velocity[i]);
+                particles.size[i] = 0.01f * Vector3Length(particles.velocity[i]);
             }
         });
 
@@ -150,15 +150,14 @@ namespace effects {
                 continue;
             }
 
-            _effects[i].~pair();
-            new (&_effects[i]) std::pair(std::move(_effects.back()));
+            std::swap(_effects[i], _effects.back());
             _effects.pop_back();
         }
     }
 
-    void draw() {
+    void draw(Vector3 offset) {
         for (std::size_t i = 0; i < _effects.size(); i++) {
-            std::get<1>(_effects[i]).draw();
+            std::get<1>(_effects[i]).draw(offset);
         }
     }
 

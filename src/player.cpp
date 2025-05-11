@@ -32,7 +32,7 @@ Player::Player(Vector3 position, assets::Store& assets)
 }
 
 void Player::update_interpolated_pos(double accum_time) {
-    interpolated_position = Vector3Lerp(prev_position, position, static_cast<float>(accum_time) * TICKS);
+    interpolated_position = wrap_lerp(prev_position, position, static_cast<float>(accum_time) * TICKS);
     prev_position = interpolated_position;
     camera.target = interpolated_position;
     camera.position = Vector3Lerp(camera.position, Vector3Add(camera_offset, interpolated_position), 1.0f);

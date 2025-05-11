@@ -37,8 +37,8 @@ std::pair<int, Vector2> max_font_size(const Font& font, float spacing, const Vec
 // 180 degrees -> 6 o' clock
 // 270 degrees -> 9 o' clock
 float angle_from_point(const Vector2& point, const Vector2& origin) {
-    return std::fmod(
-        270 - std::atan2(origin.y - point.y, origin.x - point.x) * 180 / static_cast<float>(std::numbers::pi), 360.0f);
+    return std::fmod(270 - std::atan2(origin.y - point.y, origin.x - point.x) * 180.0f / std::numbers::pi_v<float>,
+                     360.0f);
 }
 
 Vector2 xz_component(const Vector3& vec) {
@@ -78,6 +78,29 @@ Vector4 spellbook_and_tile_dims(Vector2 screen, Vector2 spellbook_dims, Vector2 
         spellbook_width * 0.75f,
         height_from_ratio(tile_dims, spellbook_width * 0.75f),
     };
+}
+
+Vector3 wrap_lerp(Vector3 a, Vector3 b, float t) {
+    float half_width  = ARENA_WIDTH  / 2.0f;
+    float half_height = ARENA_HEIGHT / 2.0f;
+
+    float dx = b.x - a.x;
+    if (dx >  half_width)  b.x -= ARENA_WIDTH;
+    if (dx < -half_width)  b.x += ARENA_WIDTH;
+    float x = a.x + (b.x - a.x) * t;
+    if (x < -half_width) x += ARENA_WIDTH;
+    if (x >  half_width) x -= ARENA_WIDTH;
+
+    float y = a.y + (b.y - a.y) * t;
+
+    float dz = b.z - a.z;
+    if (dz >  half_height) b.z -= ARENA_HEIGHT;
+    if (dz < -half_height) b.z += ARENA_HEIGHT;
+    float z = a.z + (b.z - a.z) * t;
+    if (z < -half_height) z += ARENA_HEIGHT;
+    if (z >  half_height) z -= ARENA_HEIGHT;
+
+    return Vector3{ x, y, z };
 }
 
 void arena::loop_around(float& x, float& y) {

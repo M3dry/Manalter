@@ -8,7 +8,7 @@
 
 namespace enemies {
     uint32_t Paladin::tick(QT<true>& enemies, std::size_t ix, const shapes::Circle target_hitbox) {
-        auto& data = enemies.data[ix].val;
+        auto& data = enemies.data.vec[ix].val;
 
         switch (data.collision_state) {
             case Enemy::Collision:
@@ -178,10 +178,10 @@ void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) {
 void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix) {
     static const float neighbourhood_radius = 100.0f;
     static constexpr float weight_attraction = 3.0f; // attraction to player
-    static constexpr float weight_separation = 11.0f;
+    static constexpr float weight_separation = 5.0f;
 
-    auto id = enemies.data[ix].id;
-    auto enemy_pos = enemies.data[ix].val.position();
+    auto id = enemies.data.vec[ix].id;
+    auto enemy_pos = enemies.data.vec[ix].val.position();
 
     shapes::Circle circle_hitbox(enemy_pos, neighbourhood_radius);
 
@@ -189,7 +189,7 @@ void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix)
     attraction_force.x = player_pos.x - enemy_pos.x;
     attraction_force.y = player_pos.y - enemy_pos.y;
     attraction_force.x = wrap((attraction_force.x + ARENA_WIDTH / 2.0f), ARENA_WIDTH) - ARENA_WIDTH / 2.0f;
-    attraction_force.y = wrap((attraction_force.y + ARENA_WIDTH / 2.0f), ARENA_WIDTH) - ARENA_WIDTH / 2.0f;
+    attraction_force.y = wrap((attraction_force.y + ARENA_HEIGHT / 2.0f), ARENA_HEIGHT) - ARENA_HEIGHT / 2.0f;
     if (Vector2LengthSqr(attraction_force) > 1e-6f) {
         attraction_force = Vector2Normalize(attraction_force);
     }
@@ -198,15 +198,13 @@ void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix)
 
     Vector2 separation_force = Vector2Zero();
 
-    // FIXME: I don't think this gets all the neighbouring enemies correctly as using the for loop the enemies don't go
-    // inside each other at all
     enemies.search_by(
         [&circle_hitbox](const auto& bbox) -> bool {
             return check_collision(static_cast<Rectangle>(bbox), circle_hitbox);
         },
         [&circle_hitbox](const auto& enemy) -> bool { return check_collision(enemy.simple_hitbox, circle_hitbox); },
         [&](const auto& e, auto e_ix) {
-            if (e_ix == ix || enemies.data[e_ix].id == id) return;
+            if (e_ix == ix || enemies.data.vec[e_ix].id == id) return;
 
             auto d = enemy_pos - e.position();
 

@@ -229,7 +229,7 @@ namespace particle_system::renderers {
         if (shader.id != 0) UnloadShader(shader);
     }
 
-    void Point::operator()(Particles& particles) {
+    void Point::operator()(Particles& particles, Vector3 offset) {
         if (particles.alive_count == 0) return;
 
         BeginBlendMode(BLEND_ALPHA);
@@ -246,8 +246,9 @@ namespace particle_system::renderers {
                              static_cast<int>(col_vertex_size * particles.alive_count), 0);
 
         auto mvp = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
+        auto total_offset = pos_offset + offset;
         SetShaderValueMatrix(shader, GetShaderLocation(shader, "mvp"), mvp);
-        SetShaderValue(shader, GetShaderLocation(shader, "offset"), &pos_offset, SHADER_UNIFORM_VEC3);
+        SetShaderValue(shader, GetShaderLocation(shader, "offset"), &total_offset, SHADER_UNIFORM_VEC3);
 
         glUniform1i(glGetUniformLocation(shader.id, "circle"), 0);
 
@@ -335,8 +336,8 @@ namespace particle_system {
         return simulating;
     }
 
-    void System::draw() {
-        std::visit([&](auto&& arg) { arg(particles); }, renderer);
+    void System::draw(Vector3 offset) {
+            std::visit([&](auto&& arg) { arg(particles, offset); }, renderer);
     }
 
     void System::reset() {

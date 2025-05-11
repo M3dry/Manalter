@@ -41,8 +41,8 @@ namespace effect {
 
     struct ItemDrop {
         float y = 0.0f;
-        std::size_t particle_count = 200;
-        float emit_rate = 50000;
+        std::size_t particle_count = 100;
+        float emit_rate = 20000;
 
         particle_system::System operator()(Vector2 origin, const Color& rarity_color);
     };
@@ -59,6 +59,6 @@ namespace effects {
     void pop_effect(Id id);
 
     void update(float dt);
-    void draw();
+    void draw(Vector3 offset);
     void clean();
 }

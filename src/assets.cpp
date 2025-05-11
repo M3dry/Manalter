@@ -1,6 +1,7 @@
 #include "assets.hpp"
 #include "raylib.h"
 #include "spell.hpp"
+#include "texture_includes.hpp"
 
 #ifndef PLATFORM_WEB
 RenderTexture2D CreateRenderTextureMSAA(int width, int height, int samples) {
@@ -185,63 +186,63 @@ namespace assets {
         texture_map[LockedSlot] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/splash-screen.png");
+        img = LoadImageFromMemory(".png", texture_includes::splash_screen, sizeof(texture_includes::splash_screen));
         texture_map[SplashScreen] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/main-menu.png");
+        img = LoadImageFromMemory(".png", texture_includes::main_menu, sizeof(texture_includes::main_menu));
         texture_map[MainMenu] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/play-button.png");
+        img = LoadImageFromMemory(".png", texture_includes::play_button, sizeof(texture_includes::play_button));
         texture_map[PlayButton] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/play-button-hover.png");
+        img = LoadImageFromMemory(".png", texture_includes::play_button_hover, sizeof(texture_includes::play_button_hover));
         texture_map[PlayButtonHover] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/exit-button.png");
+        img = LoadImageFromMemory(".png", texture_includes::exit_button, sizeof(texture_includes::exit_button));
         texture_map[ExitButton] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/exit-button-hover.png");
+        img = LoadImageFromMemory(".png", texture_includes::exit_button_hover, sizeof(texture_includes::exit_button_hover));
         texture_map[ExitButtonHover] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/floor.png");
+        img = LoadImageFromMemory(".png", texture_includes::floor, sizeof(texture_includes::floor));
         texture_map[Floor] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/powerup-background.png");
+        img = LoadImageFromMemory(".png", texture_includes::powerup_background, sizeof(texture_includes::powerup_background));
         texture_map[PowerUpBackground] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/arrow.png");
+        img = LoadImageFromMemory(".png", texture_includes::arrow, sizeof(texture_includes::arrow));
         texture_map[SoulPortalArrow] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/spellbook-background.png");
+        img = LoadImageFromMemory(".png", texture_includes::spellbook_background, sizeof(texture_includes::spellbook_background));
         texture_map[SpellBookBackground] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/pause-background.png");
+        img = LoadImageFromMemory(".png", texture_includes::pause_background, sizeof(texture_includes::pause_background));
         texture_map[PauseBackground] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/hub-background.png");
+        img = LoadImageFromMemory(".png", texture_includes::hub_background, sizeof(texture_includes::hub_background));
         texture_map[HubBackground] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/spell-tile-background.png");
+        img = LoadImageFromMemory(".png", texture_includes::spell_tile_background, sizeof(texture_includes::spell_tile_background));
         texture_map[SpellTileBackground] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/spell-tile-rarity.png");
+        img = LoadImageFromMemory(".png", texture_includes::spell_tile_rarity, sizeof(texture_includes::spell_tile_rarity));
         texture_map[SpellTileRarityFrame] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/spellicon-rarity.png");
+        img = LoadImageFromMemory(".png", texture_includes::spellicon_rarity, sizeof(texture_includes::spellicon_rarity));
         texture_map[SpellIconRarityFrame] = LoadTextureFromImage(img);
         UnloadImage(img);
 

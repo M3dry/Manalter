@@ -25,12 +25,11 @@
           buildInputs = with pkgs;
             [
               cmake
-              lld
               glfw
               libGL.dev
               catch2_3
             ]
-            ++ [raylib_patched];
+            ++ [raylib_patched llvm.lld];
           buildPhase = ''
             make manalter
           '';
@@ -75,12 +74,12 @@
           nativeBuildInputs = with pkgs;
             [
               cmake
-              lld
               glfw
               libGLU
               gdb
               catch2_3
               renderdoc
+              valgrind
 
               xorg.libX11
               xorg.libXi
@@ -88,7 +87,7 @@
               xorg.libXrandr
               xorg.libXinerama
             ]
-            ++ [raylib_patched pleaseKeepMyInputs llvm.clang-tools llvm.clang];
+            ++ [raylib_patched pleaseKeepMyInputs llvm.clang-tools llvm.clang llvm.lld];
           shellHook = ''
             export CC=clang
             export CXX=clang++

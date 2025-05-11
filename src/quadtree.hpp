@@ -9,6 +9,7 @@
 #include <functional>
 #include <raylib.h>
 #include <raymath.h>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -80,23 +81,8 @@ namespace quadtree {
         IDed(IDed&& i) noexcept : id(i.id), val(std::move(i.val)) {
             i.id = static_cast<uint64_t>(-1);
         }
+        IDed& operator=(IDed&&) noexcept = default;
     };
-
-    // assumes -1 is an invalid value and returns false
-    template <typename T, typename Ix> bool lookup(const std::vector<IDed<T>>& vec, Ix& ix, const uint64_t& id) {
-        if (ix == static_cast<Ix>(-1) || id == static_cast<uint64_t>(-1)) return false;
-
-        if (ix < vec.size() && vec[ix].id == id) return true;
-
-        for (Ix i = 0; i < vec.size(); i++) {
-            if (vec[i].id == id) {
-                ix = i;
-                return true;
-            }
-        }
-
-        return false;
-    }
 
     using node_ix = uint16_t;
     static constexpr node_ix null = node_ix(-1);
@@ -154,16 +140,87 @@ namespace quadtree {
 
     static_assert(HasPosition<pos<int>>);
 
+    template <typename T> struct IDVec {
+        std::vector<IDed<T>> vec;
+
+        template <typename Ix> bool lookup(Ix& ix, const uint64_t& id) const {
+            if (ix == static_cast<Ix>(-1)) return false;
+
+            if (vec.size() > ix && (id == static_cast<uint64_t>(-1) || vec[ix].id == id)) return true;
+
+            if (id == static_cast<uint64_t>(-1)) return false;
+
+            for (std::size_t i = 0; i < vec.size(); i++) {
+                if (vec[i].id == id) {
+                    ix = i;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        std::vector<IDed<T>>& operator*() {
+            return vec;
+        }
+
+        const std::vector<IDed<T>>& operator*() const {
+            return vec;
+        }
+
+        std::vector<IDed<T>>* operator->() {
+            return &vec;
+        }
+
+        std::vector<IDed<T>> const* const operator->() const {
+            return &vec;
+        }
+
+        T& operator[](std::size_t& ix, uint64_t id) {
+            if (!lookup(ix, id)) {
+                assert(false);
+            }
+
+            return vec[ix].val;
+        }
+
+        T& operator[](std::size_t ix, uint64_t id) {
+            auto _ix = ix;
+            if (!lookup(_ix, id)) {
+                assert(false);
+            }
+
+            return vec[ix].val;
+        }
+
+        const T& operator[](std::size_t& ix, uint64_t id) const {
+            if (!lookup(ix, id)) {
+                assert(false);
+            }
+
+            return vec[ix].val;
+        }
+
+        const T& operator[](std::size_t ix, uint64_t id) const {
+            auto _ix = ix;
+            if (!lookup(_ix, id)) {
+                assert(false);
+            }
+
+            return vec[_ix].val;
+        }
+    };
+
     template <uint8_t MaxPerNode, typename T, bool __SkipPositionCheck = false>
         requires __SkipPositionCheck || HasPosition<T>
     class QuadTree {
       public:
         // root node is always at 0 index
-        std::vector<IDed<Node>> nodes;
-        std::vector<IDed<T>> data;
+        IDVec<Node> nodes;
+        IDVec<T> data;
 
         QuadTree(Box bbox) : nodes() {
-            nodes.emplace_back(Node(bbox));
+            nodes->emplace_back(Node(bbox));
         };
 
         operator QuadTree<MaxPerNode, T, false>&() {
@@ -175,31 +232,30 @@ namespace quadtree {
         }
 
         template <typename... Args> std::pair<std::size_t, uint64_t> insert(Args&&... args) {
-            data.emplace_back(std::forward<Args>(args)...);
+            data->emplace_back(std::forward<Args>(args)...);
 
-            if (!_insert(0, data.size() - 1, data.back().id)) {
+            if (!_insert(0, -1, data->size() - 1, data->back().id)) {
                 assert(false && "How???");
             }
 
-            return {data.size() - 1, data.back().id};
+            return {data->size() - 1, data->back().id};
         }
 
         void remove(std::size_t data_ix) {
-            if (data_ix >= data.size()) return;
+            if (data_ix >= data->size()) return;
 
-            data[data_ix].~IDed();
-            new (&data[data_ix]) IDed(std::move(data.back()));
-            data.pop_back();
+            std::swap(data.vec[data_ix], data.vec.back());
+            data->pop_back();
         }
 
         void remove(std::size_t data_ix, uint64_t data_id) {
-            if (lookup(data, data_ix, data_id)) remove(data_ix);
+            if (data.lookup(data_ix, data_id)) remove(data_ix);
         }
 
         // assumes the function doesn't change position
         void search_by(std::function<bool(const Box&)> check_box, std::function<bool(const T&)> check_data,
                        std::function<void(T&, std::size_t)> f) {
-            search_by(0, check_box, check_data, f);
+            search_by(0, -1, check_box, check_data, f);
         }
 
         void in_box(const Box& bbox, std::function<void(const T&, std::size_t)> f) {
@@ -211,8 +267,8 @@ namespace quadtree {
             std::size_t closest = static_cast<std::size_t>(-1);
             float closest_dist = -1.0f;
 
-            for (std::size_t i = 0; i < data.size(); i++) {
-                auto dist = Vector2DistanceSqr(point, data[i].val.position());
+            for (std::size_t i = 0; i < data->size(); i++) {
+                auto dist = Vector2DistanceSqr(point, data.vec[i].val.position());
                 if (closest == static_cast<std::size_t>(-1) || closest_dist > dist) {
                     closest = i;
                     closest_dist = dist;
@@ -223,27 +279,27 @@ namespace quadtree {
         }
 
         void rebuild() {
-            auto root_bbox = nodes[0].val.bbox;
-            nodes.clear();
-            nodes.emplace_back(Node(root_bbox));
+            auto root_bbox = nodes[0, -1].bbox;
+            nodes->clear();
+            nodes->emplace_back(Node(root_bbox));
 
-            for (std::size_t ix = 0; ix < data.size(); ix++) {
-                _insert(0, ix, data[ix].id);
+            for (std::size_t ix = 0; ix < data->size(); ix++) {
+                _insert(0, -1, ix, data.vec[ix].id);
             }
         }
 
         void reinsert(std::size_t data_ix) {
-            data[data_ix].id = ++data[data_ix].last_id;
-            _insert(0, data_ix, data[data_ix].id);
+            data.vec[data_ix].id = ++data.vec[data_ix].last_id;
+            _insert(0, -1, data_ix, data.vec[data_ix].id);
         }
 
         void prune() {
-            prune(0);
+            prune(0, -1);
         }
 
         void print(std::function<void(const T&, const char*)> print_t) const {
             std::println("NODES:");
-            for (const auto& node : nodes) {
+            for (const auto& node : nodes.vec) {
                 std::println("ID: {}; VAL:", node.id);
                 std::println("\tbbox: {{ .min = [{}, {}], .max = [{}, {}] }}", node.val.bbox.min.x, node.val.bbox.min.y,
                              node.val.bbox.max.x, node.val.bbox.max.y);
@@ -264,7 +320,7 @@ namespace quadtree {
             }
 
             std::println("\nDATA: ");
-            for (const auto& dat : data) {
+            for (const auto& dat : *data) {
                 std::println("ID: {}; VAL:", dat.id);
                 std::println("\tposition: [{}, {}]", dat.val.position().x, dat.val.position().y);
                 std::println("\tUSER DATA:");
@@ -273,35 +329,31 @@ namespace quadtree {
         }
 
         void draw_bbs(Color col) {
-            draw_bbs(col, 0);
+            draw_bbs(col, 0, -1);
         }
 
       private:
-        std::optional<node_ix> _insert(node_ix parent_ix, std::size_t dat_ix, uint64_t dat_id) {
-            const auto& parent = nodes[parent_ix].val;
+        std::optional<node_ix> _insert(node_ix parent_ix, uint64_t parent_id, std::size_t dat_ix, uint64_t dat_id) {
+            const auto& parent = nodes[parent_ix, parent_id];
 
-            if (!parent.bbox.contains(data[dat_ix].val.position())) return std::nullopt;
+            if (!parent.bbox.contains(data.vec[dat_ix].val.position())) return std::nullopt;
 
             if (!parent.subdivided && parent.data_ixs_ided.size() + 1 <= MaxPerNode) {
-                nodes[parent_ix].val.data_ixs_ided.emplace_back(dat_ix, dat_id);
+                nodes[parent_ix, parent_id].data_ixs_ided.emplace_back(dat_ix, dat_id);
 
                 return parent_ix;
             }
 
             if (!parent.subdivided) {
-                subdivide(parent_ix);
+                subdivide(parent_ix, parent_id);
             }
             // AFTER this point `parent` might be invalidated, use `parent_ix`
-
             for (int i = 0; i < 2; i++) {
-                for (int j = 0; i < 2; j++) {
-                    auto& [child_ix, child_id] = nodes[parent_ix].val[i, j];
-                    if (!lookup(nodes, child_ix, child_id)) {
-                        assert(false && "I'm going home");
-                    }
+                for (int j = 0; j < 2; j++) {
+                    auto& [child_ix, child_id] = nodes[parent_ix, parent_id][i, j];
 
-                    if (auto new_ix = _insert(child_ix, dat_ix, dat_id); new_ix) {
-                        nodes[parent_ix].val[i, j].first = *new_ix;
+                    if (auto new_ix = _insert(child_ix, child_id, dat_ix, dat_id); new_ix) {
+                        nodes[parent_ix, parent_id][i, j].first = *new_ix;
                         return parent_ix;
                     }
                 }
@@ -310,14 +362,14 @@ namespace quadtree {
             return std::nullopt;
         }
 
-        void subdivide(node_ix ix) {
-            auto& parent = nodes[ix].val;
+        void subdivide(node_ix ix, uint64_t ix_id) {
+            auto& parent = nodes[ix, ix_id];
             if (parent.subdivided) return;
 
             float mid_x = (parent.bbox.min.x + parent.bbox.max.x) / 2.0f;
             float mid_y = (parent.bbox.min.y + parent.bbox.max.y) / 2.0f;
 
-#define PARENT nodes[ix].val
+#define PARENT nodes[ix, ix_id]
             PARENT[0, 0] = add_node(Box(PARENT.bbox.min, {mid_x, mid_y}));
             PARENT[0, 1] = add_node(Box({mid_x, PARENT.bbox.min.y}, {PARENT.bbox.max.x, mid_y}));
             PARENT[1, 0] = add_node(Box({PARENT.bbox.min.x, mid_y}, {mid_x, PARENT.bbox.max.y}));
@@ -325,23 +377,23 @@ namespace quadtree {
 
             for (const auto& [_data_ix, id] : PARENT.data_ixs_ided) {
                 auto data_ix = _data_ix;
-                if (!lookup(data, data_ix, id)) {
+                if (!data.lookup(data_ix, id)) {
                     continue;
                 }
 
-                const auto& pos = data[data_ix].val.position();
+                const auto& pos = data.vec[data_ix].val.position();
 
                 if (pos.y < mid_y) {
                     if (pos.x < mid_x) {
-                        nodes[PARENT[0, 0].first].val.data_ixs_ided.emplace_back(data_ix, id);
+                        nodes[PARENT[0, 0].first, PARENT[0, 0].second].data_ixs_ided.emplace_back(data_ix, id);
                     } else {
-                        nodes[PARENT[0, 1].first].val.data_ixs_ided.emplace_back(data_ix, id);
+                        nodes[PARENT[0, 1].first, PARENT[0, 0].second].data_ixs_ided.emplace_back(data_ix, id);
                     }
                 } else {
                     if (pos.x < mid_x) {
-                        nodes[PARENT[1, 0].first].val.data_ixs_ided.emplace_back(data_ix, id);
+                        nodes[PARENT[1, 0].first, PARENT[0, 0].second].data_ixs_ided.emplace_back(data_ix, id);
                     } else {
-                        nodes[PARENT[1, 1].first].val.data_ixs_ided.emplace_back(data_ix, id);
+                        nodes[PARENT[1, 1].first, PARENT[0, 0].second].data_ixs_ided.emplace_back(data_ix, id);
                     }
                 }
             }
@@ -352,24 +404,24 @@ namespace quadtree {
 #undef PARENT
         }
 
-        inline std::pair<node_ix, uint64_t> add_node(Box&& bbox) {
-            nodes.emplace_back(bbox);
-            return {nodes.size() - 1, nodes.back().id};
+        std::pair<node_ix, uint64_t> add_node(Box&& bbox) {
+            nodes->emplace_back(bbox);
+            return {nodes->size() - 1, nodes->back().id};
         }
 
         // assumes `ix` is valid
-        void search_by(node_ix ix, std::function<bool(const Box&)> check_box, std::function<bool(const T&)> check_point,
-                       std::function<void(T&, std::size_t)> f) {
-            auto& node = nodes[ix].val;
+        void search_by(node_ix ix, uint64_t ix_id, std::function<bool(const Box&)> check_box,
+                       std::function<bool(const T&)> check_point, std::function<void(T&, std::size_t)> f) {
+            auto& node = nodes[ix, ix_id];
 
             if (!check_box(node.bbox)) return;
 
             if (!node.subdivided) {
                 for (auto& [data_ix, data_id] : node.data_ixs_ided) {
-                    if (!lookup(data, data_ix, data_id)) continue;
+                    if (!data.lookup(data_ix, data_id)) continue;
 
-                    if (check_point(data[data_ix].val)) {
-                        f(data[data_ix].val, data_ix);
+                    if (check_point(data.vec[data_ix].val)) {
+                        f(data.vec[data_ix].val, data_ix);
                     }
                 }
                 return;
@@ -378,26 +430,21 @@ namespace quadtree {
             for (int x = 0; x < 2; x++) {
                 for (int y = 0; y < 2; y++) {
                     auto& [child_ix, child_id] = node[x, y];
-                    if (!lookup(nodes, child_ix, child_id)) {
-                        assert(false && "How can this happen");
-                    }
 
-                    search_by(child_ix, check_box, check_point, f);
+                    search_by(child_ix, child_id, check_box, check_point, f);
                 }
             }
         }
 
-        std::size_t prune(node_ix ix) {
-            auto node_id = nodes[ix].id;
-
+        std::size_t prune(node_ix ix, uint64_t ix_id) {
             {
                 std::size_t i = 0;
-                while (i < nodes[ix].val.data_ixs_ided.size()) {
-                    auto& [data_ix, data_id] = nodes[ix].val.data_ixs_ided[i];
-                    if (!lookup(data, data_ix, data_id)) {
+                while (i < nodes[ix, ix_id].data_ixs_ided.size()) {
+                    auto& [data_ix, data_id] = nodes[ix, ix_id].data_ixs_ided[i];
+                    if (!data.lookup(data_ix, data_id)) {
 
-                        new (&nodes[ix].val.data_ixs_ided[i]) std::pair(std::move(nodes[ix].val.data_ixs_ided.back()));
-                        nodes[ix].val.data_ixs_ided.pop_back();
+                        std::swap(nodes[ix, ix_id].data_ixs_ided[i], nodes[ix, ix_id].data_ixs_ided.back());
+                        nodes[ix, ix_id].data_ixs_ided.pop_back();
                         continue;
                     }
 
@@ -405,20 +452,17 @@ namespace quadtree {
                 }
             }
 
-            auto size = nodes[ix].val.data_ixs_ided.size();
-            if (!nodes[ix].val.subdivided) return size;
+            auto size = nodes[ix, ix_id].data_ixs_ided.size();
+            if (!nodes[ix, ix_id].subdivided) return size;
 
             bool all_leaf = true;
             std::size_t children_size = 0;
             for (int i = 0; i < 2; i++) {
                 for (int j = 0; j < 2; j++) {
-                    auto& [child_ix, child_id] = nodes[ix].val[i, j];
-                    if (!lookup(nodes, child_ix, child_id)) {
-                        assert(false && "Michael this is so not right");
-                    }
+                    auto& [child_ix, child_id] = nodes[ix, ix_id][i, j];
 
-                    children_size += prune(child_ix);
-                    if (nodes[child_ix].val.subdivided) all_leaf = false;
+                    children_size += prune(child_ix, child_id);
+                    if (nodes[child_ix, child_id].subdivided) all_leaf = false;
                 }
             }
 
@@ -427,36 +471,34 @@ namespace quadtree {
                 return total_size;
             }
 
-            nodes[ix].val.data_ixs_ided.reserve(total_size);
+            nodes[ix, ix_id].data_ixs_ided.reserve(total_size);
             for (int i = 0; i < 2; i++) {
                 for (int j = 0; j < 2; j++) {
-                    auto& [child_ix, child_id] = nodes[ix].val[i, j];
-                    if (!lookup(nodes, child_ix, child_id)) {
-                        assert(false && "No, please no");
+                    auto& [child_ix, child_id] = nodes[ix, ix_id][i, j];
+                    auto& child = nodes[child_ix, child_id];
+                    nodes[ix, ix_id].data_ixs_ided.insert(nodes[ix, ix_id].data_ixs_ided.end(),
+                                                          child.data_ixs_ided.begin(), child.data_ixs_ided.end());
+                    bool moved = nodes->back().id == ix_id;
+
+                    if (!nodes.lookup(child_ix, child_id)) {
+                        assert(false);
                     }
-
-                    auto& child = nodes[child_ix].val;
-                    nodes[ix].val.data_ixs_ided.insert(nodes[ix].val.data_ixs_ided.end(), child.data_ixs_ided.begin(),
-                                                       child.data_ixs_ided.end());
-                    bool moved = nodes.back().id == node_id;
-
-                    nodes[child_ix].~IDed();
-                    new (&nodes[child_ix]) IDed(std::move(nodes.back()));
-                    nodes.pop_back();
+                    std::swap(nodes.vec[child_ix], nodes.vec.back());
+                    nodes->pop_back();
 
                     if (moved) {
                         ix = child_ix;
                     }
-                    nodes[ix].val[i, j] = {null, -1};
+                    nodes[ix, ix_id][i, j] = {null, -1};
                 }
             }
 
-            nodes[ix].val.subdivided = false;
+            nodes[ix, ix_id].subdivided = false;
             return total_size;
         }
 
-        void draw_bbs(Color col, node_ix ix) {
-            auto& node = nodes[ix].val;
+        void draw_bbs(Color col, node_ix ix, uint64_t ix_id) {
+            auto& node = nodes[ix, ix_id];
 
             node.bbox.draw(col);
 
@@ -466,11 +508,7 @@ namespace quadtree {
                 for (int j = 0; j < 2; j++) {
                     auto& [child_ix, child_id] = node[i, j];
 
-                    if (!lookup(nodes, child_ix, child_id)) {
-                        assert(false && "This really shouldn't happen");
-                    }
-
-                    draw_bbs(col, child_ix);
+                    draw_bbs(col, child_ix, child_id);
                 }
             }
         }

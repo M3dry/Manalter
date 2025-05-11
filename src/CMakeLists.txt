@@ -29,7 +29,12 @@ set(PLAYGROUND_SOURCES
 add_library(manalter_lib STATIC ${MANALTER_LIB_SOURCES})
 target_include_directories(manalter_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(manalter_lib PRIVATE raylib)
-target_compile_definitions(manalter_lib PRIVATE DEBUG)
+# target_compile_definitions(manalter_lib PUBLIC DEBUG)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_link_libraries(manalter_lib PRIVATE winmm "stdc++exp")
+endif()
+
 # target_precompile_headers(manalter_lib PRIVATE
 #     <vector>
 #     <string>

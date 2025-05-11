@@ -54,13 +54,6 @@ void ItemDrop::make_effect() {
         item);
 }
 
-void ItemDrops::draw_item_drops(const Vector3& offset) const {
-    for (const auto& drop : item_drops) {
-        DrawCircle3D((Vector3){drop.hitbox.center.x + offset.x, 1.0f + offset.y, drop.hitbox.center.y + offset.z},
-                     drop.hitbox.radius, (Vector3){1.0f, 0.0f, 0.0f}, 90.0f, RED);
-    }
-}
-
 #ifdef DEBUG
 void ItemDrops::draw_item_drop_names(std::function<Vector2(Vector3)> to_screen_coords) const {
     for (const auto& drop : item_drops) {

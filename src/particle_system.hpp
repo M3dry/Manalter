@@ -11,6 +11,7 @@
 #include <raylib.h>
 #include <raymath.h>
 #include <vector>
+#include <variant>
 
 #include "glad.h"
 #include "rlgl.h"
@@ -281,11 +282,11 @@ namespace particle_system {
             };
             ~Point();
 
-            void operator()(Particles& particles);
+            void operator()(Particles& particles, Vector3 offset = Vector3Zero());
             void setup_gl();
         };
 
-        using AnonRenderer = std::function<void(Particles& particles)>;
+        using AnonRenderer = std::function<void(Particles& particles, Vector3 offset)>;
         using Renderer = std::variant<Point, AnonRenderer>;
     }
 
@@ -303,7 +304,7 @@ namespace particle_system {
 
         // false - simulation ended
         bool update(float dt);
-        void draw();
+        void draw(Vector3 offset = Vector3Zero());
         void reset();
         void reset(std::optional<std::size_t> max_emit);
         void add_emitter(emitters::Emitter&& emitter);

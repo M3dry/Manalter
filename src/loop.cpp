@@ -203,10 +203,9 @@ void Arena::draw(Loop& loop) {
     };
     auto floor_tex = loop.assets[assets::Floor];
     for (const auto& v : vs) {
-        DrawPlane(v, (Vector2){ARENA_WIDTH, ARENA_HEIGHT}, GREEN);
+        DrawPlane(v, (Vector2){ARENA_WIDTH, ARENA_HEIGHT}, DARKGRAY);
 
         enemies.draw(loop.enemy_models, v, circle);
-        item_drops.draw_item_drops(v);
 
         if (soul_portal) {
             soul_portal->hitbox.draw_3D(BLACK, 1.0f, xz_component(v));
@@ -225,18 +224,26 @@ void Arena::draw(Loop& loop) {
     BeginMode3D(player.camera);
     if (soul_portal && !check_collision(soul_portal->hitbox, xz_component(player.interpolated_position))) {
         auto tex = loop.assets[assets::SoulPortalArrow];
-        auto angle = angle_from_point(xz_component(player.interpolated_position), soul_portal->hitbox.center);
 
-        static constexpr auto r = 50.0f;
-        auto normalized_dir = Vector2Normalize(soul_portal->hitbox.center - xz_component(player.interpolated_position));
-        auto pos = Vector3{player.interpolated_position.x, 1.0f, player.interpolated_position.z};
-        pos.x += r * normalized_dir.x;
-        pos.z += r * normalized_dir.y;
+        Vector2 dir_vec;
+        dir_vec.x = soul_portal->hitbox.center.x - player.interpolated_position.x;
+        dir_vec.y = soul_portal->hitbox.center.y - player.interpolated_position.z;
+        dir_vec.x = wrap((dir_vec.x + ARENA_WIDTH / 2.0f), ARENA_WIDTH) - ARENA_WIDTH / 2.0f;
+        dir_vec.y = wrap((dir_vec.y + ARENA_HEIGHT / 2.0f), ARENA_HEIGHT) - ARENA_HEIGHT / 2.0f;
+        dir_vec = Vector2Normalize(dir_vec);
+
+        auto angle = angle_from_point(-dir_vec, Vector2Zero());
+
+        constexpr auto r = 50.0f;
+        auto pos = Vector3{player.interpolated_position.x + r * dir_vec.x, 1.0f,
+                           player.interpolated_position.z + r * dir_vec.y};
 
         DrawModelEx(soul_portal_arrow, pos, Vector3{0.0f, 1.0f, 0.0f}, angle, Vector3{1.0f, 1.0f, 1.0f}, WHITE);
     }
 
-    effects::draw();
+    for (const auto& v : vs) {
+        effects::draw(v);
+    }
     EndMode3D();
 
 #ifdef DEBUG
@@ -301,7 +308,7 @@ void Arena::draw(Loop& loop) {
     }
 
     DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
-    DrawText(std::format("ENEMIES: {}", enemies.enemies.data.size()).c_str(), 10, 30, 20, BLACK);
+    DrawText(std::format("ENEMIES: {}", enemies.enemies.data->size()).c_str(), 10, 30, 20, BLACK);
 
     auto time = format_to_time(game_time);
     DrawText(time.c_str(), static_cast<int>(loop.screen.x) - MeasureText(time.c_str(), 20) - 5, 10, 20, BLACK);
@@ -397,7 +404,7 @@ void Arena::update(Loop& loop) {
                             if (state == State::Hover) {
                                 outline = RED;
                             } else if (state == State::Drag) {
-                                outline = GREEN;
+                                outline = RED;
                             } else {
                                 for (const auto& ix : equipped) {
                                     if (ix == spell_ix) {
@@ -560,6 +567,7 @@ Hub::Hub(Loop& loop) {
 
             Color outline = GRAY;
             if (state == decltype(state)::Hover) outline = RED;
+            if (state == decltype(state)::Drag) outline = RED;
 
             DrawRectangleRec(working_area, outline);
 
@@ -593,6 +601,7 @@ Hub::Hub(Loop& loop) {
 
             Color outline = GRAY;
             if (state == decltype(state)::Hover) outline = RED;
+            if (state == decltype(state)::Drag) outline = RED;
 
             DrawRectangleRec(working_area, outline);
 

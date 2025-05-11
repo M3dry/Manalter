@@ -55,8 +55,6 @@ struct ItemDrops {
         item_drops.emplace_back(std::forward<Args>(args)...);
     }
 
-    void draw_item_drops(const Vector3& offset) const;
-
     void pickup(const Shape auto& shape, auto handler) {
         std::size_t i = 0;
         while (i < item_drops.size()) {
@@ -66,18 +64,9 @@ struct ItemDrops {
             }
 
             std::visit(handler, std::move(item_drops[i].item));
-            item_drops[i].~ItemDrop();
-            new (&item_drops[i]) ItemDrop(std::move(item_drops.back()));
+            std::swap(item_drops[i], item_drops.back());
             item_drops.pop_back();
         }
-
-        /*auto [first, last] = std::ranges::remove_if(item_drops, [&](auto& drop) -> bool {*/
-        /*    if (!check_collision(shape, drop.hitbox)) return false;*/
-        /**/
-        /*    std::visit(handler, std::move(drop.item));*/
-        /*    return true;*/
-        /*});*/
-        /*item_drops.erase(first, last);*/
     };
 
 #ifdef DEBUG
