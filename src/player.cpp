@@ -78,6 +78,7 @@ int Player::equip_spell(uint64_t spellbook_idx, uint8_t slot_id, const SpellBook
     if (spellbook.size() <= spellbook_idx) return -1;
     if (unlocked_spell_count <= slot_id) return -2;
 
+    std::println("EQUIPPING {} @{}", spellbook_idx, slot_id);
     equipped_spells[slot_id] = spellbook_idx;
 
     return 0;
@@ -146,9 +147,9 @@ bool Player::unlocks_spell_slot(uint16_t lvl) {
         case 17:
         case 20:
             return true;
+        default:
+            return false;
     }
-
-    return false;
 }
 
 Player::~Player() {

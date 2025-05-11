@@ -11,7 +11,7 @@
 #define ARENA_WIDTH 2000
 #define ARENA_HEIGHT 2000
 
-std::pair<int, Vector2> max_font_size(const Font& font, float spacing, const Vector2& max_dims, std::string_view text);
+std::pair<int, Vector2> max_font_size(const Font& font, const Vector2& max_dims, std::string_view text);
 
 float angle_from_point(const Vector2& point, const Vector2& origin);
 Vector2 xz_component(const Vector3& vec);

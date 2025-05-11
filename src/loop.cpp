@@ -47,6 +47,7 @@ Arena::Playing::Playing(Keys& keys) {
     keys.register_key(KEY_B);
     keys.register_key(KEY_ONE);
     keys.register_key(KEY_TWO);
+    keys.register_key(KEY_THREE);
     keys.register_key(KEY_FOUR);
     keys.register_key(KEY_FIVE);
     keys.register_key(KEY_SIX);
@@ -307,8 +308,12 @@ void Arena::draw(Loop& loop) {
         spellbook_ui->inventory_pane.draw_deffered();
     }
 
+#ifdef DEBUG
     DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
     DrawText(std::format("ENEMIES: {}", enemies.enemies.data->size()).c_str(), 10, 30, 20, BLACK);
+    DrawText(std::format("LVL: {}", player.lvl).c_str(), 10, 50, 20, BLACK);
+    DrawText(std::format("UNLOCKED SPELL SPLOTS: {}", player.unlocked_spell_count).c_str(), 10, 70, 20, BLACK);
+#endif
 
     auto time = format_to_time(game_time);
     DrawText(time.c_str(), static_cast<int>(loop.screen.x) - MeasureText(time.c_str(), 20) - 5, 10, 20, BLACK);
@@ -440,12 +445,24 @@ void Arena::update(Loop& loop) {
         }
 
         for (const auto& [k, num] : spell_keys) {
-            if (k == key) {
-                auto spell_id = player.can_cast(num, loop.player_save->get_spellbook());
-                loop.player_save->cast_spell(spell_id, (Vector2){player.position.x, player.position.z}, mouse_xz,
-                                             enemies, player.mana);
-                return;
+            if (k != key) continue;
+
+            if (spellbook_ui) {
+                auto spell_id = spellbook_ui->inventory_pane.dragged(loop.mouse);
+
+                if (spell_id) {
+                    player.equip_spell(*spell_id, num, loop.player_save->get_spellbook());
+                    return;
+                }
+
+                if (loop.mouse.mouse_pos.x < spellbook_ui->spellbook_dims.x && loop.mouse.mouse_pos.y < spellbook_ui->spellbook_dims.y) return;
             }
+
+            auto spell_id = player.can_cast(num, loop.player_save->get_spellbook());
+            loop.player_save->cast_spell(spell_id, (Vector2){player.position.x, player.position.z}, mouse_xz,
+                                         enemies, player.mana);
+
+            return;
         }
     });
 

@@ -8,6 +8,7 @@
 #include "spell.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace ui {
@@ -162,14 +163,14 @@ namespace ui {
             for (std::size_t item_ix = first; item_ix < second; item_ix++) {
                 auto hover = !mouse.button_press && check_collision(item_hitboxes[item_ix - first].hitbox, mouse.mouse_pos);
 
-                auto dragged = item_hitboxes[item_ix - first].is_dragged(mouse);
-                if (dragged) {
+                auto drag = item_hitboxes[item_ix - first].is_dragged(mouse);
+                if (drag) {
                     is_deferred = true;
                     BeginTextureMode(drag_defer);
                     ClearBackground(BLANK);
                 }
                 if (auto pos = item_hitboxes[item_ix - first].update(mouse, *this, item_ix,
-                                                                     dragged ? Drag
+                                                                     drag ? Drag
                                                                      : hover ? Hover
                                                                              : Normal,
                                                                      std::forward<Args>(args)...);
@@ -177,7 +178,7 @@ namespace ui {
                     assert(!ret);
                     ret = {item_ix, *pos};
                 }
-                if (dragged) EndTextureMode();
+                if (drag) EndTextureMode();
             }
 
             return ret;
@@ -200,6 +201,15 @@ namespace ui {
                                },
                                Vector2Zero(), 0.0f, WHITE);
             }
+        }
+
+        std::optional<uint64_t> dragged(Mouse& mouse) const {
+            for (uint64_t i = item_view.first; i < item_view.second; i++) {
+                const auto& item = item_hitboxes[i - item_view.first];
+                if (check_collision(item.hitbox, mouse.mouse_pos) || item.is_dragged(mouse)) return i;
+            }
+
+            return std::nullopt;
         }
     };
 }

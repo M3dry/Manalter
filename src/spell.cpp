@@ -41,6 +41,8 @@ void Spell::add_exp(uint32_t e) {
 }
 
 void Spell::draw(Rectangle working_area, assets::Store& assets) {
+    auto info = get_spell_info();
+
     assets.draw_texture(assets::SpellTileBackground, working_area);
     assets.draw_texture(get_spell_tag(), Rectangle{
                                              .x = working_area.x,
@@ -58,6 +60,16 @@ void Spell::draw(Rectangle working_area, assets::Store& assets) {
                    },
                    working_area, Vector2Zero(), 0.0f, rarity::get_rarity_info(rarity).color);
 
+    working_area.x += working_area.height * 0.75f;
+    working_area.width -= working_area.height * 0.75f;
+    working_area.height = working_area.height * 0.7f;
+    auto [size, _] = max_font_size(GetFontDefault(),
+                                   Vector2{working_area.width, working_area.height * 0.4f}, info.name);
+    DrawText(info.name, static_cast<int>(working_area.x), static_cast<int>(working_area.y), size, WHITE);
+
+    working_area.y += working_area.height * 0.4f;
+    working_area.height -= working_area.height * 0.4f;
+    DrawRectangleRec(working_area, BLACK);
 }
 
 Spell Spell::random(uint32_t max_level) {

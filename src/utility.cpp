@@ -7,28 +7,29 @@
 #include <raylib.h>
 #include <rlgl.h>
 
-std::pair<int, Vector2> max_font_size(const Font& font, float spacing, const Vector2& max_dims, std::string_view text) {
-    int font_size = 100;
-    int min = 0;
-    int max = -1;
+std::pair<int, Vector2> max_font_size(const Font& font, const Vector2& max_dims, std::string_view text) {
+    int lo = 1;
+    int hi = 1000; 
+    int best_size = 0;
+    Vector2 best_dims;
 
-    while (true) {
-        Vector2 dims = MeasureTextEx(font, text.data(), static_cast<float>(font_size), spacing);
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        float spacing = static_cast<float>(mid) / 10.0f;
+        Vector2 dims = MeasureTextEx(font, text.data(), static_cast<float>(mid), spacing);
 
-        if (dims.y < max_dims.y) {
-            min = font_size;
-        } else if (dims.y > max_dims.y) {
-            max = font_size;
-        } else
-            return {font_size, dims};
-
-        if (min == max) return {font_size, dims};
-
-        if (max == -1) {
-            font_size += 100;
-        } else
-            font_size = (min + max) / 2;
+        if (dims.x <= max_dims.x && dims.y <= max_dims.y) {
+            // Valid font size, try larger
+            best_size = mid;
+            best_dims = dims;
+            lo = mid + 1;
+        } else {
+            // Too big, try smaller
+            hi = mid - 1;
+        }
     }
+
+    return {best_size, best_dims};
 }
 
 // angle will be of range 0 - 360
