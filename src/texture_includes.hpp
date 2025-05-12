@@ -66,4 +66,12 @@ namespace texture_includes {
     constexpr unsigned char arrow[] = {
 #embed "../assets/arrow.png"
     };
+
+    constexpr unsigned char empty_slot[] = {
+#embed "../assets/spell-icons/empty-slot.png"
+    };
+
+    constexpr unsigned char locked_slot[] = {
+#embed "../assets/spell-icons/locked-slot.png"
+    };
 }

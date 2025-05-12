@@ -96,10 +96,9 @@ void EndTextureModeMSAA(RenderTexture2D target, RenderTexture2D resolveTarget) {
 #endif
 
 namespace assets {
-    Store::Store(Vector2 screen) : texture_map({}), render_map({}), font_map({}) {
+    Store::Store(Vector2 screen) : texture_map({}), render_map({}) {
         add_textures();
         add_render_textures(screen);
-        add_fonts();
         add_models();
     };
 
@@ -110,10 +109,6 @@ namespace assets {
 
         for (auto& render_tex : render_map) {
             UnloadRenderTexture(render_tex);
-        }
-
-        for (auto& font : font_map) {
-            UnloadFont(font);
         }
 
         for (auto& model : model_map) {
@@ -137,16 +132,8 @@ namespace assets {
         return texture_map[id_to_idx(name)];
     }
 
-    Texture2D Store::operator[](Rarity id) {
-        return texture_map[id_to_idx(id)];
-    }
-
     RenderTexture2D Store::operator[](RenderId id, bool resolved) {
         return index_render_map(id, resolved);
-    }
-
-    Font Store::operator[](FontId id) {
-        return font_map[id];
     }
 
     Model Store::operator[](ModelId id) {
@@ -173,16 +160,12 @@ namespace assets {
         return static_cast<std::size_t>(name) + GeneralIdSize;
     }
 
-    std::size_t Store::id_to_idx(Rarity id) {
-        return static_cast<std::size_t>(id) + GeneralIdSize + static_cast<std::size_t>(spells::Tag::Size);
-    }
-
     void Store::add_textures() {
-        Image img = LoadImage("./assets/spell-icons/empty-slot.png");
+        Image img = LoadImageFromMemory(".png", texture_includes::empty_slot, sizeof(texture_includes::empty_slot));
         texture_map[EmptySpellSlot] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImage("./assets/spell-icons/locked-slot.png");
+        img = LoadImageFromMemory(".png", texture_includes::locked_slot, sizeof(texture_includes::locked_slot));
         texture_map[LockedSlot] = LoadTextureFromImage(img);
         UnloadImage(img);
 
@@ -198,7 +181,8 @@ namespace assets {
         texture_map[PlayButton] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImageFromMemory(".png", texture_includes::play_button_hover, sizeof(texture_includes::play_button_hover));
+        img = LoadImageFromMemory(".png", texture_includes::play_button_hover,
+                                  sizeof(texture_includes::play_button_hover));
         texture_map[PlayButtonHover] = LoadTextureFromImage(img);
         UnloadImage(img);
 
@@ -206,7 +190,8 @@ namespace assets {
         texture_map[ExitButton] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImageFromMemory(".png", texture_includes::exit_button_hover, sizeof(texture_includes::exit_button_hover));
+        img = LoadImageFromMemory(".png", texture_includes::exit_button_hover,
+                                  sizeof(texture_includes::exit_button_hover));
         texture_map[ExitButtonHover] = LoadTextureFromImage(img);
         UnloadImage(img);
 
@@ -214,7 +199,8 @@ namespace assets {
         texture_map[Floor] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImageFromMemory(".png", texture_includes::powerup_background, sizeof(texture_includes::powerup_background));
+        img = LoadImageFromMemory(".png", texture_includes::powerup_background,
+                                  sizeof(texture_includes::powerup_background));
         texture_map[PowerUpBackground] = LoadTextureFromImage(img);
         UnloadImage(img);
 
@@ -222,11 +208,13 @@ namespace assets {
         texture_map[SoulPortalArrow] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImageFromMemory(".png", texture_includes::spellbook_background, sizeof(texture_includes::spellbook_background));
+        img = LoadImageFromMemory(".png", texture_includes::spellbook_background,
+                                  sizeof(texture_includes::spellbook_background));
         texture_map[SpellBookBackground] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImageFromMemory(".png", texture_includes::pause_background, sizeof(texture_includes::pause_background));
+        img =
+            LoadImageFromMemory(".png", texture_includes::pause_background, sizeof(texture_includes::pause_background));
         texture_map[PauseBackground] = LoadTextureFromImage(img);
         UnloadImage(img);
 
@@ -234,27 +222,24 @@ namespace assets {
         texture_map[HubBackground] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImageFromMemory(".png", texture_includes::spell_tile_background, sizeof(texture_includes::spell_tile_background));
+        img = LoadImageFromMemory(".png", texture_includes::spell_tile_background,
+                                  sizeof(texture_includes::spell_tile_background));
         texture_map[SpellTileBackground] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImageFromMemory(".png", texture_includes::spell_tile_rarity, sizeof(texture_includes::spell_tile_rarity));
+        img = LoadImageFromMemory(".png", texture_includes::spell_tile_rarity,
+                                  sizeof(texture_includes::spell_tile_rarity));
         texture_map[SpellTileRarityFrame] = LoadTextureFromImage(img);
         UnloadImage(img);
 
-        img = LoadImageFromMemory(".png", texture_includes::spellicon_rarity, sizeof(texture_includes::spellicon_rarity));
+        img =
+            LoadImageFromMemory(".png", texture_includes::spellicon_rarity, sizeof(texture_includes::spellicon_rarity));
         texture_map[SpellIconRarityFrame] = LoadTextureFromImage(img);
         UnloadImage(img);
 
         for (std::size_t tag_i = 0; tag_i < static_cast<int>(spells::Tag::Size); tag_i++) {
             img = LoadImage((std::string(spell::icon_path) + "/" + spells::infos[tag_i].icon).c_str());
             texture_map[tag_i + GeneralIdSize] = LoadTextureFromImage(img);
-            UnloadImage(img);
-        }
-
-        for (std::size_t rarity_i = 0; rarity_i < static_cast<int>(Rarity::Size); rarity_i++) {
-            img = LoadImage((std::string(rarity::frame_path) + "/" + rarity::info[rarity_i].frame).c_str());
-            texture_map[rarity_i + static_cast<int>(spells::Tag::Size) + GeneralIdSize] = LoadTextureFromImage(img);
             UnloadImage(img);
         }
 
@@ -274,10 +259,6 @@ namespace assets {
         index_render_map(Target, true) = LoadRenderTexture(static_cast<int>(screen.x), static_cast<int>(screen.y));
         index_render_map(CircleUI, false) = CreateRenderTextureMSAA(1023, 1023, MSAA); // odd, to have a center pixel
         index_render_map(CircleUI, true) = LoadRenderTexture(1023, 1023);
-    }
-
-    void Store::add_fonts() {
-        font_map[Macondo] = LoadFontEx("./assets/Macondo/Macondo-Regular.ttf", 64, nullptr, 0);
     }
 
     void Store::add_models() {

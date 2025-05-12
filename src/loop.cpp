@@ -14,6 +14,7 @@
 
 #include "assets.hpp"
 #include "effects.hpp"
+#include "font.hpp"
 #include "hitbox.hpp"
 #include "item_drops.hpp"
 #include "player.hpp"
@@ -318,9 +319,11 @@ void Arena::draw(Loop& loop) {
     auto time = format_to_time(game_time);
     DrawText(time.c_str(), static_cast<int>(loop.screen.x) - MeasureText(time.c_str(), 20) - 5, 10, 20, BLACK);
 
-    DrawText(std::format("SOULS: {}", souls).c_str(), 10, static_cast<int>(loop.screen.y) - 50, 20, BLACK);
-    DrawText(std::format("CLAIMED SOULS: {}", loop.player_save->get_souls()).c_str(), 10,
-             static_cast<int>(loop.screen.y) - 30, 20, BLACK);
+    font_manager::draw_text(std::format("Souls: {}", souls).c_str(), font_manager::Alagard, 20, 2, WHITE,
+                            Vector2{10.0f, loop.screen.y - 50.0f}, font_manager::Exact);
+    font_manager::draw_text(std::format("Claimed souls: {}", loop.player_save->get_souls()).c_str(),
+                            font_manager::Alagard, 20, 2, WHITE, Vector2{10.0f, loop.screen.y - 30.0f},
+                            font_manager::Exact);
 
     if (soul_portal && soul_portal->time_remaining >= 58.0) {
         auto text = "A new soul portal has spawned";
@@ -448,19 +451,21 @@ void Arena::update(Loop& loop) {
             if (k != key) continue;
 
             if (spellbook_ui) {
-                auto spell_id = spellbook_ui->inventory_pane.dragged(loop.mouse);
+                auto spell_id = spellbook_ui->inventory_pane.hover(loop.mouse);
 
                 if (spell_id) {
                     player.equip_spell(*spell_id, num, loop.player_save->get_spellbook());
                     return;
                 }
 
-                if (loop.mouse.mouse_pos.x < spellbook_ui->spellbook_dims.x && loop.mouse.mouse_pos.y < spellbook_ui->spellbook_dims.y) return;
+                if (loop.mouse.mouse_pos.x < spellbook_ui->spellbook_dims.x &&
+                    loop.mouse.mouse_pos.y < spellbook_ui->spellbook_dims.y)
+                    return;
             }
 
             auto spell_id = player.can_cast(num, loop.player_save->get_spellbook());
-            loop.player_save->cast_spell(spell_id, (Vector2){player.position.x, player.position.z}, mouse_xz,
-                                         enemies, player.mana);
+            loop.player_save->cast_spell(spell_id, (Vector2){player.position.x, player.position.z}, mouse_xz, enemies,
+                                         player.mana);
 
             return;
         }
@@ -498,6 +503,7 @@ void Arena::update(Loop& loop) {
 
     if (player.health == 0) {
         loop.player_save->save();
+        loop.player_save->remove_default_spell();
         loop.scene.emplace<Hub>(loop);
         return;
     }
@@ -539,11 +545,24 @@ Hub::Hub(Loop& loop) {
     start_button.emplace(button_rec, [&, button_rec](auto state) {
         switch (state) {
             using enum ui::Button::State;
-            case Normal:
-                DrawRectangleRec(button_rec, WHITE);
+            case Normal: {
+                auto [size, dims] = font_manager::max_font_size(
+                    font_manager::Alagard, Vector2{button_rec.width, button_rec.height}, "Start game");
+                font_manager::draw_text("Start game", font_manager::Alagard, size, static_cast<float>(size) / 10.0f,
+                                        WHITE,
+                                        Vector2{button_rec.x + button_rec.width / 2.0f - dims.x / 2.0f,
+                                                button_rec.y + button_rec.height / 2.0f - dims.y / 2.0f},
+                                        font_manager::Exact);
                 break;
+            }
             case Hover:
-                DrawRectangleRec(button_rec, YELLOW);
+                auto [size, dims] = font_manager::max_font_size(
+                    font_manager::Alagard, Vector2{button_rec.width, button_rec.height}, "Start game");
+                font_manager::draw_text("Start game", font_manager::Alagard, size, static_cast<float>(size) / 10.0f,
+                                        BLUE,
+                                        Vector2{button_rec.x + button_rec.width / 2.0f - dims.x / 2.0f,
+                                                button_rec.y + button_rec.height / 2.0f - dims.y / 2.0f},
+                                        font_manager::Exact);
                 break;
         }
     });
@@ -650,6 +669,9 @@ void Hub::draw(Loop& loop) {
         loop.player_save->save();
         loop.player_save->create_default_spell();
         loop.scene.emplace<Arena>(loop);
+        EndDrawing();
+
+        return;
     }
 
     if (auto pos =
@@ -800,6 +822,7 @@ void SplashScreen::update([[maybe_unused]] Loop& loop) {
 Loop::Loop(int width, int height)
     : screen((Vector2){static_cast<float>(width), static_cast<float>(height)}), assets(screen),
       skinning_shader(LoadShader("./assets/skinning.vs.glsl", "./assets/skinning.fs.glsl")), scene(SplashScreen()) {
+    font_manager::init();
 #ifdef PLATFORM_WEB
     emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, this, false, resize_handler);
 #endif
@@ -841,4 +864,5 @@ void Loop::update() {
 Loop::~Loop() {
     UnloadShader(skinning_shader);
     effects::clean();
+    font_manager::clean();
 }

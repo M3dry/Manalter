@@ -55,10 +55,10 @@ uint32_t Player::exp_to_lvl(uint16_t lvl) {
 
 bool Player::add_exp(uint32_t e) {
     exp += e;
-    if (exp >= exp_to_next_lvl) {
+    while (exp >= exp_to_next_lvl) {
         lvl++;
         exp -= exp_to_next_lvl;
-        exp_to_next_lvl = Player::exp_to_lvl(lvl + 1);
+        exp_to_next_lvl = exp_to_lvl(lvl + 1);
 
         if (unlocks_spell_slot(lvl)) unlocked_spell_count++;
         return true;
@@ -78,7 +78,6 @@ int Player::equip_spell(uint64_t spellbook_idx, uint8_t slot_id, const SpellBook
     if (spellbook.size() <= spellbook_idx) return -1;
     if (unlocked_spell_count <= slot_id) return -2;
 
-    std::println("EQUIPPING {} @{}", spellbook_idx, slot_id);
     equipped_spells[slot_id] = spellbook_idx;
 
     return 0;

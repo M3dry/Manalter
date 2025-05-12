@@ -62,11 +62,14 @@ struct Enemies {
                 return false;
             },
             [&](auto& enemy, auto ix) {
-                auto dropped = enemy.take_damage(damage, element);
-                if (!dropped) return;
-                auto [exp, souls] = *dropped;
+                auto dead = enemy.take_damage(damage, element);
+                if (!dead) return;
+                auto [exp, souls] = *dead;
 
-                item_drop_pusher.emplace_back(enemy.level, xz_component(enemy.pos));
+                if (GetRandomValue(0, 5) == 0) {
+                    item_drop_pusher.emplace_back(enemy.level, xz_component(enemy.pos));
+                }
+
                 if (auto enemy_cap = enemies::get_info(enemy.state).cap_value; enemy_cap < cap) {
                     cap -= enemy_cap;
                 } else {

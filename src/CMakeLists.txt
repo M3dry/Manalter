@@ -16,6 +16,7 @@ set(MANALTER_LIB_SOURCES
     power_up.cpp
     particle_system.cpp
     effects.cpp
+    font.cpp
 )
 
 set(HITBOX_DEMO_SOURCES

@@ -1,4 +1,5 @@
 #include "particle_system.hpp"
+#include "texture_includes.hpp"
 #include "utility.hpp"
 #include <random>
 #include <raylib.h>
@@ -299,7 +300,10 @@ namespace particle_system::renderers {
         rlDisableVertexArray();
         rlDisableVertexBuffer();
 
-        particle_circle = LoadTexture("./assets/particle_circle.png");
+        Image img =
+            LoadImageFromMemory(".png", texture_includes::particle_circle, sizeof(texture_includes::particle_circle));
+        particle_circle = LoadTextureFromImage(img);
+        UnloadImage(img);
     }
 }
 
@@ -337,7 +341,7 @@ namespace particle_system {
     }
 
     void System::draw(Vector3 offset) {
-            std::visit([&](auto&& arg) { arg(particles, offset); }, renderer);
+        std::visit([&](auto&& arg) { arg(particles, offset); }, renderer);
     }
 
     void System::reset() {

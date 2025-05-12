@@ -324,34 +324,28 @@ namespace rarity {
     static const char* frame_path = "./assets/spell-icons/frames";
 
     struct Info {
-        const char* frame;
         const Color color;
         const float stat_multiplier;
     };
 
     static const std::array<Info, static_cast<int>(Rarity::Size)> info = {
         (Info){
-            .frame = "common.png",
             .color = (Color){124, 129, 129, 255},
             .stat_multiplier = 1.0f,
         },
         (Info){
-            .frame = "uncommon.png",
             .color = (Color){5, 249, 203, 255},
             .stat_multiplier = 2.0f,
         },
         (Info){
-            .frame = "rare.png",
             .color = (Color){5, 92, 249, 255},
             .stat_multiplier = 3.0f,
         },
         (Info){
-            .frame = "epic.png",
             .color = (Color){140, 12, 152, 255},
             .stat_multiplier = 5.0f,
         },
         (Info){
-            .frame = "legendary.png",
             .color = (Color){252, 12, 12, 255},
             .stat_multiplier = 10.0f,
         },
@@ -369,6 +363,8 @@ struct SpellStats {
     SpellStats();
     SpellStats(const spell::Info& info, Rarity rarity, uint32_t level);
 
+    void lvl_increased();
+
     void serialize(std::ostream& out) const;
     static SpellStats deserialize(std::istream& in, version version);
 };
@@ -380,17 +376,18 @@ struct Spell {
     uint16_t cooldown;
     uint16_t current_cooldown;
 
-    uint32_t level;
-    uint64_t experience;
+    uint32_t lvl;
+    uint64_t exp;
+    uint64_t exp_to_next_lvl = 100;
 
     SpellStats stats;
 
-    Spell(spells::Data&& spell, Rarity rarity, uint32_t level)
-        : spell(std::forward<spells::Data>(spell)), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(0), level(level),
-          experience(0), stats(get_info(spell), rarity, level) {};
-    Spell(spells::Data&& spell, Rarity rarity, uint32_t level, uint64_t experience, SpellStats stats)
-        : spell(std::forward<spells::Data>(spell)), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(0), level(level),
-          experience(experience), stats(stats) {};
+    Spell(spells::Data&& spell, Rarity rarity, uint32_t lvl)
+        : spell(std::forward<spells::Data>(spell)), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(0), lvl(lvl),
+          exp(0), stats(get_info(spell), rarity, lvl) {};
+    Spell(spells::Data&& spell, Rarity rarity, uint32_t lvl, uint64_t exp, SpellStats stats)
+        : spell(std::forward<spells::Data>(spell)), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(0), lvl(lvl),
+          exp(exp), stats(stats) {};
     Spell(Spell&&) noexcept = default;
     Spell& operator=(Spell&&) noexcept = default;
 
@@ -412,6 +409,7 @@ struct Spell {
     void draw(Rectangle working_area, assets::Store& assets);
 
     static Spell random(uint32_t max_level);
+    static uint64_t exp_to_lvl(uint32_t lvl);
 
     void serialize(std::ostream& out) const;
     static Spell deserialize(std::istream& in, version version);

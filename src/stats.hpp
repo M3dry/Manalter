@@ -25,6 +25,16 @@ template <SeriaDeser Int, Int points_def, Int percetange_def> class Stat {
         update();
     }
 
+    inline constexpr void set_points(Int p) {
+        points = p;
+        update();
+    }
+
+    inline constexpr void set_percentage(Int per) {
+        percentage = per;
+        update();
+    }
+
     inline constexpr Int get_points() const {
         return points;
     }

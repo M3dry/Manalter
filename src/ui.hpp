@@ -140,7 +140,7 @@ namespace ui {
                 first = 0;
                 second = std::min(items_size, page_size);
             }
-            if (mouse.wheel_movement != 0 && check_collision(scroll_poly, mouse.mouse_pos) && second >= page_size) {
+            if (mouse.wheel_movement != 0 && check_collision(scroll_poly, mouse.mouse_pos) && !dragged(mouse) && second >= page_size) {
                 if (mouse.wheel_movement < 0) {
                     first += static_cast<uint64_t>(-mouse.wheel_movement);
                     second += static_cast<uint64_t>(-mouse.wheel_movement);
@@ -204,6 +204,17 @@ namespace ui {
         }
 
         std::optional<uint64_t> dragged(Mouse& mouse) const {
+            if (!mouse.button_press) return std::nullopt;
+
+            for (uint64_t i = item_view.first; i < item_view.second; i++) {
+                const auto& item = item_hitboxes[i - item_view.first];
+                if (item.is_dragged(mouse)) return i;
+            }
+
+            return std::nullopt;
+        }
+
+        std::optional<uint64_t> hover(Mouse& mouse) const {
             for (uint64_t i = item_view.first; i < item_view.second; i++) {
                 const auto& item = item_hitboxes[i - item_view.first];
                 if (check_collision(item.hitbox, mouse.mouse_pos) || item.is_dragged(mouse)) return i;
