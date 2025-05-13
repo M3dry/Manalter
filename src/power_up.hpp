@@ -24,7 +24,7 @@ namespace powerups {
             { T::min } -> std::convertible_to<uint8_t>;
             { T::max } -> std::convertible_to<uint8_t>;
             { T::step } -> std::convertible_to<uint8_t>;
-            { T::weights } -> std::same_as<const double(&)[std::extent_v<decltype(T::weights)>]>;
+            { T::weights } -> std::same_as<const double (&)[std::extent_v<decltype(T::weights)>]>;
             { t.value } -> std::convertible_to<uint8_t>;
         };
 
@@ -240,9 +240,11 @@ namespace powerups {
 #define POWERUP_TYPE_ENUM(name)                                                                                        \
     template <> struct TypeToEnum<name<Percentage>> {                                                                  \
         static constexpr Type type = Type::name##Percentage;                                                           \
+        static constexpr PowerUpType powerup_type = Percentage;                                                        \
     };                                                                                                                 \
     template <> struct TypeToEnum<name<Absolute>> {                                                                    \
         static constexpr Type type = Type::name##Absolute;                                                             \
+        static constexpr PowerUpType powerup_type = Absolute;                                                          \
     };
 
     EACH_POWERUP(POWERUP_TYPE_ENUM, POWERUP_TYPE_ENUM)
@@ -275,8 +277,8 @@ struct PowerUp {
     PowerUp(PowerUp&&) noexcept = default;
     PowerUp& operator=(PowerUp&&) noexcept = default;
 
-    void draw(assets::Store& assets, const Rectangle& inside);
-    void draw_hover(assets::Store& assets, const Rectangle& inside);
+    void draw(assets::Store& assets, Rectangle inside);
+    void draw_hover(assets::Store& assets, Rectangle inside);
     void apply(PlayerStats& stats);
     static PowerUp random();
 };

@@ -5,6 +5,7 @@
 #include "ringbuffer.hpp"
 #include "seria_deser.hpp"
 #include "stats.hpp"
+#include "texture_includes.hpp"
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -66,7 +67,8 @@ namespace spell {
     static const char* icon_path = "./assets/spell-icons";
     struct Info {
         const char* name;
-        const char* icon;
+        const unsigned char* icon_data;
+        std::size_t icon_size;
 
         movement::Movement movement;
         Effect effect;
@@ -86,7 +88,8 @@ namespace spells {
     struct FireWall {
         static constexpr spell::Info info = {
             .name = "Fire Wall",
-            .icon = "fire-wall.png",
+            .icon_data = texture_includes::fire_wall,
+            .icon_size = sizeof(texture_includes::fire_wall),
             .movement =
                 (spell::movement::Beam){
                     .origin = spell::movement::Player,
@@ -107,7 +110,8 @@ namespace spells {
     struct FrostNova {
         static constexpr spell::Info info = {
             .name = "Frost Nova",
-            .icon = "frost-nova.png",
+            .icon_data = texture_includes::frost_nova,
+            .icon_size = sizeof(texture_includes::frost_nova),
             .movement =
                 (spell::movement::Circle){
                     .center = spell::movement::Mouse,
@@ -138,7 +142,8 @@ namespace spells {
     struct FallingIcicile {
         static constexpr spell::Info info = {
             .name = "Falling Icicle",
-            .icon = "falling-icicle.png",
+            .icon_data = texture_includes::falling_icicle,
+            .icon_size = sizeof(texture_includes::falling_icicle),
             .movement =
                 (spell::movement::Circle){
                     .center = spell::movement::Mouse,
@@ -155,7 +160,8 @@ namespace spells {
     struct LightningStrike {
         static constexpr spell::Info info = {
             .name = "Lightning Strike",
-            .icon = "lightning-strike.png",
+            .icon_data = texture_includes::lightning_strike,
+            .icon_size = sizeof(texture_includes::lightning_strike),
             .movement =
                 (spell::movement::Circle){
                     .center = spell::movement::ClosestEnemy,
@@ -172,7 +178,8 @@ namespace spells {
     struct VoidImplosion {
         static constexpr spell::Info info = {
             .name = "Void Implosion",
-            .icon = "void-implosion.png",
+            .icon_data = texture_includes::void_implosion,
+            .icon_size = sizeof(texture_includes::void_implosion),
             .movement =
                 (spell::movement::Circle){
                     .center = spell::movement::ClosestEnemy,
@@ -202,7 +209,8 @@ namespace spells {
     struct ManaDetonation {
         static constexpr spell::Info info = {
             .name = "Mana Detonation",
-            .icon = "mana-detonation.png",
+            .icon_data = texture_includes::mana_detonation,
+            .icon_size = sizeof(texture_includes::mana_detonation),
             .movement =
                 (spell::movement::Circle){
                     .center = spell::movement::Player,
@@ -383,11 +391,11 @@ struct Spell {
     SpellStats stats;
 
     Spell(spells::Data&& spell, Rarity rarity, uint32_t lvl)
-        : spell(std::forward<spells::Data>(spell)), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(0), lvl(lvl),
-          exp(0), stats(get_info(spell), rarity, lvl) {};
+        : spell(std::forward<spells::Data>(spell)), rarity(rarity), cooldown(get_info(spell).cooldown),
+          current_cooldown(0), lvl(lvl), exp(0), stats(get_info(spell), rarity, lvl) {};
     Spell(spells::Data&& spell, Rarity rarity, uint32_t lvl, uint64_t exp, SpellStats stats)
-        : spell(std::forward<spells::Data>(spell)), rarity(rarity), cooldown(get_info(spell).cooldown), current_cooldown(0), lvl(lvl),
-          exp(exp), stats(stats) {};
+        : spell(std::forward<spells::Data>(spell)), rarity(rarity), cooldown(get_info(spell).cooldown),
+          current_cooldown(0), lvl(lvl), exp(exp), exp_to_next_lvl(exp_to_lvl(lvl + 1)), stats(stats) {};
     Spell(Spell&&) noexcept = default;
     Spell& operator=(Spell&&) noexcept = default;
 

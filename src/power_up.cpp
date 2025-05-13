@@ -1,27 +1,39 @@
 #include "power_up.hpp"
 
 #include "assets.hpp"
+#include "font.hpp"
 #include "raylib.h"
 #include <random>
 
 template <powerups::__impl::DiscreteDistr T> void draw_text(const Rectangle& constraint, uint8_t value) {
-    DrawText(T::name, static_cast<int>(constraint.x + 10), static_cast<int>(constraint.y + 20), 20, WHITE);
-    DrawText(std::format("{}", value).c_str(), static_cast<int>(constraint.x + 10), static_cast<int>(constraint.y + 40), 20, WHITE);
+    auto powerup_type = powerups::TypeToEnum<T>::powerup_type;
+
+    font_manager::draw_text(T::name, font_manager::Alagard, 20, 2, WHITE,
+                            Vector2{constraint.x + 10.0f, constraint.y + 20}, font_manager::Exact);
+    font_manager::draw_text(std::format("{}{}", value, powerup_type == powerups::Percentage ? "%" : "").c_str(),
+                            font_manager::Alagard, 20, 2, WHITE, Vector2{constraint.x + 10.0f, constraint.y + 40.0f},
+                            font_manager::Exact);
 }
 
-void PowerUp::draw(assets::Store& assets, const Rectangle& constraint) {
+void PowerUp::draw(assets::Store& assets, Rectangle constraint) {
     assets.draw_texture(assets::PowerUpBackground, constraint);
 
-    std::visit([&constraint](auto&& arg) {
-        using T = std::decay_t<decltype(arg)>;
+    constraint.x += 10;
+    constraint.y += 10;
+    constraint.width -= 20;
+    constraint.height -= 20;
+    std::visit(
+        [&constraint](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
 
-        if (powerups::__impl::DiscreteDistr<T>) {
-            draw_text<T>(constraint, arg.value);
-        }
-    }, power_up);
+            if (powerups::__impl::DiscreteDistr<T>) {
+                draw_text<T>(constraint, arg.value);
+            }
+        },
+        power_up);
 }
 
-void PowerUp::draw_hover(assets::Store& assets, const Rectangle& constraint) {
+void PowerUp::draw_hover(assets::Store& assets, Rectangle constraint) {
     DrawRectangleRec(constraint, BLUE);
 }
 

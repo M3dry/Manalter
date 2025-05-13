@@ -155,7 +155,7 @@ void Arena::Paused::update(Arena& arena, Loop& loop) {
 }
 
 Arena::Arena(Loop& loop)
-    : state(Playing(loop.keys)), player({0.0f, 10.0f, 0.0f}, loop.assets), enemies(30), to_next_soul_portal(5.0 * 60.0),
+    : state(Playing(loop.keys)), player({0.0f, 10.0f, 0.0f}, loop.assets), enemies(100), to_next_soul_portal(5.0 * 60.0),
       soul_portal(std::nullopt) {
     auto arrow_tex = loop.assets[assets::SoulPortalArrow];
     auto arrow_mesh = GenMeshPlane(16, 16, 1, 1);

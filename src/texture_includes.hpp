@@ -74,4 +74,28 @@ namespace texture_includes {
     constexpr unsigned char locked_slot[] = {
 #embed "../assets/spell-icons/locked-slot.png"
     };
+
+    constexpr unsigned char fire_wall[] = {
+#embed "../assets/spell-icons/fire-wall.png"
+    };
+
+    constexpr unsigned char frost_nova[] = {
+#embed "../assets/spell-icons/frost-nova.png"
+    };
+
+    constexpr unsigned char falling_icicle[] = {
+#embed "../assets/spell-icons/falling-icicle.png"
+    };
+
+    constexpr unsigned char lightning_strike[] = {
+#embed "../assets/spell-icons/lightning-strike.png"
+    };
+
+    constexpr unsigned char void_implosion[] = {
+#embed "../assets/spell-icons/void-implosion.png"
+    };
+
+    constexpr unsigned char mana_detonation[] = {
+#embed "../assets/spell-icons/mana-detonation.png"
+    };
 }
