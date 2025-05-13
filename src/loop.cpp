@@ -126,22 +126,72 @@ void Arena::PowerUpSelection::update_buttons(assets::Store& assets, Vector2 scre
     }
 }
 
-Arena::Paused::Paused(Keys& keys) {
-    keys.unregister_all();
-    keys.register_key(KEY_ESCAPE);
+Arena::Paused::Paused(Loop& loop) {
+    loop.keys.unregister_all();
+    loop.keys.register_key(KEY_ESCAPE);
+
+    constexpr auto continue_text = "Continue";
+    auto continue_rec = Rectangle{
+        .x = loop.screen.x * 0.8f,
+        .y = 0.0f,
+        .width = loop.screen.x * 0.2f,
+        .height = loop.screen.y * 0.1f,
+    };
+    auto [continue_size, continue_dims] = font_manager::max_font_size(
+        font_manager::Alagard, Vector2{continue_rec.width, continue_rec.height}, continue_text);
+
+    continue_rec.width = continue_dims.x;
+    continue_rec.height = continue_dims.y;
+    auto padding = continue_rec.x * 0.02f;
+    continue_rec.x = loop.screen.x - continue_rec.width - padding;
+    continue_rec.y = padding;
+    continue_button.emplace(continue_rec, [continue_size, continue_rec](auto state) {
+        font_manager::draw_text(continue_text, font_manager::Alagard, continue_size,
+                                static_cast<float>(continue_size) / 10.0f,
+                                state == ui::Button::Hover ? Color{170, 255, 0, 255} : Color{34, 139, 34, 255},
+                                Vector2{continue_rec.x, continue_rec.y}, font_manager::Exact);
+    });
+
+    constexpr auto quit_text = "Quit";
+    auto quit_rec = Rectangle{
+        .x = 0.0f,
+        .y = loop.screen.y * 0.99f,
+        .width = loop.screen.x * 0.2f,
+        .height = loop.screen.y * 0.1f,
+    };
+    auto [quit_size, quit_dims] =
+        font_manager::max_font_size(font_manager::Alagard, Vector2{quit_rec.width, quit_rec.height}, quit_text);
+
+    quit_rec.width = quit_dims.x;
+    quit_rec.height = quit_dims.y;
+    padding = quit_rec.x * 0.02f;
+    quit_rec.x = padding;
+    quit_rec.y = loop.screen.y - quit_rec.height - padding;
+    quit_button.emplace(quit_rec, [quit_size, quit_rec](auto state) {
+        font_manager::draw_text(quit_text, font_manager::Alagard, quit_size, static_cast<float>(quit_size) / 10.0f,
+                                state == ui::Button::Hover ? Color{210, 43, 43, 255} : Color{136, 8, 8, 255},
+                                Vector2{quit_rec.x, quit_rec.y}, font_manager::Exact);
+    });
 }
 
-void Arena::Paused::draw(Loop& loop) {
+void Arena::Paused::draw(Arena& arena, Loop& loop) {
     loop.assets.draw_texture(assets::PauseBackground, Rectangle{
                                                           .x = 0.0f,
                                                           .y = 0.0f,
                                                           .width = loop.screen.x,
                                                           .height = loop.screen.y,
                                                       });
-    DrawText("PAUSED",
-             static_cast<int>(loop.screen.x / 2.0f) -
-                 static_cast<int>(static_cast<float>(MeasureText("PAUSED", 30)) / 2.0f),
-             static_cast<int>(loop.screen.y / 2.0f) - 15, 30, WHITE);
+
+    if (continue_button->update(loop.mouse)) {
+        arena.state.emplace<Playing>(loop.keys);
+        return;
+    }
+
+    if (quit_button->update(loop.mouse)) {
+        arena.player.health = 0;
+        arena.state.emplace<Playing>(loop.keys);
+        return;
+    }
 }
 
 void Arena::Paused::update(Arena& arena, Loop& loop) {
@@ -155,8 +205,8 @@ void Arena::Paused::update(Arena& arena, Loop& loop) {
 }
 
 Arena::Arena(Loop& loop)
-    : state(Playing(loop.keys)), player({0.0f, 10.0f, 0.0f}, loop.assets), enemies(100), to_next_soul_portal(5.0 * 60.0),
-      soul_portal(std::nullopt) {
+    : state(Playing(loop.keys)), player({0.0f, 10.0f, 0.0f}, loop.assets), enemies(100),
+      to_next_soul_portal(5.0 * 60.0), soul_portal(std::nullopt) {
     auto arrow_tex = loop.assets[assets::SoulPortalArrow];
     auto arrow_mesh = GenMeshPlane(16, 16, 1, 1);
     soul_portal_arrow = LoadModelFromMesh(arrow_mesh);
@@ -295,7 +345,7 @@ void Arena::draw(Loop& loop) {
 
         const auto& spellbook = loop.player_save->get_spellbook();
         if (auto dropped =
-                spellbook_ui->update(loop.mouse, spellbook.size(), loop.assets,
+                spellbook_ui->update(loop.mouse, spellbook.size(), curr_state<Playing>(), loop.assets,
                                      std::span(player.equipped_spells.get(), player.unlocked_spell_count), spellbook);
             dropped) {
             auto [spell, pos] = *dropped;
@@ -334,7 +384,7 @@ void Arena::draw(Loop& loop) {
     if (curr_state<PowerUpSelection>()) {
         std::get<PowerUpSelection>(state).draw(*this, loop);
     } else if (curr_state<Paused>()) {
-        std::get<Paused>(state).draw(loop);
+        std::get<Paused>(state).draw(*this, loop);
     }
 
     EndDrawing();
@@ -373,7 +423,7 @@ void Arena::update(Loop& loop) {
     loop.keys.tick([&](const auto& key) {
         switch (key) {
             case KEY_ESCAPE:
-                state.emplace<Paused>(loop.keys);
+                state.emplace<Paused>(loop);
                 return;
             case KEY_B:
                 if (spellbook_ui) {
@@ -675,13 +725,13 @@ void Hub::draw(Loop& loop) {
     }
 
     if (auto pos =
-            stash->update(loop.mouse, loop.player_save->get_stash().size(), loop.assets, loop.player_save->get_stash());
+            stash->update(loop.mouse, loop.player_save->get_stash().size(), true, loop.assets, loop.player_save->get_stash());
         pos) {
         auto [ix, p] = *pos;
 
         std::println("DROPEPD {} FROM STASH AT: @[{}, {}]", ix, p.x, p.y);
     }
-    if (auto pos = spellbook->update(loop.mouse, loop.player_save->get_spellbook().size(), loop.assets,
+    if (auto pos = spellbook->update(loop.mouse, loop.player_save->get_spellbook().size(), true, loop.assets,
                                      loop.player_save->get_spellbook());
         pos) {
         auto [ix, p] = *pos;

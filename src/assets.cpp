@@ -238,7 +238,8 @@ namespace assets {
         UnloadImage(img);
 
         for (std::size_t tag_i = 0; tag_i < static_cast<int>(spells::Tag::Size); tag_i++) {
-            img = LoadImageFromMemory(".png", spells::infos[tag_i].icon_data, spells::infos[tag_i].icon_size);
+            img = LoadImageFromMemory(".png", spells::infos[tag_i].icon_data,
+                                      static_cast<int>(spells::infos[tag_i].icon_size));
             texture_map[tag_i + GeneralIdSize] = LoadTextureFromImage(img);
             UnloadImage(img);
         }

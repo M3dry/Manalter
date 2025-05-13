@@ -32,9 +32,12 @@ struct Arena {
     };
 
     struct Paused {
-        Paused(Keys& keys);
+        std::optional<ui::Button> continue_button;
+        std::optional<ui::Button> quit_button;
 
-        void draw(Loop& loop);
+        Paused(Loop& Loop);
+
+        void draw(Arena& arena, Loop& loop);
         void update(Arena& arena, Loop& loop);
     };
 

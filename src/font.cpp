@@ -1,6 +1,5 @@
 #include "font.hpp"
 
-#include <print>
 #include <vector>
 
 namespace font_manager {

@@ -41,8 +41,8 @@ namespace ui {
 
         // returns a mouse position at which the component was dropped
         // doesn't call draw if it returns a Vector2
-        template <typename... Args> std::optional<Vector2> update(Mouse& mouse, Args&&... args) {
-            if (!is_dragged(mouse)) {
+        template <typename... Args> std::optional<Vector2> update(Mouse& mouse, bool handle, Args&&... args) {
+            if (!handle || !is_dragged(mouse)) {
                 draw(origin, std::forward<Args>(args)...);
                 return std::nullopt;
             }
@@ -132,36 +132,45 @@ namespace ui {
         }
 
         template <typename... Args>
-        std::optional<std::pair<uint64_t, Vector2>> update(Mouse& mouse, std::size_t items_size, Args&&... args) {
-            // FIX: scrolling won't work if item_view range is smaller than page_size
-            // FIX: also the item_view won't get updated when the items_size decreases
+        std::optional<std::pair<uint64_t, Vector2>> update(Mouse& mouse, std::size_t items_size, bool handle,
+                                                           Args&&... args) {
             auto& [first, second] = item_view;
             if (second < page_size) {
                 first = 0;
                 second = std::min(items_size, page_size);
             }
-            if (mouse.wheel_movement != 0 && check_collision(scroll_poly, mouse.mouse_pos) && !dragged(mouse) && second >= page_size) {
-                if (mouse.wheel_movement < 0) {
-                    first += static_cast<uint64_t>(-mouse.wheel_movement);
-                    second += static_cast<uint64_t>(-mouse.wheel_movement);
+            if (handle) {
+                if (mouse.wheel_movement != 0 && check_collision(scroll_poly, mouse.mouse_pos) && !dragged(mouse) &&
+                    second >= page_size) {
+                    if (mouse.wheel_movement < 0) {
+                        first += static_cast<uint64_t>(-mouse.wheel_movement);
+                        second += static_cast<uint64_t>(-mouse.wheel_movement);
 
-                    if (second > items_size) {
-                        first = items_size - page_size;
-                        second = items_size;
+                        if (second > items_size) {
+                            first = items_size - page_size;
+                            second = items_size;
+                        }
+                    } else if (first >= static_cast<uint64_t>(mouse.wheel_movement)) {
+                        first -= static_cast<std::size_t>(mouse.wheel_movement);
+                        second -= static_cast<std::size_t>(mouse.wheel_movement);
+                    } else {
+                        first = 0;
+                        second = std::min(page_size, items_size);
                     }
-                } else if (first >= static_cast<uint64_t>(mouse.wheel_movement)) {
-                    first -= static_cast<std::size_t>(mouse.wheel_movement);
-                    second -= static_cast<std::size_t>(mouse.wheel_movement);
-                } else {
-                    first = 0;
-                    second = std::min(page_size, items_size);
                 }
             }
 
             is_deferred = false;
             std::optional<std::tuple<uint64_t, Vector2>> ret;
             for (std::size_t item_ix = first; item_ix < second; item_ix++) {
-                auto hover = !mouse.button_press && check_collision(item_hitboxes[item_ix - first].hitbox, mouse.mouse_pos);
+                if (!handle) {
+                    item_hitboxes[item_ix - first].update(mouse, handle, *this, item_ix, Normal,
+                                                          std::forward<Args>(args)...);
+                    continue;
+                }
+
+                auto hover =
+                    !mouse.button_press && check_collision(item_hitboxes[item_ix - first].hitbox, mouse.mouse_pos);
 
                 auto drag = item_hitboxes[item_ix - first].is_dragged(mouse);
                 if (drag) {
@@ -169,8 +178,8 @@ namespace ui {
                     BeginTextureMode(drag_defer);
                     ClearBackground(BLANK);
                 }
-                if (auto pos = item_hitboxes[item_ix - first].update(mouse, *this, item_ix,
-                                                                     drag ? Drag
+                if (auto pos = item_hitboxes[item_ix - first].update(mouse, handle, *this, item_ix,
+                                                                     drag    ? Drag
                                                                      : hover ? Hover
                                                                              : Normal,
                                                                      std::forward<Args>(args)...);
