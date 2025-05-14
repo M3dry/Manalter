@@ -254,6 +254,34 @@ template <typename T> class RingBuffer {
         emplace_back(std::forward<U>(value));
     }
 
+    void remove(std::size_t normalized_ix) {
+        if (normalized_ix >= size()) return;
+        if (normalized_ix == size() - 1) {
+            pop_back();
+            return;
+        }
+        if (normalized_ix == 0) {
+            pop_front();
+            return;
+        }
+
+        if (normalized_ix > size() / 2) {
+            while (normalized_ix != size() - 1) {
+                std::swap((*this)[normalized_ix], (*this)[normalized_ix + 1]);
+                normalized_ix++;
+            }
+
+            pop_back();
+        } else {
+            while (normalized_ix != 0) {
+                std::swap((*this)[normalized_ix], (*this)[normalized_ix - 1]);
+                normalized_ix--;
+            }
+
+            pop_front();
+        }
+    }
+
     // clang-format off
     iterator begin() { return Iter(this); }
     const_iterator begin() const { return Iter(this); }
@@ -300,18 +328,15 @@ template <typename T> class RingBuffer {
     std::size_t capacity = 0;
     std::unique_ptr<std::byte[], Deleter> raw_buffer;
 
-    template <typename U = T>
-    inline typename std::enable_if<!std::is_const_v<U>, T*>::type buffer() {
+    template <typename U = T> inline typename std::enable_if<!std::is_const_v<U>, T*>::type buffer() {
         return reinterpret_cast<T*>(raw_buffer.get());
     }
 
-    template <typename U = T>
-    inline typename std::enable_if<!std::is_const_v<U>, T* const>::type buffer() const {
+    template <typename U = T> inline typename std::enable_if<!std::is_const_v<U>, T* const>::type buffer() const {
         return reinterpret_cast<T*>(raw_buffer.get());
     }
 
-    template <typename U = T>
-    inline typename std::enable_if<std::is_const_v<U>, T const* const>::type buffer() const {
+    template <typename U = T> inline typename std::enable_if<std::is_const_v<U>, T const* const>::type buffer() const {
         return reinterpret_cast<T*>(raw_buffer.get());
     }
 

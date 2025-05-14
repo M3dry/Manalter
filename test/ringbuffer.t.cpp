@@ -116,3 +116,21 @@ TEST_CASE("Serialization and deserialization", "[ringbuffer][seria_deser]") {
         REQUIRE(rb[i] == deserialized_rb[i]);
     }
 }
+
+TEST_CASE("Removal", "[ringbuffer]") {
+    RingBuffer<int> rb;
+
+    rb.push_back(10);
+    rb.push_back(20);
+    rb.push_back(30);
+    rb.push_back(40);
+    rb.push_back(50);
+
+    rb.remove(1); // 20
+    rb.remove(2); // 40
+    int expected[] = {10, 30, 50};
+    REQUIRE(rb.size() == sizeof(expected));
+    for (std::size_t i = 0; i < rb.size(); i++) {
+        REQUIRE(rb[i] == expected[i]);
+    }
+}

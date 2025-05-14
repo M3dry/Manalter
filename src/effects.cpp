@@ -98,10 +98,10 @@ namespace effect {
 
         system.add_updater(updaters::Position());
         system.add_updater(updaters::Lifetime());
-        system.add_updater(updaters::ColorByVelocity(rarity_color, WHITE, 0.0f, 70.0f));
+        system.add_updater(updaters::ColorByVelocity(rarity_color, WHITE, 0.0f, 120.0f));
         system.add_updater([](Particles& particles, float _) {
             for (std::size_t i = 0; i < particles.alive_count; i++) {
-                particles.size[i] = 0.01f * Vector3Length(particles.velocity[i]);
+                particles.size[i] = 0.05f * Vector3Length(particles.velocity[i]);
             }
         });
 

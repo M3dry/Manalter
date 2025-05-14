@@ -72,7 +72,7 @@ void Spell::draw(Rectangle working_area, assets::Store& assets) {
                    working_area, Vector2Zero(), 0.0f, rarity::get_rarity_info(rarity).color);
 
     working_area.x += working_area.height * 0.75f;
-    working_area.width -= working_area.height * 0.75f;
+    working_area.width -= working_area.height * 0.77f;
     working_area.height = working_area.height * 0.7f;
     auto [name_size, _] = font_manager::max_font_size(
         font_manager::Alagard, Vector2{working_area.width, working_area.height * 0.4f}, info.name);

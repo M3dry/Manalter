@@ -99,6 +99,7 @@ class PlayerSave {
     void create_default_spell();
     void remove_default_spell();
     uint64_t add_spell_to_spellbook(Spell&& spell);
+    void remove_spell(uint64_t ix);
     void cast_spell(uint64_t spell_id, const Vector2& player_position, const Vector2& mouse_pos, Enemies& enemies, uint64_t& mana);
     void tick_spellbook();
 

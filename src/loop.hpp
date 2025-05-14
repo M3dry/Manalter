@@ -97,15 +97,25 @@ struct Arena {
 };
 
 struct Hub {
+    enum Origin {
+        Arena,
+        MainMenu,
+    };
+
     std::optional<ui::Button> start_button;
 
-    Rectangle stash_rec;
-    std::optional<ui::InventoryPane<assets::Store&, const SpellBook&>> stash;
+    /*Rectangle stash_rec;*/
+    /*std::optional<ui::InventoryPane<assets::Store&, const SpellBook&>> stash;*/
 
     Rectangle spellbook_rec;
     std::optional<ui::InventoryPane<assets::Store&, const SpellBook&>> spellbook;
 
-    Hub(Loop& loop);
+    Rectangle trash;
+
+    bool _start_immediatly = false;
+    bool _goto_main_menu = false;
+
+    Hub(Loop& loop, Origin origin);
 
     void draw(Loop& loop);
     void update(Loop& loop);

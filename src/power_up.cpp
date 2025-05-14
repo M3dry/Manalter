@@ -8,10 +8,24 @@
 template <powerups::__impl::DiscreteDistr T> void draw_text(const Rectangle& constraint, uint8_t value) {
     auto powerup_type = powerups::TypeToEnum<T>::powerup_type;
 
-    font_manager::draw_text(T::name, font_manager::Alagard, 20, 2, WHITE,
-                            Vector2{constraint.x + 10.0f, constraint.y + 20}, font_manager::Exact);
-    font_manager::draw_text(std::format("{}{}", value, powerup_type == powerups::Percentage ? "%" : "").c_str(),
-                            font_manager::Alagard, 20, 2, WHITE, Vector2{constraint.x + 10.0f, constraint.y + 40.0f},
+    auto [name_size, name_dims] = font_manager::max_font_size(
+        font_manager::Alagard, Vector2{constraint.width * 0.9f, constraint.height * 0.15f}, T::name);
+    font_manager::draw_text(T::name, font_manager::Alagard, name_size, static_cast<float>(name_size) / 10.0f, WHITE,
+                            Vector2{
+                                constraint.x + constraint.width / 2.0f - name_dims.x / 2.0f,
+                                constraint.y + constraint.height * 0.01f,
+                            },
+                            font_manager::Exact);
+
+    auto stat_text = std::format("+{}{}", value, powerup_type == powerups::Percentage ? "%" : " points");
+    auto [stat_size, stat_dims] = font_manager::max_font_size(
+        font_manager::Alagard, Vector2{constraint.width * 0.7f, constraint.height * 0.05f}, stat_text.data());
+    font_manager::draw_text(stat_text.data(), font_manager::Alagard, stat_size, static_cast<float>(stat_size) / 10.0f,
+                            WHITE,
+                            Vector2{
+                                constraint.x + constraint.width / 2.0f - stat_dims.x / 2.0f,
+                                constraint.y + constraint.height / 2.0f - stat_dims.y / 2.0f,
+                            },
                             font_manager::Exact);
 }
 

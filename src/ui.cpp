@@ -96,7 +96,7 @@ namespace hud {
         static const uint32_t outer_radius = 1023 / 2;
         static const Vector2 center = (Vector2){outer_radius, outer_radius};
 
-        BeginTextureMode(assets[assets::CircleUI, false]);
+        BeginTextureMode(assets[assets::CircleUI]);
         ClearBackground(BLANK);
 
         DrawCircleV(center, outer_radius, BLACK);
@@ -149,6 +149,5 @@ namespace hud {
         DrawRing(center, outer_radius - 6.2f * padding, outer_radius - 5 * padding, 0.0f, 360.0f, 512, BLACK);
         DrawLineEx((Vector2){center.x, 0.0f}, (Vector2){center.y, 1022.0f - 6 * padding}, 10.0f, BLACK);
         EndTextureMode();
-        EndTextureModeMSAA(assets[assets::CircleUI, false], assets[assets::CircleUI, true]);
     }
 }

@@ -1,4 +1,5 @@
 #pragma once
+#ifndef __INTELLISENSE__
 
 #include <raylib.h>
 
@@ -99,3 +100,5 @@ namespace texture_includes {
 #embed "../assets/spell-icons/mana-detonation.png"
     };
 }
+
+#endif

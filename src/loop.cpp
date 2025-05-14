@@ -142,7 +142,7 @@ Arena::Paused::Paused(Loop& loop) {
 
     continue_rec.width = continue_dims.x;
     continue_rec.height = continue_dims.y;
-    auto padding = continue_rec.x * 0.02f;
+    auto padding = continue_rec.width * 0.02f;
     continue_rec.x = loop.screen.x - continue_rec.width - padding;
     continue_rec.y = padding;
     continue_button.emplace(continue_rec, [continue_size, continue_rec](auto state) {
@@ -164,7 +164,7 @@ Arena::Paused::Paused(Loop& loop) {
 
     quit_rec.width = quit_dims.x;
     quit_rec.height = quit_dims.y;
-    padding = quit_rec.x * 0.02f;
+    padding = quit_rec.width * 0.02f;
     quit_rec.x = padding;
     quit_rec.y = loop.screen.y - quit_rec.height - padding;
     quit_button.emplace(quit_rec, [quit_size, quit_rec](auto state) {
@@ -227,7 +227,7 @@ void Arena::draw(Loop& loop) {
         incr_time(loop.delta_time);
     }
 
-    BeginTextureMode(loop.assets[assets::Target, false]);
+    BeginTextureMode(loop.assets[assets::Target]);
     ClearBackground(WHITE);
 
     BeginMode3D(player.camera);
@@ -305,7 +305,6 @@ void Arena::draw(Loop& loop) {
 #endif
 
     EndTextureMode();
-    EndTextureModeMSAA(loop.assets[assets::Target, false], loop.assets[assets::Target, true]);
 
     hud::draw(loop.assets, player, loop.player_save->get_spellbook(), loop.screen);
 
@@ -316,13 +315,12 @@ void Arena::draw(Loop& loop) {
     ClearBackground(WHITE);
 
     // BeginShaderMode(fxaa_shader);
-    loop.assets.draw_texture(assets::Target, true, {});
+    loop.assets.draw_texture(assets::Target, {});
     // EndShaderMode();
 
     float circle_ui_dim = loop.screen.x * 1 / 8;
     const float padding = 10;
-    SetTextureFilter(loop.assets[assets::CircleUI, true].texture, TEXTURE_FILTER_BILINEAR);
-    loop.assets.draw_texture(assets::CircleUI, true,
+    loop.assets.draw_texture(assets::CircleUI,
                              (Rectangle){loop.screen.x - circle_ui_dim - padding,
                                          loop.screen.y - circle_ui_dim - padding, circle_ui_dim, circle_ui_dim});
 
@@ -554,7 +552,7 @@ void Arena::update(Loop& loop) {
     if (player.health == 0) {
         loop.player_save->save();
         loop.player_save->remove_default_spell();
-        loop.scene.emplace<Hub>(loop);
+        loop.scene.emplace<Hub>(loop, Hub::Arena);
         return;
     }
 }
@@ -585,7 +583,21 @@ void Arena::incr_time(double delta) {
     }
 }
 
-Hub::Hub(Loop& loop) {
+Hub::Hub(Loop& loop, Origin origin) {
+    if (loop.player_save->get_spellbook().size() == 0) {
+        switch (origin) {
+            case Arena:
+                _goto_main_menu = true;
+                _start_immediatly = false;
+                break;
+            case MainMenu:
+                _goto_main_menu = false;
+                _start_immediatly = true;
+                break;
+        }
+        return;
+    }
+
     auto button_rec = Rectangle{
         .x = loop.screen.x / 2.0f - 300 / 2.0f,
         .y = loop.screen.y / 2.0f - 140 / 2.0f,
@@ -627,44 +639,44 @@ Hub::Hub(Loop& loop) {
         spellbook_and_tile.w,
     };
 
-    stash_rec = Rectangle{
+    auto stash_rec = Rectangle{
         .x = loop.screen.y * 0.1f,
         .y = loop.screen.y * 0.01f,
         .width = tile_dims.x,
         .height = loop.screen.y * 0.9f,
     };
 
-    stash.emplace(
-        loop.screen, Vector2{stash_rec.x, stash_rec.y}, stash_rec.height, Vector3{0.0f, 0.0f, stash_rec.height * 0.01f},
-        tile_dims,
-        Rectangle{
-            .x = 0.0f,
-            .y = 0.0f,
-            .width = loop.screen.x / 2.0f,
-            .height = loop.screen.y / 2.0f,
-        },
-        [tile_dims](Vector2 origin, auto state, auto spell_ix, assets::Store& assets, const auto& spellbook) {
-            auto working_area = Rectangle{
-                .x = origin.x,
-                .y = origin.y,
-                .width = tile_dims.x,
-                .height = tile_dims.y,
-            };
-
-            Color outline = GRAY;
-            if (state == decltype(state)::Hover) outline = RED;
-            if (state == decltype(state)::Drag) outline = RED;
-
-            DrawRectangleRec(working_area, outline);
-
-            working_area.x += 3;
-            working_area.y += 3;
-            working_area.width -= 6;
-            working_area.height -= 6;
-
-            spellbook[spell_ix].draw(working_area, assets);
-        },
-        loop.player_save->get_stash().size());
+    /*stash.emplace(*/
+    /*    loop.screen, Vector2{stash_rec.x, stash_rec.y}, stash_rec.height, Vector3{0.0f, 0.0f, stash_rec.height * 0.01f},*/
+    /*    tile_dims,*/
+    /*    Rectangle{*/
+    /*        .x = 0.0f,*/
+    /*        .y = 0.0f,*/
+    /*        .width = loop.screen.x / 2.0f,*/
+    /*        .height = loop.screen.y / 2.0f,*/
+    /*    },*/
+    /*    [tile_dims](Vector2 origin, auto state, auto spell_ix, assets::Store& assets, const auto& spellbook) {*/
+    /*        auto working_area = Rectangle{*/
+    /*            .x = origin.x,*/
+    /*            .y = origin.y,*/
+    /*            .width = tile_dims.x,*/
+    /*            .height = tile_dims.y,*/
+    /*        };*/
+    /**/
+    /*        Color outline = GRAY;*/
+    /*        if (state == decltype(state)::Hover) outline = RED;*/
+    /*        if (state == decltype(state)::Drag) outline = RED;*/
+    /**/
+    /*        DrawRectangleRec(working_area, outline);*/
+    /**/
+    /*        working_area.x += 3;*/
+    /*        working_area.y += 3;*/
+    /*        working_area.width -= 6;*/
+    /*        working_area.height -= 6;*/
+    /**/
+    /*        spellbook[spell_ix].draw(working_area, assets);*/
+    /*    },*/
+    /*    loop.player_save->get_stash().size());*/
 
     spellbook_rec = stash_rec;
     spellbook_rec.x = loop.screen.x - stash_rec.x - tile_dims.x;
@@ -700,12 +712,43 @@ Hub::Hub(Loop& loop) {
         },
         loop.player_save->get_stash().size());
 
+    auto padding = loop.screen.x * 0.005f;
+    trash = Rectangle{
+        .x = padding,
+        .y = loop.screen.y - loop.screen.x * 0.07f - padding,
+        .width = loop.screen.x * 0.07f,
+        .height = loop.screen.x * 0.07f,
+    };
+
     loop.keys.unregister_all();
     loop.keys.register_key(KEY_SPACE);
     loop.keys.register_key(KEY_ESCAPE);
 }
 
 void Hub::draw(Loop& loop) {
+    if (_start_immediatly) {
+        loop.player_save->save();
+        loop.player_save->create_default_spell();
+
+        BeginDrawing();
+        ClearBackground(GRAY);
+        EndDrawing();
+
+        loop.scene.emplace<Arena>(loop);
+        return;
+    }
+    if (_goto_main_menu) {
+        loop.player_save->remove_default_spell();
+        loop.player_save->save();
+
+        BeginDrawing();
+        ClearBackground(GRAY);
+        EndDrawing();
+
+        loop.scene.emplace<Main>(loop);
+        return;
+    }
+
     BeginDrawing();
 
     loop.assets.draw_texture(assets::HubBackground, Rectangle{
@@ -724,22 +767,30 @@ void Hub::draw(Loop& loop) {
         return;
     }
 
-    if (auto pos =
-            stash->update(loop.mouse, loop.player_save->get_stash().size(), true, loop.assets, loop.player_save->get_stash());
-        pos) {
-        auto [ix, p] = *pos;
-
-        std::println("DROPEPD {} FROM STASH AT: @[{}, {}]", ix, p.x, p.y);
+    if (loop.mouse.button_press && loop.mouse.button_press->button == Mouse::Button::Left && check_collision(trash, loop.mouse.mouse_pos)) {
+        DrawRectangleRec(trash, RED);
+    } else {
+        DrawRectangleRec(trash, WHITE);
     }
+
+    /*if (auto pos = stash->update(loop.mouse, loop.player_save->get_stash().size(), true, loop.assets,*/
+    /*                             loop.player_save->get_stash());*/
+    /*    pos) {*/
+    /*    auto [ix, p] = *pos;*/
+    /**/
+    /*    std::println("DROPEPD {} FROM STASH AT: @[{}, {}]", ix, p.x, p.y);*/
+    /*}*/
     if (auto pos = spellbook->update(loop.mouse, loop.player_save->get_spellbook().size(), true, loop.assets,
                                      loop.player_save->get_spellbook());
         pos) {
         auto [ix, p] = *pos;
 
-        std::println("DROPEPD {} FROM SPELLBOOK AT: @[{}, {}]", ix, p.x, p.y);
+        if (check_collision(trash, loop.mouse.mouse_pos)) {
+            loop.player_save->remove_spell(ix);
+        }
     }
 
-    stash->draw_deffered();
+    /*stash->draw_deffered();*/
     spellbook->draw_deffered();
 
     EndDrawing();
@@ -825,7 +876,7 @@ void Main::draw(Loop& loop) {
         loop.player_save = PlayerSave();
         loop.player_save->load_save();
 
-        loop.scene.emplace<Hub>(loop);
+        loop.scene.emplace<Hub>(loop, Hub::MainMenu);
         return;
     }
 

@@ -208,6 +208,10 @@ uint64_t PlayerSave::add_spell_to_spellbook(Spell&& spell) {
     return spellbook.size() - 1;
 }
 
+void PlayerSave::remove_spell(uint64_t ix) {
+    spellbook.remove(ix);
+}
+
 void PlayerSave::cast_spell(uint64_t spell_id, const Vector2& player_position, const Vector2& mouse_pos,
                             Enemies& enemies, uint64_t& mana) {
     if (spell_id == std::numeric_limits<uint64_t>::max()) return;
