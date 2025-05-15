@@ -9,7 +9,7 @@
 
 class ItemDrop {
   public:
-    static constexpr float hitbox_radius = 5.0f;
+    static constexpr float hitbox_radius = 15.0f;
 
     using Item = std::variant<Spell>;
     Item item;

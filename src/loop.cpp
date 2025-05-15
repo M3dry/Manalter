@@ -113,15 +113,7 @@ void Arena::PowerUpSelection::update_buttons(assets::Store& assets, Vector2 scre
         };
 
         selections.emplace_back(rec, [&, i, rec](ui::Button::State button_state) {
-            switch (button_state) {
-                using enum ui::Button::State;
-                case Normal:
-                    power_ups[i].draw(assets, rec);
-                    return;
-                case Hover:
-                    power_ups[i].draw_hover(assets, rec);
-                    return;
-            }
+            power_ups[i].draw(assets, rec, ui::Button::State::Hover == button_state);
         });
     }
 }
@@ -337,8 +329,8 @@ void Arena::draw(Loop& loop) {
         loop.assets.draw_texture(assets::SpellBookBackground, Rectangle{
                                                                   .x = 0.0f,
                                                                   .y = 0.0f,
-                                                                  .width = spellbook_ui->spellbook_dims.x,
-                                                                  .height = spellbook_ui->spellbook_dims.y,
+                                                                  .width = std::floor(spellbook_ui->spellbook_dims.x),
+                                                                  .height = std::floor(spellbook_ui->spellbook_dims.y),
                                                               });
 
         const auto& spellbook = loop.player_save->get_spellbook();
@@ -647,7 +639,8 @@ Hub::Hub(Loop& loop, Origin origin) {
     };
 
     /*stash.emplace(*/
-    /*    loop.screen, Vector2{stash_rec.x, stash_rec.y}, stash_rec.height, Vector3{0.0f, 0.0f, stash_rec.height * 0.01f},*/
+    /*    loop.screen, Vector2{stash_rec.x, stash_rec.y}, stash_rec.height, Vector3{0.0f, 0.0f, stash_rec.height *
+     * 0.01f},*/
     /*    tile_dims,*/
     /*    Rectangle{*/
     /*        .x = 0.0f,*/
@@ -767,11 +760,33 @@ void Hub::draw(Loop& loop) {
         return;
     }
 
-    if (loop.mouse.button_press && loop.mouse.button_press->button == Mouse::Button::Left && check_collision(trash, loop.mouse.mouse_pos)) {
-        DrawRectangleRec(trash, RED);
+    if (loop.mouse.button_press && loop.mouse.button_press->button == Mouse::Button::Left &&
+        check_collision(trash, loop.mouse.mouse_pos)) {
+        DrawRectangleRounded(trash, 0.5f, 256, RED);
     } else {
-        DrawRectangleRec(trash, WHITE);
+        DrawRectangleRounded(trash, 0.5f, 256, Color{233, 220, 201, 255});
     }
+    auto [spell_size, spell_dims] =
+        font_manager::max_font_size(font_manager::Alagard, Vector2{trash.width * 0.95f, trash.height / 2.0f}, "Spell");
+    auto [trasher_size, trasher_dims] = font_manager::max_font_size(
+        font_manager::Alagard, Vector2{trash.width * 0.95f, trash.height / 2.0f}, "trasher");
+    auto font_size = std::min(spell_size, trasher_size);
+    auto spacing = static_cast<float>(font_size) / 10.0f;
+    spell_dims = font_manager::measure(font_manager::Alagard, "Spell", font_size, spacing);
+    trasher_dims = font_manager::measure(font_manager::Alagard, "trasher", font_size, spacing);
+
+    font_manager::draw_text("Spell", font_manager::Alagard, font_size, spacing, BLACK,
+                            Vector2{
+                                trash.x + trash.width / 2.0f - spell_dims.x / 2.0f,
+                                trash.y + trash.height / 2.0f - spell_dims.y,
+                            },
+                            font_manager::Exact);
+    font_manager::draw_text("trasher", font_manager::Alagard, font_size, spacing, BLACK,
+                            Vector2{
+                                trash.x + trash.width / 2.0f - trasher_dims.x / 2.0f,
+                                trash.y + trash.height / 2.0f,
+                            },
+                            font_manager::Exact);
 
     /*if (auto pos = stash->update(loop.mouse, loop.player_save->get_stash().size(), true, loop.assets,*/
     /*                             loop.player_save->get_stash());*/
@@ -787,6 +802,7 @@ void Hub::draw(Loop& loop) {
 
         if (check_collision(trash, loop.mouse.mouse_pos)) {
             loop.player_save->remove_spell(ix);
+            loop.player_save->save();
         }
     }
 
@@ -816,7 +832,7 @@ void Hub::update(Loop& loop) {
 Main::Main(Loop& loop) {
     auto play_button_rec = Rectangle{
         .x = loop.screen.x / 1.5f - loop.assets[assets::PlayButton].width / 2.0f,
-        .y = loop.screen.y / 2.0f * 0.90f,
+        .y = loop.screen.y / 2.0f,
         .width = static_cast<float>(loop.assets[assets::PlayButton].width),
         .height = static_cast<float>(loop.assets[assets::PlayButton].height),
     };
@@ -834,7 +850,7 @@ Main::Main(Loop& loop) {
 
     auto exit_button_rec = Rectangle{
         .x = loop.screen.x / 1.5f - loop.assets[assets::PlayButtonHover].width / 2.0f,
-        .y = loop.screen.y / 2.0f * 0.90f + loop.assets[assets::PlayButton].height * 1.05f,
+        .y = loop.screen.y / 2.0f + loop.assets[assets::PlayButton].height * 1.05f,
         .width = static_cast<float>(loop.assets[assets::PlayButtonHover].width),
         .height = static_cast<float>(loop.assets[assets::PlayButtonHover].height),
     };

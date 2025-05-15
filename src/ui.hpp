@@ -139,6 +139,10 @@ namespace ui {
                 first = 0;
                 second = std::min(items_size, page_size);
             }
+            if (second > items_size) {
+                first = items_size >= page_size ? items_size - page_size : 0;
+                second = items_size;
+            }
             if (handle) {
                 if (mouse.wheel_movement != 0 && check_collision(scroll_poly, mouse.mouse_pos) && !dragged(mouse) &&
                     second >= page_size) {
@@ -189,6 +193,10 @@ namespace ui {
                 }
                 if (drag) EndTextureMode();
             }
+
+#ifdef DEBUG
+            DrawText(std::format("[{}, {})", first, second).data(), origin.x, origin.y, 20, WHITE);
+#endif
 
             return ret;
         }

@@ -8,14 +8,19 @@
 #include <emscripten/html5.h>
 #endif
 
+void custom_log(int msgType, const char* text, va_list args) {
+    return;
+}
+
 int main() {
     int width = 0, height = 0;
 #ifdef PLATFORM_WEB
     emscripten_get_canvas_element_size("#canvas", &width, &height);
 #endif
 
-    InitWindow(width, height, "Aetas Magus");
-    SetWindowState(FLAG_FULLSCREEN_MODE);
+    SetTraceLogCallback(custom_log);
+    InitWindow(width, height, "Manalter");
+    /*SetWindowState(FLAG_FULLSCREEN_MODE);*/
     SetExitKey(KEY_NULL);
     // DisableCursor();
 

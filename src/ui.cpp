@@ -1,6 +1,7 @@
 #include "ui.hpp"
 
 #include "assets.hpp"
+#include "font.hpp"
 #include "hitbox.hpp"
 #include "raylib.h"
 #include "spell.hpp"
@@ -103,13 +104,13 @@ namespace hud {
 
         // EXP
         float angle = 360.0f * static_cast<float>(player.exp) / static_cast<float>(player.exp_to_next_lvl);
-        DrawCircleV(center, outer_radius - 2 * padding, WHITE);
-        DrawCircleSector(center, outer_radius - 2 * padding, -90.0f, angle - 90.0f, 512, GREEN);
+        DrawCircleV(center, outer_radius - 2 * padding, GRAY);
+        DrawCircleSector(center, outer_radius - 2 * padding, -90.0f, angle - 90.0f, 512, Color{0, 255, 127, 255});
 
         // HEALTH & MANA
         // https://www.desmos.com/calculator/ltqvnvrd3p
-        DrawCircleSector(center, outer_radius - 6 * padding, 90.0f, 270.0f, 512, RED);
-        DrawCircleSector(center, outer_radius - 6 * padding, -90.0f, 90.0f, 512, BLUE);
+        DrawCircleSector(center, outer_radius - 6 * padding, 90.0f, 270.0f, 512, Color{210, 4, 45, 255});
+        DrawCircleSector(center, outer_radius - 6 * padding, -90.0f, 90.0f, 512, Color{93, 63, 211, 255});
 
         float health_s = static_cast<float>(player.health) / static_cast<float>(player.stats.max_health.get());
         float mana_s = static_cast<float>(player.mana) / static_cast<float>(player.stats.max_mana.get());
@@ -139,15 +140,99 @@ namespace hud {
             DrawRectangle(static_cast<int>(center.x) - health_width,
                           static_cast<int>(6.0f * padding +
                                            (static_cast<float>(health_height) / segments) * static_cast<float>(i)),
-                          health_width, static_cast<int>(static_cast<float>(health_height) / segments + 1), WHITE);
+                          health_width, static_cast<int>(static_cast<float>(health_height) / segments + 1),
+                          Color{169, 92, 104, 255});
             DrawRectangle(
                 static_cast<int>(center.x),
                 static_cast<int>(6.0f * padding + (static_cast<float>(mana_height) / segments) * static_cast<float>(i)),
-                mana_width, static_cast<int>(static_cast<float>(mana_height) / segments + 1), WHITE);
+                mana_width, static_cast<int>(static_cast<float>(mana_height) / segments + 1),
+                Color{204, 204, 255, 255});
         }
 
         DrawRing(center, outer_radius - 6.2f * padding, outer_radius - 5 * padding, 0.0f, 360.0f, 512, BLACK);
         DrawLineEx((Vector2){center.x, 0.0f}, (Vector2){center.y, 1022.0f - 6 * padding}, 10.0f, BLACK);
+
+        const auto inner_radius = outer_radius - 6 * padding;
+        auto stat_dims = Vector2{
+            .x = 0.0f,
+            .y = 1023 * 0.3f,
+        };
+        auto stat_origin = Vector2{
+            .x = center.x,
+            .y = center.y - stat_dims.y / 2.0f,
+        };
+        stat_dims.x = std::sqrtf(stat_origin.y * (2 * inner_radius - stat_origin.y)) * 0.9f;
+        stat_origin.x *= 1.04f;
+
+        // MANA SIDE
+        auto mana_current_text = std::to_string(player.mana);
+        auto [mana_current_size, mana_current_dims] = font_manager::max_font_size(
+            font_manager::Alagard, Vector2{stat_dims.x, stat_dims.y / 2.0f}, mana_current_text.data());
+        auto mana_max_text = std::to_string(player.stats.max_mana.get());
+        auto [mana_max_size, mana_max_dims] = font_manager::max_font_size(
+            font_manager::Alagard, Vector2{stat_dims.x, stat_dims.y / 2.0f}, mana_max_text.data());
+
+        auto bar_length = std::max(mana_current_dims.x, mana_max_dims.x) * 1.2f;
+        DrawLineEx(
+            Vector2{
+                stat_origin.x + stat_dims.x / 2.0f - bar_length / 2.0f,
+                center.y - 5.0f,
+            },
+            Vector2{
+                stat_origin.x + stat_dims.x / 2.0f + bar_length / 2.0f,
+                center.y - 5.0f,
+            },
+            10.0f, BLACK);
+        font_manager::draw_text(mana_current_text.data(), font_manager::Alagard, mana_current_size,
+                                static_cast<float>(mana_current_size) / 10.0f, WHITE,
+                                Vector2{
+                                    stat_origin.x + stat_dims.x / 2.0f - mana_current_dims.x / 2.0f,
+                                    center.y - mana_current_dims.y,
+                                },
+                                font_manager::Exact);
+        font_manager::draw_text(mana_max_text.data(), font_manager::Alagard, mana_max_size,
+                                static_cast<float>(mana_max_size) / 10.0f, WHITE,
+                                Vector2{
+                                    stat_origin.x + stat_dims.x / 2.0f - mana_max_dims.x / 2.0f,
+                                    center.y * 1.01f,
+                                },
+                                font_manager::Exact);
+
+        // HEALTH SIDE
+        stat_origin.x = center.x * 0.96f - stat_dims.x;
+        auto health_current_text = std::to_string(player.health);
+        auto [health_current_size, health_current_dims] = font_manager::max_font_size(
+            font_manager::Alagard, Vector2{stat_dims.x, stat_dims.y / 2.0f}, health_current_text.data());
+        auto health_max_text = std::to_string(player.stats.max_health.get());
+        auto [health_max_size, health_max_dims] = font_manager::max_font_size(
+            font_manager::Alagard, Vector2{stat_dims.x, stat_dims.y / 2.0f}, health_max_text.data());
+
+        bar_length = std::max(health_current_dims.x, health_max_dims.x) * 1.2f;
+        DrawLineEx(
+            Vector2{
+                stat_origin.x + stat_dims.x / 2.0f - bar_length / 2.0f,
+                center.y - 5.0f,
+            },
+            Vector2{
+                stat_origin.x + stat_dims.x / 2.0f + bar_length / 2.0f,
+                center.y - 5.0f,
+            },
+            10.0f, BLACK);
+        font_manager::draw_text(health_current_text.data(), font_manager::Alagard, health_current_size,
+                                static_cast<float>(health_current_size) / 10.0f, WHITE,
+                                Vector2{
+                                    stat_origin.x + stat_dims.x / 2.0f - health_current_dims.x / 2.0f,
+                                    center.y - health_current_dims.y,
+                                },
+                                font_manager::Exact);
+        font_manager::draw_text(health_max_text.data(), font_manager::Alagard, health_max_size,
+                                static_cast<float>(health_max_size) / 10.0f, WHITE,
+                                Vector2{
+                                    stat_origin.x + stat_dims.x / 2.0f - health_max_dims.x / 2.0f,
+                                    center.y * 1.01f,
+                                },
+                                font_manager::Exact);
+
         EndTextureMode();
     }
 }

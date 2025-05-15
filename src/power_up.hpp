@@ -50,7 +50,7 @@ namespace powerups {
 
     template <PowerUpType Type> struct Speed;
     template <> struct Speed<Percentage> {
-        static constexpr const char* name = "Speed";
+        static constexpr const char* name = "Speed Boost";
         static constexpr uint8_t min = 5;
         static constexpr uint8_t max = 35;
         static constexpr uint8_t step = 5;
@@ -63,7 +63,7 @@ namespace powerups {
         }
     };
     template <> struct Speed<Absolute> {
-        static constexpr const char* name = "Speed";
+        static constexpr const char* name = "Speed Boost";
         static constexpr uint8_t min = 1;
         static constexpr uint8_t max = 5;
         static constexpr uint8_t step = 1;
@@ -277,8 +277,7 @@ struct PowerUp {
     PowerUp(PowerUp&&) noexcept = default;
     PowerUp& operator=(PowerUp&&) noexcept = default;
 
-    void draw(assets::Store& assets, Rectangle inside);
-    void draw_hover(assets::Store& assets, Rectangle inside);
+    void draw(assets::Store& assets, Rectangle inside, bool hover);
     void apply(PlayerStats& stats);
     static PowerUp random();
 };

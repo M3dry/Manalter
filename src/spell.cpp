@@ -67,7 +67,7 @@ void Spell::draw(Rectangle working_area, assets::Store& assets) {
                        .x = 0.0f,
                        .y = 0.0f,
                        .width = static_cast<float>(assets[assets::SpellTileRarityFrame].width),
-                       .height = static_cast<float>(assets[assets::SpellTileRarityFrame].height),
+                       .height = static_cast<float>(assets[assets::SpellTileRarityFrame].height) - 1.0f,
                    },
                    working_area, Vector2Zero(), 0.0f, rarity::get_rarity_info(rarity).color);
 

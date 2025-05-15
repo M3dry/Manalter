@@ -18,7 +18,7 @@ RUN cmake -S /build/raylib -B /build/raylib/build-win \
 RUN cmake -S /build -B /build/build-win \
         -DCMAKE_TOOLCHAIN_FILE=/build/toolchain-mingw.cmake \
         -DCMAKE_CXX_FLAGS=-I/build/raylib/src/ \
-        -DCMAKE_EXE_LINKER_FLAGS=-L/build/raylib/build-win/raylib && \
+        -DCMAKE_EXE_LINKER_FLAGS="-L/build/raylib/build-win/raylib" && \
     cmake --build /build/build-win --target manalter
 RUN find /usr/x86_64-w64-mingw32/bin -name "*.dll"
 RUN cp "/usr/x86_64-w64-mingw32/bin/libstdc++-6.dll" /build/build-win/ \

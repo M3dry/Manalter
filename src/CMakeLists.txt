@@ -27,7 +27,20 @@ set(PLAYGROUND_SOURCES
     playground.cpp
 )
 
+set(COMMON_COMPILE_OPTIONS
+    -Wall -Wextra -Wuninitialized -Wmissing-field-initializers
+    -Wno-unused-variable -Wshadow -Wconversion -Wsign-conversion
+    -Wdouble-promotion -Wnull-dereference -Wold-style-cast -Woverloaded-virtual -Wnon-virtual-dtor
+    -O3 -ffunction-sections -fdata-sections
+)
+
+set(COMMON_LINK_OPTIONS
+    -O3 -Wl,--gc-sections -s
+)
+
 add_library(manalter_lib STATIC ${MANALTER_LIB_SOURCES})
+target_compile_options(manalter_lib PRIVATE ${COMMON_COMPILE_OPTIONS})
+target_link_options(manalter_lib PRIVATE ${COMMON_LINK_OPTIONS})
 target_include_directories(manalter_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(manalter_lib PRIVATE raylib)
 # target_compile_definitions(manalter_lib PUBLIC DEBUG)
@@ -55,3 +68,8 @@ target_link_libraries(hitbox_demo PRIVATE manalter_lib)
 
 add_executable(playground ${PLAYGROUND_SOURCES})
 target_link_libraries(playground PRIVATE manalter_lib)
+
+foreach(target IN ITEMS manalter hitbox_demo playground)
+    target_compile_options(${target} PRIVATE ${COMMON_COMPILE_OPTIONS})
+    target_link_options(${target} PRIVATE ${COMMON_LINK_OPTIONS})
+endforeach()

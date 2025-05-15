@@ -1,5 +1,6 @@
 #include "font.hpp"
 
+#include <raylib.h>
 #include <vector>
 
 namespace font_manager {
@@ -88,5 +89,9 @@ namespace font_manager {
         }
 
         return {best_size, best_dims};
+    }
+
+    Vector2 measure(Fonts font, const char* text, unsigned int font_size, float spacing) {
+        return MeasureTextEx(fonts[font][0].second, text, static_cast<float>(font_size), spacing);
     }
 }

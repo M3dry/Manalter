@@ -75,7 +75,7 @@ struct Enemies {
                 } else {
                     cap = 0;
                 }
-                cap = std::min<uint32_t>(cap + 1, 500);
+                max_cap = std::min<uint32_t>(max_cap + 1, 500);
 
                 killed++;
                 stored_exp += exp;

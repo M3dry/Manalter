@@ -201,8 +201,8 @@ namespace spells {
                 },
             .element = Element::Shadow,
             .cooldown = 40,
-            .base_manacost = 75,
-            .base_damage = 20,
+            .base_manacost = 50,
+            .base_damage = 30,
         };
     };
 
@@ -212,24 +212,37 @@ namespace spells {
             .icon_data = texture_includes::mana_detonation,
             .icon_size = sizeof(texture_includes::mana_detonation),
             .movement =
-                (spell::movement::Circle){
+                spell::movement::Circle{
                     .center = spell::movement::Player,
-                    .maximal_radius = 20,
-                    .increase_duration = 4,
+                    .maximal_radius = 100,
+                    .increase_duration = 8,
+                },
+            .effect =
+                effect::Plosion{
+                    .type = effect::Plosion::Ex,
+                    .radius = 0.0f,
+                    .particle_count = 3500,
+                    .particle_size_scale = 0.05f,
+                    .floor_y = 0.0f,
+                    .lifetime = {0.2f, 0.6f},
+                    .velocity_scale = {60.0f, 120.0f},
+                    .acceleration = {200.0f, 200.0f, 200.0f},
+                    .color = {{WHITE, 40.0f}, {Color{93, 63, 211, 255}, 150.0f}},
                 },
             .element = Element::Light,
             .cooldown = 40,
-            .base_manacost = 60,
-            .base_damage = 30,
+            .base_manacost = 150,
+            .base_damage = 35,
         };
     };
 
 #define EACH_SPELL(F, G)                                                                                               \
-    G(FireWall)                                                                                                        \
-    F(FrostNova)                                                                                                       \
-    F(FallingIcicile)                                                                                                  \
-    F(LightningStrike)                                                                                                 \
-    F(VoidImplosion)
+    G(FrostNova)                                                                                                       \
+    F(VoidImplosion)                                                                                                   \
+    F(ManaDetonation)
+    /*G(FireWall)                                                                                                        \*/
+    /*F(FallingIcicile)                                                                                                  \*/
+    /*F(LightningStrike)                                                                                                 \*/
 
     enum class Tag : uint16_t {
 #define SPELL_TAG_FIRST(name) name = 0,

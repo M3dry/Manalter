@@ -29,4 +29,5 @@ namespace font_manager {
     void draw_text(const char* text, Fonts font, unsigned int font_size, float spacing, Color tint, Vector2 pos,
                    Match match);
     std::pair<unsigned int, Vector2> max_font_size(Fonts font, const Vector2& max_dims, const char* text);
+    Vector2 measure(Fonts font, const char* text, unsigned int font_size, float spacing);
 };
