@@ -46,6 +46,7 @@ target_link_libraries(manalter_lib PRIVATE raylib)
 # target_compile_definitions(manalter_lib PUBLIC DEBUG)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_link_options(manalter_lib PRIVATE mwindows)
     target_link_libraries(manalter_lib PRIVATE winmm "stdc++exp")
 endif()
 

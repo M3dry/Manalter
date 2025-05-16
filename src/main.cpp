@@ -20,7 +20,7 @@ int main() {
 
     SetTraceLogCallback(custom_log);
     InitWindow(width, height, "Manalter");
-    /*SetWindowState(FLAG_FULLSCREEN_MODE);*/
+    SetWindowState(FLAG_FULLSCREEN_MODE);
     SetExitKey(KEY_NULL);
     // DisableCursor();
 
