@@ -2,6 +2,7 @@
 
 #include "hitbox.hpp"
 #include <random>
+#include <span>
 #include <string_view>
 #include <utility>
 
@@ -20,6 +21,13 @@ float wrap(float value, float modulus);
 std::string format_to_time(double time);
 Vector4 spellbook_and_tile_dims(Vector2 screen, Vector2 spellbook_dims, Vector2 tile_dims);
 Vector3 wrap_lerp(Vector3 a, Vector3 b, float t);
+Mesh gen_mesh_quad(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4);
+void DrawBillboardCustom(Camera camera, Texture2D texture, Rectangle source, Vector3 position, Vector3 up, Vector2 size,
+                         Vector2 origin, float angle, Vector3 rotation_axis, Color tint);
+
+inline Vector3 vec2_to_vec3(const Vector2& v) {
+    return {v.x, 0.0f, v.y};
+}
 
 inline float width_from_ratio(Vector2 ratio, float height) {
     return (height * ratio.x) / ratio.y;

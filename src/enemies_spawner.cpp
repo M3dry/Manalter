@@ -40,6 +40,12 @@ bool Enemies::spawn(const EnemyModels& enemy_models, const Vector2& player_pos) 
     return true;
 }
 
+void Enemies::update_health_bars() {
+    for (std::size_t i = 0; i < enemies.data->size(); i++) {
+        enemies.data.vec[i].val.update_health_bar();
+    }
+}
+
 uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_models) {
     static uint8_t tick_count = 0;
 
@@ -59,11 +65,11 @@ uint32_t Enemies::tick(const shapes::Circle& target_hitbox, EnemyModels& enemy_m
     return acc;
 }
 
-void Enemies::draw(EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle) {
+void Enemies::draw(Camera cam, EnemyModels& enemy_models, const Vector3& offset, const shapes::Circle& visibility_circle) {
     for (auto& enemy : *enemies.data) {
         if (check_collision(visibility_circle, xz_component(Vector3Add(enemy.val.pos, offset)))) {
             enemy.val.update_bones(enemy_models);
-            enemy.val.draw(enemy_models, offset);
+            enemy.val.draw(cam, enemy_models, offset);
         }
     }
 

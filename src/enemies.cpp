@@ -1,5 +1,6 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
+#include "particle_system.hpp"
 #include "raylib.h"
 #include "raymath.h"
 #include "utility.hpp"
@@ -146,7 +147,7 @@ void Enemy::update_bones(EnemyModels& enemy_models) {
     enemy_models.update_bones(state, bone_transforms, anim_index, anim_curr_frame);
 }
 
-void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) {
+void Enemy::draw(Camera cam, EnemyModels& enemy_models, const Vector3& offset) {
     auto [model, _] = enemy_models[state];
 
     auto mesh_bone_ptrs = std::unique_ptr<Matrix*[]>(new Matrix*[static_cast<unsigned int>(model.meshCount)]);
@@ -173,6 +174,23 @@ void Enemy::draw(EnemyModels& enemy_models, const Vector3& offset) {
     for (std::size_t i = 0; i < static_cast<std::size_t>(model.meshCount); i++) {
         model.meshes[i].boneMatrices = mesh_bone_ptrs[i];
     }
+
+    if (health == max_health) return;
+
+    Vector2 dims = Vector2{
+        static_cast<float>(health_bar.texture.width),
+        static_cast<float>(health_bar.texture.height),
+    };
+
+    DrawBillboardCustom(cam, health_bar.texture,
+                     Rectangle{
+                         .x = 0.0f,
+                         .y = 0.0f,
+                         .width = dims.x,
+                         .height = dims.y,
+                     },
+                     Vector3{pos.x, pos.y, pos.z}, Vector3{0.0f, 1.0f, 0.0f}, dims,
+                     Vector2{dims.x / 2.0f, dims.y / 2.0f}, angle, Vector3{0.0f, 1.0f, 0.0f}, WHITE);
 }
 
 void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix) {
@@ -221,6 +239,12 @@ void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix)
     movement +=
         Vector2Scale(Vector2Normalize({GetRandomValue(-100, 100) / 100.f, GetRandomValue(-100, 100) / 100.f}), 0.1f);
     movement = Vector2Normalize(movement);
+}
+
+void Enemy::update_health_bar() {
+    BeginTextureMode(health_bar);
+    ClearBackground(RED);
+    EndTextureMode();
 }
 
 uint32_t Enemy::tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hitbox, EnemyModels& enemy_models) {

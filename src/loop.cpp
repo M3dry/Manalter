@@ -197,8 +197,8 @@ void Arena::Paused::update(Arena& arena, Loop& loop) {
 }
 
 Arena::Arena(Loop& loop)
-    : state(Playing(loop.keys)), player({0.0f, 10.0f, 0.0f}, loop.assets), enemies(100),
-      to_next_soul_portal(5.0 * 60.0), soul_portal(std::nullopt) {
+    : state(Playing(loop.keys)), player({0.0f, 0.0f, 0.0f}, loop.assets), enemies(100), to_next_soul_portal(5.0 * 60.0),
+      soul_portal(std::nullopt), regen_player_view_quad(true) {
     auto arrow_tex = loop.assets[assets::SoulPortalArrow];
     auto arrow_mesh = GenMeshPlane(16, 16, 1, 1);
     soul_portal_arrow = LoadModelFromMesh(arrow_mesh);
@@ -208,21 +208,68 @@ Arena::Arena(Loop& loop)
 
 Arena::~Arena() {
     UnloadModel(soul_portal_arrow);
+
+    UnloadShader(player_view_quad.materials[0].shader);
+    UnloadModel(player_view_quad);
 }
 
 void Arena::draw(Loop& loop) {
     bool playing = curr_state<Playing>();
+
     if (playing) {
         player.update_interpolated_pos(loop.accum_time);
-        mouse_xz = mouse_xz_in_world(GetMouseRay(loop.mouse.mouse_pos, player.camera));
 
         incr_time(loop.delta_time);
     }
+    mouse_xz = mouse_xz_in_world(GetMouseRay(loop.mouse.mouse_pos, player.camera));
+
+    if (regen_player_view_quad) {
+        regen_player_view_quad = false;
+
+        auto ray1 = vec2_to_vec3(mouse_xz_in_world(GetScreenToWorldRay(Vector2{0.0f, 0.0f}, player.camera)));
+        auto ray2 = vec2_to_vec3(mouse_xz_in_world(GetScreenToWorldRay(Vector2{loop.screen.x, 0.0f}, player.camera)));
+        auto ray3 =
+            vec2_to_vec3(mouse_xz_in_world(GetScreenToWorldRay(Vector2{loop.screen.x, loop.screen.y}, player.camera)));
+        auto ray4 = vec2_to_vec3(mouse_xz_in_world(GetScreenToWorldRay(Vector2{0.0f, loop.screen.y}, player.camera)));
+
+        auto width = std::max(std::abs(ray1.x - ray2.x), std::abs(ray4.x - ray3.x));
+        std::println("max(|{} - {}|, |{} - {}|)", ray1.z, ray4.z, ray2.z, ray3.z);
+        auto height = std::max(std::abs(ray1.z - ray4.z), std::abs(ray2.z - ray3.z));
+        auto quad = Rectangle{
+            .x = ray1.x,
+            .y = ray1.z,
+            .width = width,
+            .height = height,
+        };
+        player_view_origin.x = quad.x;
+        player_view_origin.y = 0.0f;
+        player_view_origin.z = quad.y;
+        player_view_dims.x = quad.width;
+        player_view_dims.y = quad.height;
+
+        player_view_quad = LoadModelFromMesh(gen_mesh_quad(
+            Vector3{quad.x, 0.0f, quad.y}, Vector3{quad.x + quad.width, 0.0f, quad.y},
+            Vector3{quad.x + quad.width, 0.0f, quad.y + quad.height}, Vector3{quad.x, 0.0f, quad.y + quad.height}));
+        player_view_quad.materials[0].shader = LoadShader("./assets/floor.vs.glsl", "./assets/floor.fs.glsl");
+    }
+
+    enemies.update_health_bars();
+
 
     BeginTextureMode(loop.assets[assets::Target]);
     ClearBackground(WHITE);
 
     BeginMode3D(player.camera);
+
+    auto& player_view_shader = player_view_quad.materials[0].shader;
+    SetShaderValueTexture(player_view_shader, GetShaderLocation(player_view_shader, "tex"),
+                          loop.assets[assets::HubBackground]);
+    Vector3 player_view_origin_set = player_view_origin + vec2_to_vec3(player.interpolated_total_position);
+    SetShaderValue(player_view_shader, GetShaderLocation(player_view_shader, "totalOrigin"), &player_view_origin_set,
+                   SHADER_UNIFORM_VEC3);
+    SetShaderValue(player_view_shader, GetShaderLocation(player_view_shader, "totalMappingDims"), &player_view_dims,
+                   SHADER_UNIFORM_VEC2);
+    DrawModel(player_view_quad, player.interpolated_position, 1.0f, WHITE);
 
     auto circle =
         shapes::Circle(xz_component(player.position) + Player::visibility_center_offset, Player::visibility_radius);
@@ -245,11 +292,8 @@ void Arena::draw(Loop& loop) {
         // RIGHT-UP
         (Vector3){-ARENA_WIDTH, 0.0f, -ARENA_HEIGHT},
     };
-    auto floor_tex = loop.assets[assets::Floor];
     for (const auto& v : vs) {
-        DrawPlane(v, (Vector2){ARENA_WIDTH, ARENA_HEIGHT}, DARKGRAY);
-
-        enemies.draw(loop.enemy_models, v, circle);
+        enemies.draw(player.camera, loop.enemy_models, v, circle);
 
         if (soul_portal) {
             soul_portal->hitbox.draw_3D(BLACK, 1.0f, xz_component(v));
@@ -265,6 +309,7 @@ void Arena::draw(Loop& loop) {
     EndMode3D();
 
     if (playing) effects::update(static_cast<float>(loop.delta_time));
+
     BeginMode3D(player.camera);
     if (soul_portal && !check_collision(soul_portal->hitbox, xz_component(player.interpolated_position))) {
         auto tex = loop.assets[assets::SoulPortalArrow];
@@ -291,9 +336,7 @@ void Arena::draw(Loop& loop) {
     EndMode3D();
 
 #ifdef DEBUG
-    item_drops.draw_item_drop_names([camera = player.camera, screen = loop.screen](auto pos) {
-        return GetWorldToScreenEx(pos, camera, static_cast<int>(screen.x), static_cast<int>(screen.y));
-    });
+    item_drops.draw_item_drop_names([camera = player.camera](auto pos) { return GetWorldToScreen(pos, camera); });
 #endif
 
     EndTextureMode();
@@ -350,10 +393,16 @@ void Arena::draw(Loop& loop) {
     }
 
 #ifdef DEBUG
-    DrawText(std::format("POS: [{}, {}]", player.position.x, player.position.z).c_str(), 10, 10, 20, BLACK);
-    DrawText(std::format("ENEMIES: {}", enemies.enemies.data->size()).c_str(), 10, 30, 20, BLACK);
-    DrawText(std::format("LVL: {}", player.lvl).c_str(), 10, 50, 20, BLACK);
-    DrawText(std::format("UNLOCKED SPELL SPLOTS: {}", player.unlocked_spell_count).c_str(), 10, 70, 20, BLACK);
+    DrawText(std::format("POS: [{}, {}, {}]", player.position.x, player.position.y, player.position.z).c_str(), 10, 10,
+             20, BLACK);
+    DrawText(std::format("TOTAL POS: [{}, {}]", player.total_position.x, player.total_position.y).c_str(), 10, 30, 20,
+             BLACK);
+    DrawText(std::format("INTERPOLATED TOTAL POS: [{}, {}]", player.interpolated_total_position.x, player.interpolated_total_position.y).c_str(), 10, 50, 20,
+             BLACK);
+    DrawText(std::format("SCREEN: [{}, {}]", loop.screen.x, loop.screen.y).c_str(), 10, 70, 20, BLACK);
+    DrawText(std::format("ENEMIES: {}", enemies.enemies.data->size()).c_str(), 10, 90, 20, BLACK);
+    DrawText(std::format("LVL: {}", player.lvl).c_str(), 10, 110, 20, BLACK);
+    DrawText(std::format("UNLOCKED SPELL SPLOTS: {}", player.unlocked_spell_count).c_str(), 10, 130, 20, BLACK);
 #endif
 
     auto time = format_to_time(game_time);
@@ -390,7 +439,7 @@ void Arena::update(Loop& loop) {
     }
 
     const int movement_keys[] = {KEY_A, KEY_S, KEY_D, KEY_W};
-    const Vector2 movements[] = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
+    const Vector2 movements[] = {{-1, 0}, {0, 1}, {1, 0}, {0, -1}};
     const float angles[] = {0.0f, 90.0f, 180.0f, 270.0f};
 
     Vector2 movement = {0, 0};
@@ -511,7 +560,7 @@ void Arena::update(Loop& loop) {
         }
     });
 
-    player.tick((Vector2){movement.x, movement.y}, angle.x / angle.y);
+    player.tick((Vector2){movement.x, movement.y}, angle.x / angle.y - 90.0f);
     loop.player_save->tick_spellbook();
     auto damage_done = enemies.tick(player.hitbox, loop.enemy_models);
     souls += enemies.take_souls();

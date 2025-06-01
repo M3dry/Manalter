@@ -235,6 +235,7 @@ namespace quadtree {
             data->emplace_back(std::forward<Args>(args)...);
 
             if (!_insert(0, -1, data->size() - 1, data->back().id)) {
+                std::println("BAD POS: [{}, {}]", data.vec.back().val.position().x, data.vec.back().val.position().y);
                 assert(false && "How???");
             }
 
@@ -354,6 +355,7 @@ namespace quadtree {
 
                     if (auto new_ix = _insert(child_ix, child_id, dat_ix, dat_id); new_ix) {
                         nodes[parent_ix, parent_id][i, j].first = *new_ix;
+
                         return parent_ix;
                     }
                 }
@@ -406,6 +408,7 @@ namespace quadtree {
 
         std::pair<node_ix, uint64_t> add_node(Box&& bbox) {
             nodes->emplace_back(bbox);
+
             return {nodes->size() - 1, nodes->back().id};
         }
 
@@ -424,6 +427,7 @@ namespace quadtree {
                         f(data.vec[data_ix].val, data_ix);
                     }
                 }
+
                 return;
             }
 
@@ -434,6 +438,7 @@ namespace quadtree {
                     search_by(child_ix, child_id, check_box, check_point, f);
                 }
             }
+
         }
 
         std::size_t prune(node_ix ix, uint64_t ix_id) {

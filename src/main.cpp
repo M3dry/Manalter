@@ -18,7 +18,10 @@ int main() {
     emscripten_get_canvas_element_size("#canvas", &width, &height);
 #endif
 
+#ifndef DEBUG
     SetTraceLogCallback(custom_log);
+#endif
+
     InitWindow(width, height, "Manalter");
     SetWindowState(FLAG_FULLSCREEN_MODE);
     SetExitKey(KEY_NULL);

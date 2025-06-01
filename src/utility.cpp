@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <random>
+#include <ranges>
 #include <raylib.h>
 #include <rlgl.h>
 
@@ -102,6 +103,115 @@ Vector3 wrap_lerp(Vector3 a, Vector3 b, float t) {
     if (z >  half_height) z -= ARENA_HEIGHT;
 
     return Vector3{ x, y, z };
+}
+
+Mesh gen_mesh_quad(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4) {
+    std::vector ps = {p1, p2, p3, p4};
+    Mesh mesh{};
+    mesh.vertexCount = 4;
+    mesh.triangleCount = 2;
+
+    auto normal = Vector3Normalize(Vector3CrossProduct(Vector3Subtract(p2, p1), Vector3Subtract(p3, p1)));
+
+    mesh.vertices = static_cast<float*>(RL_MALLOC(static_cast<unsigned long>(mesh.vertexCount)*sizeof(Vector3)));
+    mesh.normals = static_cast<float*>(RL_MALLOC(static_cast<unsigned long>(mesh.vertexCount)*sizeof(Vector3)));
+    for (std::size_t i = 0; i < ps.size(); i++) {
+        reinterpret_cast<Vector3*>(mesh.vertices)[i] = ps[i];
+        reinterpret_cast<Vector3*>(mesh.normals)[i] = normal;
+    }
+
+    mesh.texcoords = static_cast<float*>(RL_MALLOC(static_cast<unsigned long>(mesh.vertexCount)*sizeof(Vector3)));
+    auto texcoords = reinterpret_cast<Vector2*>(mesh.texcoords);
+    texcoords[3] = {0, 1};
+    texcoords[2] = {1, 1};
+    texcoords[1] = {1, 0};
+    texcoords[0] = {0, 0};
+
+    mesh.indices = static_cast<unsigned short*>(RL_MALLOC(static_cast<unsigned long>(mesh.triangleCount*3)*sizeof(unsigned short)));
+    auto indices = reinterpret_cast<unsigned short*>(mesh.indices);
+    indices[0] = 2;
+    indices[1] = 1;
+    indices[2] = 0;
+
+    indices[3] = 0;
+    indices[4] = 3;
+    indices[5] = 2;
+
+    UploadMesh(&mesh, false);
+    return mesh;
+}
+
+void DrawBillboardCustom(Camera camera, Texture2D texture, Rectangle source, Vector3 position, Vector3 up, Vector2 size, Vector2 origin, float angle, Vector3 rotation_axis, Color tint) {
+    // Compute the up vector and the right vector
+    Matrix matView = MatrixLookAt(camera.position, camera.target, camera.up);
+    Vector3 right = { matView.m0, matView.m4, matView.m8 };
+    right = Vector3Scale(right, size.x);
+    up = Vector3Scale(up, size.y);
+
+    // Flip the content of the billboard while maintaining the counterclockwise edge rendering order
+    if (size.x < 0.0f)
+    {
+        source.x += size.x;
+        source.width *= -1.0;
+        right = Vector3Negate(right);
+        origin.x *= -1.0f;
+    }
+    if (size.y < 0.0f)
+    {
+        source.y += size.y;
+        source.height *= -1.0;
+        up = Vector3Negate(up);
+        origin.y *= -1.0f;
+    }
+
+    // Draw the texture region described by source on the following rectangle in 3D space:
+    //
+    //                size.x          <--.
+    //  3 ^---------------------------+ 2 \ rotation
+    //    |                           |   /
+    //    |                           |
+    //    |   origin.x   position     |
+    // up |..............             | size.y
+    //    |             .             |
+    //    |             . origin.y    |
+    //    |             .             |
+    //  0 +---------------------------> 1
+    //                right
+    Vector3 forward;
+
+    Vector3 origin3D = Vector3Add(Vector3Scale(Vector3Normalize(right), origin.x), Vector3Scale(Vector3Normalize(up), origin.y));
+
+    Vector3 points[4];
+    points[0] = Vector3Zero();
+    points[1] = right;
+    points[2] = Vector3Add(up, right);
+    points[3] = up;
+
+    for (int i = 0; i < 4; i++)
+    {
+        points[i] = Vector3Subtract(points[i], origin3D);
+        if (angle != 0.0f) points[i] = Vector3RotateByAxisAngle(points[i], rotation_axis, angle * DEG2RAD);
+        points[i] = Vector3Add(points[i], position);
+    }
+
+    Vector2 texcoords[4];
+    texcoords[0] = (Vector2) { (float)source.x/texture.width, (float)(source.y + source.height)/texture.height };
+    texcoords[1] = (Vector2) { (float)(source.x + source.width)/texture.width, (float)(source.y + source.height)/texture.height };
+    texcoords[2] = (Vector2) { (float)(source.x + source.width)/texture.width, (float)source.y/texture.height };
+    texcoords[3] = (Vector2) { (float)source.x/texture.width, (float)source.y/texture.height };
+
+    rlSetTexture(texture.id);
+    rlBegin(RL_QUADS);
+
+        rlColor4ub(tint.r, tint.g, tint.b, tint.a);
+        for (int i = 0; i < 4; i++)
+        {
+            rlTexCoord2f(texcoords[i].x, texcoords[i].y);
+            rlVertex3f(points[i].x, points[i].y, points[i].z);
+        }
+
+    rlEnd();
+    rlSetTexture(0);
 }
 
 void arena::loop_around(float& x, float& y) {

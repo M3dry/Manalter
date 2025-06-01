@@ -7,14 +7,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_BUILD_TYPE Debug)
 
-# add_compile_options(
-#     -Wall -Wextra -Wuninitialized -Wmissing-field-initializers
-#     -Wno-unused-variable -Wshadow -Wconversion -Wsign-conversion
-#     -Wdouble-promotion -Wnull-dereference -Wold-style-cast -Woverloaded-virtual -Wnon-virtual-dtor -O3 -flto -ffunction-sections -fdata-sections)
-#     # -fsanitize=undefined -fsanitize-undefined-trap-on-error -fno-sanitize-recover=undefined -g -fno-omit-frame-pointer)
-# # add_link_options(-fsanitize=undefined -fsanitize-undefined-trap-on-error -fno-sanitize-recover=undefined -g -fno-omit-frame-pointer)
-# add_link_options(-O3 -flto -Wl,--gc-sections -s)
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_LINKER lld)

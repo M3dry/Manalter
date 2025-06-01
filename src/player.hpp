@@ -13,13 +13,15 @@
 
 struct Player {
     static constexpr float visibility_radius = 450.0f;
-    // for some reason .x moves on the y axis and .y moves on the x axis.... fuck me
-    static constexpr Vector2 visibility_center_offset = {-280.0f, 0.0f};
+    static constexpr Vector2 visibility_center_offset = {0.0f, -280.0f};
     static constexpr uint8_t max_spell_count = 10;
 
     Vector3 prev_position;
+    Vector2 prev_total_position;
     Vector3 position;
+    Vector2 total_position;
     Vector3 interpolated_position;
+    Vector2 interpolated_total_position;
     float angle = 0.0f;
 
     ModelAnimation* animations;

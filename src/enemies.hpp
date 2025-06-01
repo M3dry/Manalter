@@ -13,7 +13,7 @@
 
 struct Enemy;
 
-template <bool Check> using QT = quadtree::QuadTree<5, Enemy, Check>;
+template <bool Check> using QT = quadtree::QuadTree<10, Enemy, Check>;
 
 namespace enemies {
     enum struct EnemyClass {
@@ -253,6 +253,7 @@ struct Enemy {
 
     uint8_t damage_tint_left = 0;
 
+    uint32_t max_health;
     uint32_t health;
     uint32_t damage;
     uint16_t speed;
@@ -270,6 +271,8 @@ struct Enemy {
     enemies::State state;
     std::vector<Matrix> bone_transforms;
 
+    RenderTexture2D health_bar = {};
+
     Enemy(Vector2 position, uint16_t level, bool boss, enemies::State&& enemy, std::vector<Matrix> bone_transforms)
         : anim_index(get_info(enemy).default_anim), level(level),
           pos((Vector3){position.x, get_info(enemy).y_component, position.y}), movement(Vector2Zero()),
@@ -278,16 +281,18 @@ struct Enemy {
         assert(level != 0);
 
         auto info = get_info(enemy);
-        health = info.max_health;
+        max_health = health = info.max_health * (1 + level/10);
 
         // TODO: scale based on `level`
         auto [min_speed, max_speed] = info.speed_range;
         std::uniform_int_distribution<uint16_t> speedDist(min_speed, max_speed);
-        speed = speedDist(rng::get());
+        speed = speedDist(rng::get()) * (1 + level/10);
 
         auto [min_damage, max_damage] = info.damage_range;
         std::uniform_int_distribution<uint32_t> damageDist(min_damage, max_damage);
-        damage = damageDist(rng::get());
+        damage = damageDist(rng::get()) * (1 + level/10);
+
+        health_bar = LoadRenderTexture(400, 100);
     }
 
     Enemy(const Enemy&) = delete;
@@ -297,8 +302,9 @@ struct Enemy {
     Enemy& operator=(Enemy&&) = default;
 
     void update_bones(EnemyModels& enemy_models);
-    void draw(EnemyModels& enemy_models, const Vector3& offset);
+    void draw(Camera cam, EnemyModels& enemy_models, const Vector3& offset);
     void update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix);
+    void update_health_bar();
     // returned number is the amount of damage taken by the player
     uint32_t tick(QT<true>& enemies, std::size_t ix, shapes::Circle target_hitbox, EnemyModels& enemy_models);
 

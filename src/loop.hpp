@@ -71,6 +71,11 @@ struct Arena {
     std::optional<SoulPortal> soul_portal;
     Model soul_portal_arrow;
 
+    Vector3 player_view_origin;
+    Vector2 player_view_dims;
+    Model player_view_quad;
+    bool regen_player_view_quad;
+
     std::optional<SpellBookUI> spellbook_ui;
     hud::SpellBar spellbar;
 

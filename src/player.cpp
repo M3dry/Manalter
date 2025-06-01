@@ -8,12 +8,13 @@
 #include <fstream>
 #include <limits>
 
-const Vector3 Player::camera_offset = (Vector3){60.0f, 140.0f, 0.0f};
+const Vector3 Player::camera_offset = (Vector3){0.0f, 140.0f, 60.0f};
 const float Player::model_scale = 0.2f;
 
 Player::Player(Vector3 position, assets::Store& assets)
-    : prev_position(position), position(position), interpolated_position(position), animations(nullptr),
-      hitbox((Vector2){position.x, position.z}, 8.0f) {
+    : prev_position(position), prev_total_position(Vector2{position.x, position.z}), position(position), total_position(Vector2{position.x, position.z}),
+      interpolated_position(position), interpolated_total_position(Vector2{position.x, position.y}),
+      animations(nullptr), hitbox((Vector2){position.x, position.z}, 8.0f) {
     equipped_spells.reset(new uint64_t[Player::max_spell_count]);
     for (std::size_t i = 0; i < Player::max_spell_count; i++) {
         equipped_spells[i] = std::numeric_limits<uint64_t>::max();
@@ -33,7 +34,11 @@ Player::Player(Vector3 position, assets::Store& assets)
 
 void Player::update_interpolated_pos(double accum_time) {
     interpolated_position = wrap_lerp(prev_position, position, static_cast<float>(accum_time) * TICKS);
+    interpolated_total_position = Vector2Lerp(prev_total_position, total_position, static_cast<float>(accum_time) * TICKS);
+
     prev_position = interpolated_position;
+    prev_total_position = interpolated_total_position;
+
     camera.target = interpolated_position;
     camera.position = Vector3Lerp(camera.position, Vector3Add(camera_offset, interpolated_position), 1.0f);
 }
@@ -91,6 +96,8 @@ void Player::tick(Vector2 movement, float new_angle) {
         prev_position = position;
         position.x += movement.x * stats.speed.get();
         position.z += movement.y * stats.speed.get();
+        total_position.x += movement.x * stats.speed.get();
+        total_position.y += movement.y * stats.speed.get();
         angle = new_angle;
 
         arena::loop_around(position.x, position.z);
