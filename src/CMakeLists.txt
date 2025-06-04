@@ -43,7 +43,7 @@ target_compile_options(manalter_lib PRIVATE ${COMMON_COMPILE_OPTIONS})
 target_link_options(manalter_lib PRIVATE ${COMMON_LINK_OPTIONS})
 target_include_directories(manalter_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(manalter_lib PRIVATE raylib)
-target_compile_definitions(manalter_lib PUBLIC DEBUG)
+# target_compile_definitions(manalter_lib PUBLIC DEBUG)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_link_options(manalter_lib PRIVATE mwindows)

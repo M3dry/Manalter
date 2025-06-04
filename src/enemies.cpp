@@ -182,15 +182,15 @@ void Enemy::draw(Camera cam, EnemyModels& enemy_models, const Vector3& offset) {
         static_cast<float>(health_bar.texture.height),
     };
 
-    DrawBillboardCustom(cam, health_bar.texture,
-                     Rectangle{
-                         .x = 0.0f,
-                         .y = 0.0f,
-                         .width = dims.x,
-                         .height = dims.y,
-                     },
-                     Vector3{pos.x, pos.y, pos.z}, Vector3{0.0f, 1.0f, 0.0f}, dims,
-                     Vector2{dims.x / 2.0f, dims.y / 2.0f}, angle, Vector3{0.0f, 1.0f, 0.0f}, WHITE);
+    // DrawBillboardCustom(cam, health_bar.texture,
+    //                  Rectangle{
+    //                      .x = 0.0f,
+    //                      .y = 0.0f,
+    //                      .width = dims.x,
+    //                      .height = dims.y,
+    //                  },
+    //                  Vector3{pos.x, pos.y, pos.z}, Vector3{0.0f, 1.0f, 0.0f}, dims,
+    //                  Vector2{dims.x / 2.0f, dims.y / 2.0f}, angle, Vector3{0.0f, 1.0f, 0.0f}, WHITE);
 }
 
 void Enemy::update_target(QT<true>& enemies, Vector2 player_pos, std::size_t ix) {

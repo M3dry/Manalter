@@ -233,7 +233,6 @@ void Arena::draw(Loop& loop) {
         auto ray4 = vec2_to_vec3(mouse_xz_in_world(GetScreenToWorldRay(Vector2{0.0f, loop.screen.y}, player.camera)));
 
         auto width = std::max(std::abs(ray1.x - ray2.x), std::abs(ray4.x - ray3.x));
-        std::println("max(|{} - {}|, |{} - {}|)", ray1.z, ray4.z, ray2.z, ray3.z);
         auto height = std::max(std::abs(ray1.z - ray4.z), std::abs(ray2.z - ray3.z));
         auto quad = Rectangle{
             .x = ray1.x,
@@ -614,7 +613,6 @@ void Arena::incr_time(double delta) {
                                                                             static_cast<int>(ARENA_HEIGHT / 2.0f)))},
                                          20.0f),
             };
-            std::println("SOUL PORTAL SPAWNED @[{}, {}]", soul_portal->hitbox.center.x, soul_portal->hitbox.center.y);
         }
 
         if (soul_portal->time_remaining == 0) {

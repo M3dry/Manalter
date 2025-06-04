@@ -17,12 +17,8 @@ vec4 color(vec3 totalPosition) {
     float radius = sqrt(totalPosition.x*totalPosition.x + totalPosition.z*totalPosition.z);
     float alpha = atan(totalPosition.z, totalPosition.x);
 
-    float r = step(100, radius)*255;
-    if (r == 0 && alpha <= 0) {
-        r = 255;
-    }
-    // return vec4(r, step(100, radius)*255, step(100, radius)*255, 255);
-    return vec4(smoothstep(0, 1000, radius)/1000.0f * 255.0f, smoothstep(0, 1000, radius)/1000.0f * 255.0f, smoothstep(0, 1000, radius)/1000.0f * 255.0f, 255);
+    float a = clamp(smoothstep(radius, 0.0f, 1000.0f), 20.0f/255.0f, 64.0f/255.0f);
+    return vec4(a, a, a, 1.0f);
 }
 
 void main() {

@@ -235,7 +235,6 @@ namespace quadtree {
             data->emplace_back(std::forward<Args>(args)...);
 
             if (!_insert(0, -1, data->size() - 1, data->back().id)) {
-                std::println("BAD POS: [{}, {}]", data.vec.back().val.position().x, data.vec.back().val.position().y);
                 assert(false && "How???");
             }
 
