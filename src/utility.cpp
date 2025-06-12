@@ -6,6 +6,7 @@
 #include <random>
 #include <ranges>
 #include <raylib.h>
+#include <raymath.h>
 #include <rlgl.h>
 
 std::pair<int, Vector2> max_font_size(const Font& font, const Vector2& max_dims, std::string_view text) {
@@ -141,7 +142,7 @@ Mesh gen_mesh_quad(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4) {
     return mesh;
 }
 
-void DrawBillboardCustom(Camera camera, Texture2D texture, Rectangle source, Vector3 position, Vector3 up, Vector2 size, Vector2 origin, float angle, Vector3 rotation_axis, Color tint) {
+void DrawBillboardCustom(Camera camera, Texture2D texture, Rectangle source, Vector3 position, Vector3 up, Vector2 size, Vector2 origin, Vector3 rotations, Color tint) {
     // Compute the up vector and the right vector
     Matrix matView = MatrixLookAt(camera.position, camera.target, camera.up);
     Vector3 right = { matView.m0, matView.m4, matView.m8 };
@@ -190,7 +191,10 @@ void DrawBillboardCustom(Camera camera, Texture2D texture, Rectangle source, Vec
     for (int i = 0; i < 4; i++)
     {
         points[i] = Vector3Subtract(points[i], origin3D);
-        if (angle != 0.0f) points[i] = Vector3RotateByAxisAngle(points[i], rotation_axis, angle * DEG2RAD);
+        // if (angle != 0.0f) points[i] = Vector3RotateByAxisAngle(points[i], rotation_axis, angle * DEG2RAD);
+        if (rotations.x != 0.0f) points[i] = Vector3RotateByAxisAngle(points[i], Vector3{1.0f, 0.0f, 0.0f}, rotations.x * DEG2RAD);
+        if (rotations.y != 0.0f) points[i] = Vector3RotateByAxisAngle(points[i], Vector3{0.0f, 1.0f, 0.0f}, rotations.y * DEG2RAD);
+        if (rotations.z != 0.0f) points[i] = Vector3RotateByAxisAngle(points[i], Vector3{0.0f, 0.0f, 1.0f}, rotations.z * DEG2RAD);
         points[i] = Vector3Add(points[i], position);
     }
 

@@ -281,18 +281,18 @@ struct Enemy {
         assert(level != 0);
 
         auto info = get_info(enemy);
-        max_health = health = info.max_health * (1 + level/10);
+        max_health = health = info.max_health * (1 + level / 10);
 
         // TODO: scale based on `level`
         auto [min_speed, max_speed] = info.speed_range;
         std::uniform_int_distribution<uint16_t> speedDist(min_speed, max_speed);
-        speed = speedDist(rng::get()) * (1 + level/10);
+        speed = speedDist(rng::get()) * (1 + level / 10);
 
         auto [min_damage, max_damage] = info.damage_range;
         std::uniform_int_distribution<uint32_t> damageDist(min_damage, max_damage);
-        damage = damageDist(rng::get()) * (1 + level/10);
+        damage = damageDist(rng::get()) * (1 + level / 10);
 
-        health_bar = LoadRenderTexture(400, 100);
+        health_bar = LoadRenderTexture(50, 10);
     }
 
     Enemy(const Enemy&) = delete;

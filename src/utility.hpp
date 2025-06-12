@@ -23,7 +23,7 @@ Vector4 spellbook_and_tile_dims(Vector2 screen, Vector2 spellbook_dims, Vector2 
 Vector3 wrap_lerp(Vector3 a, Vector3 b, float t);
 Mesh gen_mesh_quad(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4);
 void DrawBillboardCustom(Camera camera, Texture2D texture, Rectangle source, Vector3 position, Vector3 up, Vector2 size,
-                         Vector2 origin, float angle, Vector3 rotation_axis, Color tint);
+                         Vector2 origin, Vector3 rotations, Color tint);
 
 inline Vector3 vec2_to_vec3(const Vector2& v) {
     return {v.x, 0.0f, v.y};

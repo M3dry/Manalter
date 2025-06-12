@@ -14,6 +14,7 @@
 
 #include "assets.hpp"
 #include "effects.hpp"
+#include "enemies.hpp"
 #include "font.hpp"
 #include "hitbox.hpp"
 #include "item_drops.hpp"
@@ -61,6 +62,8 @@ Arena::Playing::Playing(Keys& keys) {
     keys.register_key(KEY_P);
     keys.register_key(KEY_O);
     keys.register_key(KEY_I);
+    keys.register_key(KEY_K);
+    keys.register_key(KEY_L);
 #endif
 }
 
@@ -393,15 +396,16 @@ void Arena::draw(Loop& loop) {
 
 #ifdef DEBUG
     DrawText(std::format("POS: [{}, {}, {}]", player.position.x, player.position.y, player.position.z).c_str(), 10, 10,
-             20, BLACK);
+             20, WHITE);
     DrawText(std::format("TOTAL POS: [{}, {}]", player.total_position.x, player.total_position.y).c_str(), 10, 30, 20,
-             BLACK);
+             WHITE);
     DrawText(std::format("INTERPOLATED TOTAL POS: [{}, {}]", player.interpolated_total_position.x, player.interpolated_total_position.y).c_str(), 10, 50, 20,
-             BLACK);
-    DrawText(std::format("SCREEN: [{}, {}]", loop.screen.x, loop.screen.y).c_str(), 10, 70, 20, BLACK);
-    DrawText(std::format("ENEMIES: {}", enemies.enemies.data->size()).c_str(), 10, 90, 20, BLACK);
-    DrawText(std::format("LVL: {}", player.lvl).c_str(), 10, 110, 20, BLACK);
-    DrawText(std::format("UNLOCKED SPELL SPLOTS: {}", player.unlocked_spell_count).c_str(), 10, 130, 20, BLACK);
+             WHITE);
+    DrawText(std::format("SCREEN: [{}, {}]", loop.screen.x, loop.screen.y).c_str(), 10, 70, 20, WHITE);
+    DrawText(std::format("ENEMIES: {}", enemies.enemies.data->size()).c_str(), 10, 90, 20, WHITE);
+    DrawText(std::format("LVL: {}", player.lvl).c_str(), 10, 110, 20, WHITE);
+    DrawText(std::format("UNLOCKED SPELL SPLOTS: {}", player.unlocked_spell_count).c_str(), 10, 130, 20, WHITE);
+    DrawText(std::format("ANGLE OFFSET: {}", test::get_offset()).c_str(), 10, 150, 20, WHITE);
 #endif
 
     auto time = format_to_time(game_time);
@@ -531,6 +535,13 @@ void Arena::update(Loop& loop) {
                 break;
             case KEY_I:
                 incr_time(1.0);
+                break;
+
+            case KEY_K:
+                test::incr_offset();
+                break;
+            case KEY_L:
+                test::decr_offset();
                 break;
 #endif
         }
