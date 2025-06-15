@@ -56,14 +56,14 @@ namespace quadtree {
             return true;
         }
 
-        void draw(Color col) const {
+        void draw(Color col, bool two_d) const {
             shapes::Polygon bbox = static_cast<Rectangle>(*this);
 
-#if FALSE
-            bbox.draw_lines_3D(col, 1.0f);
-#else
-            bbox.draw_lines_2D(col);
-#endif
+            if (two_d) {
+                bbox.draw_lines_2D(col);
+            } else {
+                bbox.draw_lines_3D(col, 1.0f);
+            }
         }
     };
 
@@ -332,8 +332,8 @@ namespace quadtree {
             }
         }
 
-        void draw_bbs(Color col) {
-            draw_bbs(col, 0, -1);
+        void draw_bbs(Color col, bool two_d) {
+            draw_bbs(col, 0, -1, two_d);
         }
 
       private:
@@ -505,10 +505,10 @@ namespace quadtree {
             return total_size;
         }
 
-        void draw_bbs(Color col, node_ix ix, uint64_t ix_id) {
+        void draw_bbs(Color col, node_ix ix, uint64_t ix_id, bool two_d) {
             auto& node = nodes[ix, ix_id];
 
-            node.bbox.draw(col);
+            node.bbox.draw(col, two_d);
 
             if (!node.subdivided) return;
 
@@ -516,7 +516,7 @@ namespace quadtree {
                 for (int j = 0; j < 2; j++) {
                     auto& [child_ix, child_id] = node[i, j];
 
-                    draw_bbs(col, child_ix, child_id);
+                    draw_bbs(col, child_ix, child_id, two_d);
                 }
             }
         }

@@ -624,19 +624,19 @@ void Arena::incr_time(double delta) {
 }
 
 Hub::Hub(Loop& loop, Origin origin) {
-    if (loop.player_save->get_spellbook().size() == 0) {
-        switch (origin) {
-            case Arena:
-                _goto_main_menu = true;
-                _start_immediatly = false;
-                break;
-            case MainMenu:
-                _goto_main_menu = false;
-                _start_immediatly = true;
-                break;
-        }
-        return;
-    }
+    // if (loop.player_save->get_spellbook().size() == 0) {
+    //     switch (origin) {
+    //         case Arena:
+    //             _goto_main_menu = true;
+    //             _start_immediatly = false;
+    //             break;
+    //         case MainMenu:
+    //             _goto_main_menu = false;
+    //             _start_immediatly = true;
+    //             break;
+    //     }
+    //     return;
+    // }
 
     auto button_rec = Rectangle{
         .x = loop.screen.x / 2.0f - 300 / 2.0f,

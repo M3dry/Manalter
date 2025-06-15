@@ -74,7 +74,7 @@ void Enemies::draw(Camera cam, EnemyModels& enemy_models, const Vector3& offset,
     }
 
 #ifdef DEBUG
-    enemies.draw_bbs(RED);
+    enemies.draw_bbs(RED, false);
 #endif
 }
 

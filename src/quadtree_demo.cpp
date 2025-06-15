@@ -25,7 +25,7 @@ int main(void) {
             DrawCircleV(pos, 20.0f, BLACK);
             DrawText(std::format("{}", p.id).c_str(), pos.x, pos.y, 5, WHITE);
         }
-        qt.draw_bbs(RED);
+        qt.draw_bbs(RED, true);
 
         EndDrawing();
         SwapScreenBuffer();
@@ -41,7 +41,7 @@ int main(void) {
                 }
             }
         } else if (IsKeyPressed(KEY_P)) {
-            qt.prune();
+            qt.rebuild();
         } else if (IsKeyPressed(KEY_A)) {
             qt.print([](auto& x, auto y) {
 
