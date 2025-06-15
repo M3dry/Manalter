@@ -26,6 +26,7 @@ RUN cp "/usr/x86_64-w64-mingw32/bin/libstdc++-6.dll" /build/build-win/ \
 
 FROM scratch AS output
 COPY --from=builder /build/build-win/src/manalter.exe /out/manalter.exe
+COPY --from=builder /build/build-win/src/manalter_debug.exe /out/manalter_debug.exe
 COPY --from=builder /build/build-win/src/quadtree_demo.exe /out/quadtree_demo.exe
 COPY --from=builder /build/build-win/src/hitbox_demo.exe /out/hitbox_demo.exe
 COPY --from=builder /build/build-win/src/particle_system_demo.exe /out/particle_system_demo.exe

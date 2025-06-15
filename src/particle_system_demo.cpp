@@ -8,6 +8,7 @@
 
 int main(void) {
     InitWindow(0, 0, "particle system");
+    SetWindowState(FLAG_FULLSCREEN_MODE);
 
     Camera3D cam{};
     cam.position = {0.0f, 10.0f, 30.0f};

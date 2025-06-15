@@ -5,6 +5,7 @@
 
 int main(void) {
     InitWindow(0, 0, "hitbox");
+    SetWindowState(FLAG_FULLSCREEN_MODE);
 
     shapes::Polygon poly1((Vector2){450, 350},
                           {(Vector2){400, 300}, (Vector2){500, 300}, (Vector2){500, 400}, (Vector2){400, 400}});

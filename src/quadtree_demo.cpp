@@ -6,6 +6,7 @@
 
 int main(void) {
     InitWindow(0, 0, "quadtree");
+    SetWindowState(FLAG_FULLSCREEN_MODE);
 
     quadtree::QuadTree<4, quadtree::pos<uint8_t>> qt(
         quadtree::Box({0.0f, 0.0f, (float)GetScreenWidth(), (float)GetScreenHeight()}));
