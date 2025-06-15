@@ -23,6 +23,14 @@ set(HITBOX_DEMO_SOURCES
     hitbox_demo.cpp
 )
 
+set(QUADTREE_DEMO_SOURCES
+    quadtree_demo.cpp
+)
+
+set(PARTICLE_SYSTEM_DEMO_SOURCES
+    particle_system_demo.cpp
+)
+
 set(PLAYGROUND_SOURCES
     playground.cpp
 )
@@ -43,29 +51,24 @@ target_compile_options(manalter_lib PRIVATE ${COMMON_COMPILE_OPTIONS})
 target_link_options(manalter_lib PRIVATE ${COMMON_LINK_OPTIONS})
 target_include_directories(manalter_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(manalter_lib PRIVATE raylib)
-target_compile_definitions(manalter_lib PUBLIC DEBUG)
+# target_compile_definitions(manalter_lib PUBLIC DEBUG)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_link_options(manalter_lib PRIVATE mwindows)
     target_link_libraries(manalter_lib PRIVATE winmm "stdc++exp")
 endif()
 
-# target_precompile_headers(manalter_lib PRIVATE
-#     <vector>
-#     <string>
-#     <cassert>
-#     <random>
-#     <functional>
-#     <utility>
-#     <raylib.h>
-#     <raymath.h>
-# )
-
 add_executable(manalter main.cpp)
 target_link_libraries(manalter PRIVATE manalter_lib)
 
 add_executable(hitbox_demo ${HITBOX_DEMO_SOURCES})
 target_link_libraries(hitbox_demo PRIVATE manalter_lib)
+
+add_executable(quadtree_demo ${QUADTREE_DEMO_SOURCES})
+target_link_libraries(quadtree_demo PRIVATE manalter_lib)
+
+add_executable(particle_system_demo ${PARTICLE_SYSTEM_DEMO_SOURCES})
+target_link_libraries(particle_system_demo PRIVATE manalter_lib)
 
 add_executable(playground ${PLAYGROUND_SOURCES})
 target_link_libraries(playground PRIVATE manalter_lib)

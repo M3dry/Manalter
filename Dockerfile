@@ -19,14 +19,17 @@ RUN cmake -S /build -B /build/build-win \
         -DCMAKE_TOOLCHAIN_FILE=/build/toolchain-mingw.cmake \
         -DCMAKE_CXX_FLAGS=-I/build/raylib/src/ \
         -DCMAKE_EXE_LINKER_FLAGS="-L/build/raylib/build-win/raylib" && \
-    cmake --build /build/build-win --target manalter
-RUN find /usr/x86_64-w64-mingw32/bin -name "*.dll"
+    cmake --build /build/build-win
 RUN cp "/usr/x86_64-w64-mingw32/bin/libstdc++-6.dll" /build/build-win/ \
     && cp "/usr/x86_64-w64-mingw32/bin/libgcc_s_seh-1.dll" /build/build-win \
     && cp "/usr/x86_64-w64-mingw32/bin/libwinpthread-1.dll" /build/build-win
 
 FROM scratch AS output
 COPY --from=builder /build/build-win/src/manalter.exe /out/manalter.exe
+COPY --from=builder /build/build-win/src/quadtree_demo.exe /out/quadtree_demo.exe
+COPY --from=builder /build/build-win/src/hitbox_demo.exe /out/hitbox_demo.exe
+COPY --from=builder /build/build-win/src/particle_system_demo.exe /out/particle_system_demo.exe
 COPY --from=builder /build/build-win/libstdc++-6.dll /out/libstdc++-6.dll
 COPY --from=builder /build/build-win/libgcc_s_seh-1.dll /out/libgcc_s_seh-1.dll
 COPY --from=builder /build/build-win/libwinpthread-1.dll /out/libwinpthread-1.dll
+COPY --from=builder /build/assets/ /out/assets

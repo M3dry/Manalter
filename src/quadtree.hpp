@@ -59,7 +59,11 @@ namespace quadtree {
         void draw(Color col) const {
             shapes::Polygon bbox = static_cast<Rectangle>(*this);
 
+#if FALSE
             bbox.draw_lines_3D(col, 1.0f);
+#else
+            bbox.draw_lines_2D(col);
+#endif
         }
     };
 

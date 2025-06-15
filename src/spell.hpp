@@ -124,8 +124,8 @@ namespace spells {
                 effect::Plosion{
                     .type = effect::Plosion::Ex,
                     .radius = 0.0f,
-                    .particle_count = 350,
-                    .particle_size_scale = 0.1f,
+                    .particle_count = 3500,
+                    .particle_size_scale = 0.05f,
                     .floor_y = 0.0f,
                     .lifetime = {0.1f, 0.3f},
                     .velocity_scale = {70.0f, 90.0f},

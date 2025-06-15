@@ -62,8 +62,6 @@ Arena::Playing::Playing(Keys& keys) {
     keys.register_key(KEY_P);
     keys.register_key(KEY_O);
     keys.register_key(KEY_I);
-    keys.register_key(KEY_K);
-    keys.register_key(KEY_L);
 #endif
 }
 
@@ -405,7 +403,6 @@ void Arena::draw(Loop& loop) {
     DrawText(std::format("ENEMIES: {}", enemies.enemies.data->size()).c_str(), 10, 90, 20, WHITE);
     DrawText(std::format("LVL: {}", player.lvl).c_str(), 10, 110, 20, WHITE);
     DrawText(std::format("UNLOCKED SPELL SPLOTS: {}", player.unlocked_spell_count).c_str(), 10, 130, 20, WHITE);
-    DrawText(std::format("ANGLE OFFSET: {}", test::get_offset()).c_str(), 10, 150, 20, WHITE);
 #endif
 
     auto time = format_to_time(game_time);
@@ -535,13 +532,6 @@ void Arena::update(Loop& loop) {
                 break;
             case KEY_I:
                 incr_time(1.0);
-                break;
-
-            case KEY_K:
-                test::incr_offset();
-                break;
-            case KEY_L:
-                test::decr_offset();
                 break;
 #endif
         }
