@@ -28,6 +28,8 @@
               glfw
               libGL.dev
               catch2_3
+              sol2
+              lua
             ]
             ++ [raylib_patched llvm.lld];
           buildPhase = ''
@@ -38,33 +40,9 @@
             cp src/manalter $out/bin/manalter
           '';
         };
-        hitbox-demo = llvm.stdenv.mkDerivation {
-          pname = "Hitbox demo";
-          version = "0.1.0";
-          src = ./.;
-          buildInputs = with pkgs;
-            [
-              cmake
-              lld
-              glfw
-              libGL.dev
-              catch2_3
-            ]
-            ++ [raylib_patched];
-          buildPhase = ''
-            make hitbox_demo
-          '';
-          installPhase = ''
-            mkdir -p $out/bin cp src/hitbox_demo $out/bin/hitbox_demo
-          '';
-        };
       in {
         packages.default = manalter;
         apps = {
-          hitbox-demo = flake-utils.lib.mkApp {
-            drv = hitbox-demo;
-            exePath = "/bin/hitbox_demo";
-          };
           default = flake-utils.lib.mkApp {
             drv = manalter;
             exePath = "/bin/manalter";
@@ -78,6 +56,8 @@
               libGLU
               gdb
               catch2_3
+              sol2
+              lua
               renderdoc
               valgrind
 
@@ -91,6 +71,7 @@
           shellHook = ''
             export CC=clang
             export CXX=clang++
+            export LUA="${pkgs.lua}"
           '';
         };
       }

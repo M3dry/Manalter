@@ -1,12 +1,17 @@
-#include "particle_system.hpp"
-#include "texture_includes.hpp"
-#include "utility.hpp"
+#include "particle.hpp"
 #include <random>
 #include <raylib.h>
 #include <raymath.h>
 #include <variant>
+#include <chrono>
+
+std::mt19937 rng(static_cast<unsigned long>(std::chrono::steady_clock::now().time_since_epoch().count()));
 
 namespace particle_system {
+    constexpr unsigned char particle_circle_data[] = {
+#embed "../assets/particle_circle.png"
+    };
+
     Particles::Particles(std::size_t max_particles) : max_size(max_particles) {
         pos.reset(new Vector3[max_size]{});
         velocity.reset(new Vector3[max_size]{});
@@ -59,10 +64,9 @@ namespace particle_system::generators::pos {
     void OnCircle::gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
         static std::uniform_real_distribution<float> distAngle(0.0f, 2 * static_cast<float>(std::numbers::pi));
 
-        auto& gen = rng::get();
         for (std::size_t i = start_ix; i < end_ix; i++) {
-            auto angle = distAngle(gen);
-            auto radius = radiusDist(gen);
+            auto angle = distAngle(rng);
+            auto radius = radiusDist(rng);
             particles.pos[i].x = center.x + radius * std::cos(angle);
             particles.pos[i].y = center.y;
             particles.pos[i].z = center.z + radius * std::sin(angle);
@@ -76,12 +80,11 @@ namespace particle_system::generators::pos {
     void OnSphere::gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
         static std::uniform_real_distribution<float> distTheta(0.0f, 2 * static_cast<float>(std::numbers::pi));
         static std::uniform_real_distribution<float> distPhi(0.0f, static_cast<float>(std::numbers::pi));
-        auto& gen = rng::get();
 
         for (std::size_t i = start_ix; i < end_ix; i++) {
-            auto radius = radiusDist(gen);
-            float theta = distTheta(gen);
-            float phi = distPhi(gen);
+            auto radius = radiusDist(rng);
+            float theta = distTheta(rng);
+            float phi = distPhi(rng);
 
             particles.pos[i] = {
                 .x = center.x + radius * std::sin(phi) * std::cos(theta),
@@ -99,11 +102,10 @@ namespace particle_system::generators::velocity {
     void Sphere::gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
         static std::uniform_real_distribution<float> distTheta(0.0f, 2 * static_cast<float>(std::numbers::pi));
         static std::uniform_real_distribution<float> distPhi(0.0f, static_cast<float>(std::numbers::pi));
-        auto& gen = rng::get();
 
         for (std::size_t i = start_ix; i < end_ix; i++) {
-            float theta = distTheta(gen);
-            float phi = distPhi(gen);
+            float theta = distTheta(rng);
+            float phi = distPhi(rng);
 
             particles.velocity[i] = {
                 .x = speed * std::sin(phi) * std::cos(theta),
@@ -121,9 +123,8 @@ namespace particle_system::generators::velocity {
     }
 
     void ScaleRange::gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
-        auto& gen = rng::get();
         for (std::size_t i = start_ix; i < end_ix; i++) {
-            particles.velocity[i] = Vector3Scale(particles.velocity[i], dist(gen));
+            particles.velocity[i] = Vector3Scale(particles.velocity[i], dist(rng));
         }
     }
 }
@@ -169,10 +170,8 @@ namespace particle_system::generators::lifetime {
     }
 
     void Range::gen(Particles& particles, float dt, std::size_t start_ix, std::size_t end_ix) {
-        auto& gen = rng::get();
-
         for (std::size_t i = start_ix; i < end_ix; i++) {
-            particles.lifetime[i] = dist(gen);
+            particles.lifetime[i] = dist(rng);
         }
     }
 }
@@ -301,7 +300,7 @@ namespace particle_system::renderers {
         rlDisableVertexBuffer();
 
         Image img =
-            LoadImageFromMemory(".png", texture_includes::particle_circle, sizeof(texture_includes::particle_circle));
+            LoadImageFromMemory(".png", particle_circle_data, sizeof(particle_circle_data));
         particle_circle = LoadTextureFromImage(img);
         UnloadImage(img);
     }

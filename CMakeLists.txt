@@ -11,7 +11,20 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_LINKER lld)
 
+set(COMMON_COMPILE_OPTIONS
+    -Wall -Wextra -Wuninitialized -Wmissing-field-initializers
+    -Wno-unused-variable -Wshadow -Wconversion -Wsign-conversion
+    -Wdouble-promotion -Wnull-dereference -Wold-style-cast -Woverloaded-virtual -Wnon-virtual-dtor
+    -O3 -ffunction-sections -fdata-sections
+)
+set(COMMON_LINK_OPTIONS
+    -O3 -Wl,--gc-sections -s
+)
+
+
+add_subdirectory(glad)
 add_subdirectory(src)
+add_subdirectory(particle)
 
 option(TEST "" OFF)
 

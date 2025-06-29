@@ -13,7 +13,7 @@
 #include <vector>
 #include <variant>
 
-#include "glad.h"
+#include "glad/glad.h"
 #include "rlgl.h"
 
 namespace particle_system {

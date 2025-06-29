@@ -1,6 +1,6 @@
 #pragma once
 
-#include "effects.hpp"
+#include "particle/effects.hpp"
 #include "raylib.h"
 #include "ringbuffer.hpp"
 #include "seria_deser.hpp"

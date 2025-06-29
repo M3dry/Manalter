@@ -13,7 +13,7 @@
 #include <variant>
 
 #include "assets.hpp"
-#include "effects.hpp"
+#include "particle/effects.hpp"
 #include "enemies.hpp"
 #include "font.hpp"
 #include "hitbox.hpp"

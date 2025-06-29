@@ -1,6 +1,6 @@
 #pragma once
 
-#include "effects.hpp"
+#include "particle/effects.hpp"
 #include "hitbox.hpp"
 #include "spell.hpp"
 #include <functional>

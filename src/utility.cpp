@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstdint>
 #include <random>
-#include <ranges>
 #include <raylib.h>
 #include <raymath.h>
 #include <rlgl.h>

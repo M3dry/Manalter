@@ -1,5 +1,5 @@
 #include "item_drops.hpp"
-#include "effects.hpp"
+#include "particle/effects.hpp"
 #include "hitbox.hpp"
 #include "raylib.h"
 #include "spell.hpp"

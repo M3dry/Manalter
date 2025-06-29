@@ -1,6 +1,5 @@
 #include "enemies.hpp"
 #include "hitbox.hpp"
-#include "particle_system.hpp"
 #include "raylib.h"
 #include "raymath.h"
 #include "utility.hpp"

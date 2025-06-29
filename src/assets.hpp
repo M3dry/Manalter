@@ -10,7 +10,7 @@
 #ifdef PLATFORM_WEB
 #include <GLES3/gl3.h>
 #else
-#include "glad.h"
+#include "glad/glad.h"
 #endif
 
 #include "spell.hpp"

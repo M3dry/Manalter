@@ -1,5 +1,5 @@
 #include "spell_caster.hpp"
-#include "effects.hpp"
+#include "particle/effects.hpp"
 #include "hitbox.hpp"
 #include "spell.hpp"
 

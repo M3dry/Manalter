@@ -1,8 +1,11 @@
 #pragma once
 
-#include "particle_system.hpp"
+#include "particle.hpp"
 #include <limits>
+#include <optional>
 #include <raylib.h>
+#include <utility>
+#include <variant>
 
 namespace effect {
     struct Plosion {
