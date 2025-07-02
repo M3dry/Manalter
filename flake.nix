@@ -25,11 +25,11 @@
           buildInputs = with pkgs;
             [
               cmake
+              pkg-config
               glfw
               libGL.dev
               catch2_3
-              sol2
-              lua
+              julia
             ]
             ++ [raylib_patched llvm.lld];
           buildPhase = ''
@@ -52,12 +52,12 @@
           nativeBuildInputs = with pkgs;
             [
               cmake
+              pkg-config
               glfw
               libGLU
               gdb
               catch2_3
-              sol2
-              lua
+              julia
               renderdoc
               valgrind
 
@@ -71,7 +71,7 @@
           shellHook = ''
             export CC=clang
             export CXX=clang++
-            export LUA="${pkgs.lua}"
+            export JULIA="${pkgs.julia}"
           '';
         };
       }

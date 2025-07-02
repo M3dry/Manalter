@@ -21,7 +21,6 @@ set(COMMON_LINK_OPTIONS
     -O3 -Wl,--gc-sections -s
 )
 
-
 add_subdirectory(glad)
 add_subdirectory(src)
 add_subdirectory(particle)

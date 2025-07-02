@@ -17,21 +17,22 @@
 #include "rlgl.h"
 
 namespace particle_system {
-    struct Particles {
-        std::unique_ptr<Vector3[]> pos;
-        std::unique_ptr<Vector3[]> velocity;
-        std::unique_ptr<Vector3[]> acceleration;
-        std::unique_ptr<Color[]> color;
-        std::unique_ptr<bool[]> alive;
-        std::unique_ptr<float[]> lifetime;
-        std::unique_ptr<float[]> size;
+    extern "C" struct Particles {
+        Vector3* pos;
+        Vector3* velocity;
+        Vector3* acceleration;
+        Color* color;
+        bool* alive;
+        float* lifetime;
+        float* size;
 
         std::size_t max_size;
-        std::size_t alive_count = 0;
+        std::size_t alive_count;
 
         Particles(std::size_t max_particles);
-        Particles(Particles&&) noexcept = default;
+        Particles(Particles&&);
         Particles& operator=(Particles&&) noexcept = default;
+        ~Particles();
 
         void kill(std::size_t ix);
         void wake(std::size_t ix);

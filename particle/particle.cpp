@@ -1,9 +1,9 @@
 #include "particle.hpp"
+#include <chrono>
 #include <random>
 #include <raylib.h>
 #include <raymath.h>
 #include <variant>
-#include <chrono>
 
 std::mt19937 rng(static_cast<unsigned long>(std::chrono::steady_clock::now().time_since_epoch().count()));
 
@@ -12,14 +12,38 @@ namespace particle_system {
 #embed "../assets/particle_circle.png"
     };
 
-    Particles::Particles(std::size_t max_particles) : max_size(max_particles) {
-        pos.reset(new Vector3[max_size]{});
-        velocity.reset(new Vector3[max_size]{});
-        acceleration.reset(new Vector3[max_size]{});
-        color.reset(new Color[max_size]{});
-        alive.reset(new bool[max_size]{});
-        lifetime.reset(new float[max_size]{});
-        size.reset(new float[max_size]{});
+    Particles::Particles(std::size_t max_particles) : max_size(max_particles), alive_count(0) {
+        pos = new Vector3[max_size]{};
+        velocity = new Vector3[max_size]{};
+        acceleration = new Vector3[max_size]{};
+        color = new Color[max_size]{};
+        alive = new bool[max_size]{};
+        lifetime = new float[max_size]{};
+        size = new float[max_size]{};
+    }
+
+    Particles::Particles(Particles&& p)
+        : pos(p.pos), velocity(p.velocity), acceleration(p.acceleration), color(p.color), alive(p.alive),
+          lifetime(p.lifetime), size(p.size), max_size(p.max_size), alive_count(p.alive_count) {
+        p.pos = nullptr;
+        p.velocity = nullptr;
+        p.acceleration = nullptr;
+        p.color = nullptr;
+        p.alive = nullptr;
+        p.lifetime = nullptr;
+        p.size = nullptr;
+        p.max_size = 0;
+        p.alive_count = 0;
+    };
+
+    Particles::~Particles() {
+        delete[] pos;
+        delete[] velocity;
+        delete[] acceleration;
+        delete[] color;
+        delete[] alive;
+        delete[] lifetime;
+        delete[] size;
     }
 
     void Particles::kill(std::size_t ix) {
@@ -234,9 +258,9 @@ namespace particle_system::renderers {
 
         BeginBlendMode(BLEND_ALPHA);
 
-        std::memcpy(pos_vertex_data.get(), particles.pos.get(), pos_vertex_size * particles.alive_count);
-        std::memcpy(size_vertex_data.get(), particles.size.get(), size_vertex_size * particles.alive_count);
-        std::memcpy(col_vertex_data.get(), particles.color.get(), col_vertex_size * particles.alive_count);
+        std::memcpy(pos_vertex_data.get(), particles.pos, pos_vertex_size * particles.alive_count);
+        std::memcpy(size_vertex_data.get(), particles.size, size_vertex_size * particles.alive_count);
+        std::memcpy(col_vertex_data.get(), particles.color, col_vertex_size * particles.alive_count);
 
         rlUpdateVertexBuffer(pos_vbo_id, pos_vertex_data.get(),
                              static_cast<int>(pos_vertex_size * particles.alive_count), 0);
@@ -299,8 +323,7 @@ namespace particle_system::renderers {
         rlDisableVertexArray();
         rlDisableVertexBuffer();
 
-        Image img =
-            LoadImageFromMemory(".png", particle_circle_data, sizeof(particle_circle_data));
+        Image img = LoadImageFromMemory(".png", particle_circle_data, sizeof(particle_circle_data));
         particle_circle = LoadTextureFromImage(img);
         UnloadImage(img);
     }
