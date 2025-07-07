@@ -1,87 +1,58 @@
 #include "julip.hpp"
-
-#include <julia.h>
+#include "julia.h"
+#include <cstdint>
 #include <print>
 
 JULIA_DEFINE_FAST_TLS
 
 namespace julip {
-    jl_value_t* __to_value(const char* str) {
-        return jl_cstr_to_string(str);
-    }
-
-    jl_value_t* __to_value(uint64_t n) {
-        return jl_box_uint64(n);
-    }
-
-    jl_value_t* __to_value(uint32_t n) {
-        return jl_box_uint32(n);
-    }
-
-    jl_value_t* __to_value(uint16_t n) {
-        return jl_box_uint16(n);
-    }
-
-    jl_value_t* __to_value(uint8_t n) {
-        return jl_box_uint8(n);
-    }
-
-    jl_value_t* __to_value(int64_t n) {
-        return jl_box_int64(n);
-    }
-
-    jl_value_t* __to_value(int32_t n) {
-        return jl_box_int32(n);
-    }
-
-    jl_value_t* __to_value(int16_t n) {
-        return jl_box_int16(n);
-    }
-
-    jl_value_t* __to_value(int8_t n) {
-        return jl_box_int8(n);
-    }
-
-    jl_value_t* __to_value(float n) {
-        return jl_box_float32(n);
-    }
-
-    jl_value_t* __to_value(double n) {
-        return jl_box_float64(n);
-    }
-
-    jl_value_t* __to_value(bool b) {
-        return jl_box_bool(b);
-    }
+    Module Main = nullptr;
+    Module Base = nullptr;
 
     Value::operator Function() {
-        if (!jl_isa(value, (jl_value_t*)jl_function_type)) {
-            assert(false && "TODO: add exceptions");
+        return (jl_function_t*)value;
+    }
+
+    void init() {
+        jl_init();
+
+        Main = jl_main_module;
+        Base = jl_base_module;
+    }
+
+    void destruct() {
+        jl_atexit_hook(0);
+    }
+}
+
+namespace julip::util {
+    std::pair<std::size_t, jl_datatype_t*> get_tuple_type(jl_value_t* v) {
+        jl_value_t* v_type = jl_typeof(v);
+        if (!jl_is_datatype(v_type)) {
+            assert(false && "datatype check; TODO: add exceptions");
         }
 
-        return value;
-    };
+        jl_datatype_t* v_dt = (jl_datatype_t*)v_type;
+        if (v_dt->name != jl_tuple_typename) {
+            assert(false && "typename check; TODO: add exceptions");
+        }
 
-    state::state() {
-        jl_init();
+        jl_svec_t* params = v_dt->parameters;
+        jl_value_t* type = jl_svecref(params, 1);
+
+        return {jl_svec_len(params), (jl_datatype_t*)type};
     }
 
-    state::state(state&& s) noexcept : _valid(true) {
-        s._valid = false;
-    }
+    std::pair<jl_datatype_t*, std::size_t> get_array_type(jl_value_t* v) {
+        if (!jl_is_array(v)) {
+            assert(false && "array check; TODO: add exceptions");
+        }
 
-    state::~state() {
-        if (_valid) jl_atexit_hook(0);
-    }
+        jl_value_t* v_type = jl_typeof(v);
+        if (!jl_is_datatype(v_type)) {
+            assert(false && "datatype check; TODO: add exceptions");
+        }
 
-    Value state::eval_str(const char* jl, Module mod) {
-        static Function eval_f = (*this)["eval", jl_base_module];
-
-        auto* quoted = jl_eval_string((std::string("begin ") + jl + "end").c_str());
-        return eval_f(mod, quoted);
-    }
-
-    Value state::operator[](Symbol sym, Module mod) {
-        return jl_get_global(mod, sym.symbol);
+        return {(jl_datatype_t*)jl_tparam0(v_type), jl_unbox_int64(jl_tparam1(v_type))};
     }
 }

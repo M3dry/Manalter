@@ -3,7 +3,7 @@
 #include <dlfcn.h>
 #include <fstream>
 #include <iostream>
-#include <julia.h>
+#include <julia/julia.h>
 #include <print>
 #include <raylib.h>
 #include <sstream>
