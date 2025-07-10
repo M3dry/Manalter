@@ -9,8 +9,8 @@ set(JULIP_SOURCES
 
 add_library(julip STATIC ${JULIP_SOURCES})
 target_compile_options(julip PRIVATE ${COMMON_COMPILE_OPTIONS})
-target_link_options(julip PRIVATE ${COMMON_LINK_OPTIONS})
-target_include_directories(julip PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..> ${JULIA_INCLUDE_DIR})
+target_link_options(julip PRIVATE ${COMMON_LINK_OPTIONS} PUBLIC -rdynamic)
+target_include_directories(julip PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..> SYSTEM ${JULIA_INCLUDE_DIR})
 target_link_libraries(julip PRIVATE ${JULIA_LIBRARY})
 
 add_executable(julip_demo julip_demo.cpp)

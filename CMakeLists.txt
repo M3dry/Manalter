@@ -14,7 +14,7 @@ set(CMAKE_LINKER lld)
 set(COMMON_COMPILE_OPTIONS
     -Wall -Wextra -Wuninitialized -Wmissing-field-initializers
     -Wno-unused-variable -Wshadow -Wconversion -Wsign-conversion
-    -Wdouble-promotion -Wnull-dereference -Wold-style-cast -Woverloaded-virtual -Wnon-virtual-dtor
+    -Wdouble-promotion -Wnull-dereference -Woverloaded-virtual -Wnon-virtual-dtor
     -O3 -ffunction-sections -fdata-sections
 )
 set(COMMON_LINK_OPTIONS
