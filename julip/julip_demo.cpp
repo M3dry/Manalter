@@ -5,8 +5,8 @@ struct A {
     float y;
     std::size_t l;
 
-    JULIA_STRUCT_NAME(A);
 };
+JULIA_STRUCT_NAME(A, A);
 
 enum BCD {
     B = 0,
@@ -34,9 +34,7 @@ int main(int argc, char** argv) {
     println(c)
 end)");
 
-    while (true) {
-        f(p, 100, a);
-    }
+    f(&a, 100, a);
 
     // julip::Main.set_function("f", [](int x, int y) -> int {
     //     std::println("hello");

@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
+#include <print>
 
 #include <julia/julia.h>
 
@@ -53,18 +54,21 @@ namespace julip {
 
     namespace types {
 #define __JULIAPODNAME __juliapodname
-#define JULIA_STRUCT_NAME(name) static constexpr const char* __JULIAPODNAME = #name
 
         template <typename T>
-        concept POD = std::is_trivial_v<T> && std::is_constructible_v<T> && (!std::is_enum_v<T>);
+        concept POD = std::is_standard_layout_v<T> && (!std::is_enum_v<T>);
 
         template <typename T> struct TypeInfo;
 
-        template <typename T> struct EnumTypes;
-
+        template <typename T> struct TypeName;
+#define JULIA_STRUCT_NAME(T, name)                                                                                     \
+    static_assert(julip::types::POD<T>);                                                                               \
+    template <> struct julip::types::TypeName<T> {                                                                     \
+        static constexpr const char* __JULIAPODNAME = #name;                                                           \
+    };
 #define JULIA_ENUM_NAME(T, name)                                                                                       \
     static_assert(std::is_enum_v<T>);                                                                                  \
-    template <> struct julip::types::EnumTypes<T> {                                                                    \
+    template <> struct julip::types::TypeName<T> {                                                                     \
         static constexpr const char* __JULIAPODNAME = #name;                                                           \
     };
 
@@ -73,14 +77,14 @@ namespace julip {
             { TypeInfo<T>::type() } -> std::same_as<jl_value_t*>;
         };
 
-        template <typename T>
-        concept JuliaPOD = POD<T> && requires() {
-            { T::__JULIAPODNAME } -> std::convertible_to<const char*>;
+        template <typename P>
+        concept JuliaPOD = POD<P> && requires() {
+            { TypeName<P>::__JULIAPODNAME } -> std::convertible_to<const char*>;
         };
 
         template <typename E>
         concept JuliaEnum = std::is_enum_v<E> && requires() {
-            { EnumTypes<E>::__JULIAPODNAME } -> std::convertible_to<const char*>;
+            { TypeName<E>::__JULIAPODNAME } -> std::convertible_to<const char*>;
         };
 
         template <typename T>
@@ -97,13 +101,14 @@ namespace julip {
         };
 
         template <typename T>
-        concept ToValue = _ToValue<T> || _ToValue<std::remove_reference_t<T>>;
+        concept ToValue = _ToValue<std::remove_reference_t<T>> || _ToValue<std::remove_reference_t<T>&>;
 
-        template <ToValue T> jl_value_t* to_value(T&& t) {
-            if constexpr (_ToValue<T>) {
-                return TypeInfo<T>::to_value(std::forward<T>(t));
-            } else {
+        template <ToValue T>
+        jl_value_t* to_value(T&& t) {
+            if constexpr (_ToValue<std::remove_reference_t<T>>) {
                 return TypeInfo<std::remove_reference_t<T>>::to_value(std::forward<T>(t));
+            } else {
+                return TypeInfo<std::remove_reference_t<T>&>::to_value(std::forward<T&>(t));
             }
         }
     }
@@ -197,18 +202,27 @@ namespace julip {
                  }),
               val(v) {
         }
-        template <types::ToValue T> value(T&& t) {
-            gc_pause;
-            val = types::to_value<T>(std::forward<T>(t));
-            auto _id = julip::preserve(val);
-
-            id = std::shared_ptr<uint64_t>(new uint64_t(_id), [](uint64_t* id) {
-                julip::release(*id);
-                delete id;
-            });
-
-            gc_unpause;
+        value(const value& v) : id(v.id), val(v.val) {
         }
+        template <typename T>
+        requires (!std::is_same_v<value, std::remove_cvref_t<T>>)
+        value(T&& t) {
+            if constexpr (types::ToValue<T>) {
+                gc_pause;
+                val = types::to_value<T>(std::forward<T>(t));
+                auto _id = julip::preserve(val);
+
+                id = std::shared_ptr<uint64_t>(new uint64_t(_id), [](uint64_t* id) {
+                    julip::release(*id);
+                    delete id;
+                });
+
+                gc_unpause;
+            } else {
+                static_assert(false);
+            }
+        }
+
 
         template <typename T>
             requires types::FromValue<T>
@@ -216,7 +230,7 @@ namespace julip {
             return types::TypeInfo<T>::from_value(val);
         }
 
-        template <types::ToValue... Args> value operator()(Args&&... args) {
+        template <types::ToValue... Args> value operator()(Args&&... args) const {
             return __impl::safe_call(val, types::to_value<Args>(std::forward<Args>(args))...);
         }
 
@@ -238,7 +252,7 @@ namespace julip {
         };
 
         template <typename R, typename... Args>
-            requires types::ToValue<R> && (types::FromValue<Args> && ...)
+            requires(types::ToValue<R> || std::is_same_v<R, void>) && (types::FromValue<Args> && ...)
         struct FunctionHolder : FunctionWrapper {
             std::function<R(Args...)> func;
 
@@ -252,7 +266,12 @@ namespace julip {
             }
 
             template <std::size_t... Is> jl_value_t* call_impl(jl_value_t** jl_args, std::index_sequence<Is...>) {
-                return types::to_value<R>(std::forward<R>(func(types::TypeInfo<Args>::from_value(jl_args[Is])...)));
+                if constexpr (std::is_same_v<R, void>) {
+                    func(types::TypeInfo<Args>::from_value(jl_args[Is])...);
+                    return (jl_value_t*)jl_void_type;
+                } else {
+                    return types::to_value<R>(std::forward<R>(func(types::TypeInfo<Args>::from_value(jl_args[Is])...)));
+                }
             }
         };
 
@@ -310,7 +329,7 @@ namespace julip {
         }
 
         template <typename R, typename... Args>
-            requires types::Typed<R> && (types::Typed<Args> && ...)
+            requires(types::Typed<R> || std::is_same_v<R, void>) && (types::Typed<Args> && ...)
         uint64_t set_function_impl(const std::string& name, std::function<R(Args...)> f) {
             __impl::functions[__impl::counter] = std::make_unique<__impl::FunctionHolder<R, Args...>>(std::move(f));
 
@@ -318,7 +337,11 @@ namespace julip {
             uint64_t i = 1;
             f_str << "function " << name << "(";
             ((f_str << "__x__var" << i++ << "::" << jl_typename_str(types::TypeInfo<Args>::type()) << ","), ...);
-            f_str << ")::" << jl_typename_str(types::TypeInfo<R>::type()) << "\n";
+            f_str << ")";
+            if constexpr (!std::is_same_v<R, void>) {
+                f_str << "::" << jl_typename_str(types::TypeInfo<R>::type());
+            }
+            f_str << "\n";
             f_str << "handle::UInt = UInt(" << __impl::counter << ")" << "\n";
 
             f_str << "args = Any[";
@@ -326,12 +349,20 @@ namespace julip {
             ((f_str << "__x__var" << i++ << "::" << jl_typename_str(types::TypeInfo<Args>::type()) << ","), ...);
             f_str << "]\n";
 
-            f_str << "return (@ccall julip_ffi_call(handle::Csize_t, args::Ptr{Any}, length(args)::Csize_t)::Any)::"
-                  << jl_typename_str(types::TypeInfo<R>::type()) << "\n";
+            if constexpr (!std::is_same_v<R, void>) {
+                f_str << "return (";
+            }
+            f_str << "@ccall julip_ffi_call(handle::Csize_t, args::Ptr{Any}, length(args)::Csize_t)::";
+            if constexpr (std::is_same_v<R, void>) {
+                f_str << "Cvoid\n";
+            } else {
+                f_str << "Any)::" << jl_typename_str(types::TypeInfo<R>::type()) << "\n";
+            }
 
             f_str << "end";
 
             std::string f_str_ = f_str.str();
+
             eval(f_str_);
 
             return __impl::counter++;
@@ -366,12 +397,16 @@ namespace julip {
 
     namespace types {
         template <> struct TypeInfo<value> {
-            static jl_value_t* to_value(value v) {
+            static jl_value_t* type() {
+                return (jl_value_t*)jl_any_type;
+            }
+
+            static jl_value_t* to_vaue(value v)  {
                 return *v;
             }
 
-            static value from_value(jl_value_t* v, [[maybe_unused]] bool check = true) {
-                return v;
+            static value from_value(jl_value_t* v, bool check = false) {
+                return value(v);
             }
         };
 
@@ -418,14 +453,14 @@ namespace julip {
         PRIMITIVE_TYPEINFO(float, jl_float32_type, jl_box_float32, jl_typeis(v, jl_float32_type), jl_unbox_float32)
         PRIMITIVE_TYPEINFO(bool, jl_bool_type, jl_box_bool, jl_is_bool(v), jl_unbox_bool)
 
-        template <POD P> struct TypeInfo<P> {
+        template <POD P> struct TypeInfo<P&> {
             using inplace = std::true_type;
 
             static jl_value_t* type() {
                 static jl_value_t* t = nullptr;
                 if (t == nullptr) {
                     if constexpr (JuliaPOD<P>) {
-                        t = jl_eval_string(P::__JULIAPODNAME);
+                        t = jl_eval_string(TypeName<P>::__JULIAPODNAME);
                     } else {
                         t = jl_apply_type2(jl_get_global(jl_base_module, jl_symbol("NTuple")), jl_box_int64(sizeof(P)),
                                            (jl_value_t*)jl_uint8_type);
@@ -435,7 +470,7 @@ namespace julip {
                 return t;
             }
 
-            static jl_value_t* to_value(P x) {
+            static jl_value_t* to_value(P& x) {
                 auto* jl_p = jl_gc_allocobj(sizeof(P));
 
                 jl_set_typeof(jl_p, type());
@@ -443,10 +478,22 @@ namespace julip {
 
                 return jl_p;
             }
+        };
+
+        template <POD P> struct TypeInfo<P> {
+            using inplace = std::true_type;
+
+            static jl_value_t* type() {
+                return TypeInfo<P&>::type();
+            }
+
+            static jl_value_t* to_value(P x) {
+                return TypeInfo<P&>::to_value(x);
+            }
 
             static P from_value(jl_value_t* v, bool check = true) {
-                if (check && !jl_types_equal(v, type())) {
-                    throw bad_type(jl_typeof_str(type()), jl_typeof_str(v));
+                if (check && !jl_types_equal(jl_typeof(v), type())) {
+                    throw bad_type(jl_typename_str(type()), jl_typeof_str(v));
                 }
 
                 return *(P*)jl_value_ptr(v);
@@ -610,6 +657,27 @@ namespace julip {
             }
         };
 
+        template <>
+        struct TypeInfo<void*> {
+            using inplace = std::true_type;
+
+            static jl_value_t* type() {
+                return (jl_value_t*)jl_voidpointer_type;
+            }
+
+            static jl_value_t* to_value(void* ptr) {
+                return jl_box_voidpointer(ptr);
+            }
+
+            static void* from_value(jl_value_t* v, bool check = true) {
+                if (check && !jl_types_equal(type(), jl_typeof(v))) {
+                    throw bad_type(jl_typename_str(type()), jl_typeof_str(v));
+                }
+
+                return jl_unbox_voidpointer(v);
+            }
+        };
+
         template <Typed T>
             requires(sizeof(std::unique_ptr<T>) == sizeof(T*))
         struct TypeInfo<std::unique_ptr<T>&> {
@@ -635,7 +703,7 @@ namespace julip {
                 requires Typed<underlying> or JuliaEnum<E>
             {
                 if constexpr (JuliaEnum<E>) {
-                    static jl_value_t* t = jl_eval_string(EnumTypes<E>::__JULIAPODNAME);
+                    static jl_value_t* t = jl_eval_string(TypeName<E>::__JULIAPODNAME);
 
                     return t;
                 } else {

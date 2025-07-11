@@ -17,7 +17,7 @@
 #include "rlgl.h"
 
 namespace particle_system {
-    extern "C" struct Particles {
+    struct Particles {
         Vector3* pos;
         Vector3* velocity;
         Vector3* acceleration;
@@ -30,6 +30,8 @@ namespace particle_system {
         std::size_t alive_count;
 
         Particles(std::size_t max_particles);
+        Particles(const Particles&) = delete;
+        Particles& operator=(const Particles&) = delete;
         Particles(Particles&&);
         Particles& operator=(Particles&&) noexcept = default;
         ~Particles();
@@ -300,6 +302,8 @@ namespace particle_system {
         Particles particles;
 
         System(std::size_t max_particles, renderers::Renderer&& renderer);
+        System(const System&) = delete;
+        System& operator=(const System&) = delete;
         System(System&& s) noexcept = default;
         System& operator=(System&& s) noexcept = default;
 

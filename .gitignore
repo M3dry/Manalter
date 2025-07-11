@@ -3,3 +3,5 @@
 /web-build
 /.clangd
 /compile_commands.json
+/save.bin
+/null.o
