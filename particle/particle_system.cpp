@@ -1,5 +1,5 @@
 #include <cstdint>
-#include <julip/julip.hpp>
+#include <julip.hpp>
 #include <particle/particle.hpp>
 #include <raylib.h>
 

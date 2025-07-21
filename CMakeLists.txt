@@ -25,6 +25,7 @@ add_subdirectory(glad)
 add_subdirectory(src)
 add_subdirectory(particle)
 add_subdirectory(julip)
+add_subdirectory(ecs)
 
 option(TEST "" OFF)
 

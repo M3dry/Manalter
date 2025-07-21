@@ -405,7 +405,7 @@ namespace julip {
                 return *v;
             }
 
-            static value from_value(jl_value_t* v, bool check = false) {
+            static value from_value(jl_value_t* v, [[maybe_unused]] bool check = false) {
                 return value(v);
             }
         };

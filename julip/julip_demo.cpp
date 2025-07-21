@@ -1,4 +1,4 @@
-#include <julip/julip.hpp>
+#include <julip.hpp>
 
 struct A {
     int x;
