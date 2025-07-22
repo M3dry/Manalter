@@ -66,6 +66,7 @@ namespace ecs {
     template <typeset::unique_v... Components> struct Archetype {
         // [0] - size
         multi_vector<Components...> components;
+        std::array<std::vector<uint64_t>, sizeof...(Components)> dirty;
         std::vector<Entity> backlink;
 
         Archetype() {};
@@ -81,6 +82,18 @@ namespace ecs {
 
             return mv;
         };
+
+        void mark_dirty(std::size_t row, bool state = true) {
+
+        }
+
+        void mark_dirty(std::size_t start, std::size_t end, bool state = true) {
+
+        }
+
+        bool get_dirty(std::size_t row) {
+
+        }
 
         template <typename... Packs> void emplace_at(std::size_t row, Packs&&... packs) {
             components.emplace_at(row, std::forward<Packs>(packs)...);
@@ -103,6 +116,8 @@ namespace ecs {
 
                 return false;
             });
+
+            mark_dirty(row);
         }
 
         template <typename... Packs>
@@ -111,6 +126,8 @@ namespace ecs {
 
             link[entity].row = components.size() - 1;
             backlink.emplace_back(entity);
+
+            mark_dirty(link[entity].row);
         };
 
         void new_entity(std::vector<ArchetypeLink>& link, Entity entity, void* args[], std::size_t nargs) {
@@ -119,6 +136,8 @@ namespace ecs {
 
             link[entity].row = components.size() - 1;
             backlink.emplace_back(entity);
+
+            mark_dirty(link[entity].row);
         }
 
         std::tuple<Components*...> unsafe_push_entity(std::vector<ArchetypeLink>& link, Entity entity) {
@@ -150,6 +169,8 @@ namespace ecs {
         }
 
         void remove(std::vector<ArchetypeLink>& link, std::size_t row) {
+            // mark_dirty(row, get_dirty(components.size() - 1));
+
             components.swap(row, components.size() - 1);
             components.pop_back();
 
@@ -539,9 +560,9 @@ namespace ecs {
         };
 
         build() {
-            constexpr auto ix_seq = std::make_index_sequence<sizeof...(Archetypes)>();
-
-            __::with_index_sequence(ix_seq, [&](auto... Is) { ((archetypes[Is] = new index<Is>::T{}), ...); });
+            __::with_index_sequence(std::index_sequence_for<Archetypes...>{}, [&](auto... Is) {
+                ((archetypes[Is] = new index<Is>::T{}), ...);
+            });
         };
 
         build(const build&) = delete;
@@ -917,9 +938,42 @@ namespace ecs {
         }
 
         template <typename... Subset> class System {
-          public:
-            static constexpr auto archetypes = in_archetypes<Subset...>::value;
-            std::vector<std::size_t> runtime_archetypes{};
+          private:
+            static consteval decltype(auto) get_dirty_impl() {
+                std::array<bool, sizeof...(Subset)> mask{!std::is_const_v<Subset>...};
+
+                std::size_t size = __::with_index_sequence(std::index_sequence_for<Subset...>{}, [&](auto... Is) {
+                    return (0uz + ... + (mask[Is] ? 1uz : 0uz));
+                });
+
+                return std::pair{mask, size};
+            }
+
+            static consteval decltype(auto) get_dirty_impl2() {
+                constexpr auto mask = get_dirty_impl();
+
+                std::array<std::size_t, mask.second> dirty;
+                std::size_t writer_ix = 0;
+                __::with_index_sequence(std::index_sequence_for<Subset...>{}, [&](auto... Is) { 
+                    ((mask.first[Is] ? (dirty[writer_ix++] = Is, 0) : 0), ...);
+                });
+
+                return dirty;
+            }
+
+            static consteval decltype(auto) get_dirty() {
+                constexpr auto dirty = get_dirty_impl2();
+
+                return __::with_index_sequence(std::make_index_sequence<dirty.size()>{}, [&](auto... Is) {
+                    return type_set<typeset::nth_t<dirty[Is], Subset...>...>{};
+                });
+            }
+
+            using dirty_components = decltype(get_dirty());
+
+            static constexpr auto archetypes = in_archetypes<std::remove_cvref_t<Subset>...>::value;
+            std::array<void*, archetypes.size()> archetype_pointers;
+            std::vector<runtime::Archetype*> runtime_archetypes{};
 
             std::array<std::vector<void**>, sizeof...(Subset)> data{};
             std::vector<std::size_t*> data_sizes{};
@@ -927,8 +981,9 @@ namespace ecs {
             template <std::size_t IX> void setup_archetype(const std::array<void*, sizeof...(Archetypes)>& arches) {
                 constexpr auto arch_id = archetypes[IX];
                 using archetype = index<arch_id>::T;
+                archetype_pointers[IX] = arches[arch_id];
                 archetype* x = (archetype*)arches[arch_id];
-                auto subset = x->template get_subset<Subset...>();
+                auto subset = x->template get_subset<std::remove_cvref_t<Subset>...>();
 
                 for (std::size_t i = 0; i < data.size(); i++) {
                     data[i].emplace_back(subset[i + 1]);
@@ -958,7 +1013,7 @@ namespace ecs {
                 }
 
                 for (const auto& arch_id : possible) {
-                    runtime_archetypes.emplace_back(arch_id);
+                    runtime_archetypes.emplace_back(&runtime_arches[arch_id - sizeof...(Archetypes)]);
                     auto& archetype = runtime_arches[arch_id - sizeof...(Archetypes)];
                     std::type_index subset_ts[] = {typeid(Subset)...};
                     auto subset = archetype.get_subset(std::span{subset_ts, sizeof...(Subset)});
@@ -985,13 +1040,14 @@ namespace ecs {
           public:
             friend build;
 
-            template <typename F> void run(F&& f) {
+            template <typename F> void run(F&& f, bool mark_dirty = false) {
                 __::with_index_sequence(std::make_index_sequence<sizeof...(Subset)>{}, [&](auto... SubSeq) {
                     __::with_index_sequence(std::make_index_sequence<archetypes.size()>{}, [&](auto... ArchSeq) {
                         auto g = [&]<std::size_t ArchIx>() {
                             std::size_t size = *data_sizes[ArchIx];
                             for (std::size_t i = 0; i < size; i++) {
-                                f((reinterpret_cast<typeset::nth_t<SubSeq, Subset...>*>(*data[SubSeq][ArchIx])[i])...);
+                                f((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                    *data[SubSeq][ArchIx])[i])...);
                             }
                         };
 
@@ -1001,15 +1057,27 @@ namespace ecs {
                     for (std::size_t a = 0; a < runtime_archetypes.size(); a++) {
                         std::size_t size = *data_sizes[archetypes.size() + a];
                         for (std::size_t i = 0; i < size; i++) {
-                            f((reinterpret_cast<typeset::nth_t<SubSeq, Subset...>*>(
+                            f((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
                                 *data[SubSeq][archetypes.size() + a])[i])...);
                         }
                     }
                 });
+
+                if (mark_dirty) {
+                    __::for_each_index(std::make_index_sequence<archetypes.size()>{}, [&](auto ArchI) {
+                        constexpr auto ArchIx = ArchI.value;
+                        using Arch = index<ArchIx>::T;
+
+                        std::size_t range = *data_sizes[ArchIx];
+                        auto* arch = reinterpret_cast<Arch*>(archetype_pointers[ArchIx]);
+
+                        return false;
+                    });
+                }
             }
         };
 
-        template <typename... Subset> System<Subset...> static_make_system() {
+        template <typename... Subset> System<Subset...> make_static_system() {
             return System<Subset...>(archetypes, {}, {});
         }
 
