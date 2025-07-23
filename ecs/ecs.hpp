@@ -17,6 +17,8 @@
 #include "typeset.hpp"
 
 namespace ecs {
+    static constexpr std::size_t null_id = std::size_t(-1);
+
     namespace __ {
         template <std::size_t... Is, typename F>
         constexpr decltype(auto) with_index_sequence(std::index_sequence<Is...>, F&& f) {
@@ -64,10 +66,25 @@ namespace ecs {
     }
 
     template <typeset::unique_v... Components> struct Archetype {
-        // [0] - size
-        multi_vector<Components...> components;
+        template <typename... Ts> struct _impl_single {
+            using type = std::tuple<Ts&...>;
+        };
+
+        template <> struct _impl_single<> {
+            using type = std::tuple<Components&...>;
+        };
+
+        template <typename... Ts> using single = _impl_single<Ts...>::type;
+
+        struct Backlink {
+            Entity entity;
+            inline constexpr operator Entity() {
+                return entity;
+            }
+        };
+
+        multi_vector<Components..., Backlink> components;
         std::array<std::vector<uint64_t>, sizeof...(Components)> dirty;
-        std::vector<Entity> backlink;
 
         Archetype() {};
 
@@ -83,20 +100,24 @@ namespace ecs {
             return mv;
         };
 
-        void mark_dirty(std::size_t row, bool state = true) {
+        void mark_dirty(std::size_t row, bool state = true) {}
 
-        }
+        void mark_dirty(std::size_t start, std::size_t end, bool state = true) {}
 
-        void mark_dirty(std::size_t start, std::size_t end, bool state = true) {
+        bool get_dirty(std::size_t row) {}
 
-        }
-
-        bool get_dirty(std::size_t row) {
-
+        template <typename... Ts> single<Ts...> get(std::size_t row) {
+            if constexpr (sizeof...(Ts) == 0) {
+                return components.template get<Components...>(row);
+            } else if constexpr (sizeof...(Ts) == 1) {
+                return std::tuple<Ts&...>(components.template get<Ts...>(row));
+            } else {
+                return components.template get<Ts...>(row);
+            }
         }
 
         template <typename... Packs> void emplace_at(std::size_t row, Packs&&... packs) {
-            components.emplace_at(row, std::forward<Packs>(packs)...);
+            components.emplace_at(row, std::forward<Packs>(packs)..., components.template get<Backlink>(row).entity);
         }
 
         void emplace_at(std::size_t row, void* args[], std::size_t nargs) {
@@ -122,20 +143,19 @@ namespace ecs {
 
         template <typename... Packs>
         void new_entity(std::vector<ArchetypeLink>& link, Entity entity, Packs&&... packs) {
-            components.emplace_back(std::forward<Packs>(packs)...);
+            components.emplace_back(std::forward<Packs>(packs)..., entity);
 
             link[entity].row = components.size() - 1;
-            backlink.emplace_back(entity);
 
             mark_dirty(link[entity].row);
         };
 
         void new_entity(std::vector<ArchetypeLink>& link, Entity entity, void* args[], std::size_t nargs) {
-            components.unsafe_push();
+            auto t = components.unsafe_push();
             emplace_at(components.size() - 1, args, nargs);
 
             link[entity].row = components.size() - 1;
-            backlink.emplace_back(entity);
+            std::get<Backlink*>(t)->entity = entity;
 
             mark_dirty(link[entity].row);
         }
@@ -144,26 +164,43 @@ namespace ecs {
             auto t = components.unsafe_push();
 
             link[entity].row = components.size() - 1;
-            backlink.emplace_back(entity);
+            std::get<Backlink*>(t)->entity = entity;
 
-            return t;
+            return std::make_tuple(std::get<Components*>(t)...);
         }
 
         std::tuple<Components*...> get_row(std::size_t row) {
             return components.template get_ptr<Components...>(row);
         }
 
-        std::vector<void*> get_row_vec(std::size_t row) {
+        std::vector<void*> get_row_vec(std::size_t row,
+                                       std::span<std::type_index> subset = {(std::type_index*)nullptr, 0}) {
             auto t = get_row(row);
             std::vector<void*> res{};
-            res.reserve(sizeof...(Components));
+            res.reserve(subset.size() != 0 ? subset.size() : sizeof...(Components));
 
-            __::for_each_index(std::index_sequence_for<Components...>{}, [&](auto I) {
-                constexpr auto Ix = I.value;
+            if (subset.size() == 0) {
+                __::for_each_index(std::index_sequence_for<Components...>{}, [&](auto I) {
+                    constexpr auto Ix = I.value;
 
-                res.emplace_back(std::get<Ix>(t));
-                return false;
-            });
+                    res.emplace_back(std::get<Ix>(t));
+                    return false;
+                });
+            } else {
+                __::for_each_index(std::index_sequence_for<Components...>{}, [&](auto I) {
+                    constexpr auto Ix = I.value;
+
+                    bool found = false;
+                    for (const auto& t : subset) {
+                        if (typeid(typeset::nth_t<Ix, Components...>) == t) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (found) res.emplace_back(std::get<Ix>(t));
+                    return false;
+                });
+            }
 
             return res;
         }
@@ -174,10 +211,7 @@ namespace ecs {
             components.swap(row, components.size() - 1);
             components.pop_back();
 
-            backlink[row] = backlink[components.size()];
-            backlink.pop_back();
-
-            link[backlink[row]].row = row;
+            link[components.template get<Backlink>(row).entity].row = row;
         }
 
         template <typename... Subset>
@@ -210,6 +244,10 @@ namespace ecs {
 
             assert(ret.size() == subset_ts.size() + 1);
             return ret;
+        }
+
+        Entity** get_backlink() {
+            return (Entity**)components.template get_ptr<Backlink>();
         }
     };
 
@@ -301,13 +339,28 @@ namespace ecs {
                 return res;
             }
 
-            std::vector<void*> get_row(std::size_t row) {
+            std::vector<void*> get_row(std::size_t row,
+                                       std::span<std::type_index> subset = {(std::type_index*)nullptr, 0}) {
                 std::vector<void*> res{};
-                res.reserve(components.size());
+                res.reserve(subset.size() != 0 ? subset.size() : components.size());
 
-                auto sizes = component_info.get_span<std::size_t>();
-                for (std::size_t i = 0; i < components.size(); i++) {
-                    res.emplace_back(reinterpret_cast<void*>(components[i] + row * sizes[i]));
+                auto [sizes, types] = component_info.get_span<std::size_t, std::type_index>();
+                if (subset.size() == 0) {
+                    for (std::size_t i = 0; i < components.size(); i++) {
+                        res.emplace_back(reinterpret_cast<void*>(components[i] + row * sizes[i]));
+                    }
+                } else {
+                    for (std::size_t i = 0; i < components.size(); i++) {
+                        bool found = false;
+                        for (const auto& t : subset) {
+                            if (t == types[i]) {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (found) res.emplace_back(reinterpret_cast<void*>(components[i] + row * sizes[i]));
+                    }
                 }
 
                 return res;
@@ -325,10 +378,10 @@ namespace ecs {
                 }
                 rows--;
 
-                backlink[row] = backlink[rows];
+                backlink.emplace_at(row, backlink.get<Entity>(row));
                 backlink.pop_back();
 
-                link[backlink[row]].row = row;
+                link[backlink.get<Entity>(row)].row = row;
             }
 
             std::vector<void**> get_subset(const std::span<std::type_index>& subset) {
@@ -354,13 +407,17 @@ namespace ecs {
                 return component_info.get_span<std::type_index>();
             }
 
+            Entity** get_backlink() {
+                return backlink.get_ptr<Entity>();
+            }
+
           private:
             std::size_t capacity;
             std::size_t rows;
             std::vector<std::byte*> components;
             multi_vector<std::size_t, std::type_index, Dtor*, MoveCtor*> component_info;
             std::size_t largest_size;
-            std::vector<Entity> backlink;
+            multi_vector<Entity> backlink;
 
             bool moved = false;
 
@@ -444,12 +501,12 @@ namespace ecs {
                         return to_index<DiffT>::value;
                     }
 
-                    return size_t(-1);
+                    return null_id;
                 }
 
                 static constexpr std::size_t value = get();
                 using T =
-                    std::conditional_t<value != size_t(-1),
+                    std::conditional_t<value != null_id,
                                        typename __impl<type_set<Extras...>, std::index_sequence<Res..., value>>::T,
                                        typename __impl<type_set<Extras...>, std::index_sequence<Res...>>::T>;
             };
@@ -560,9 +617,8 @@ namespace ecs {
         };
 
         build() {
-            __::with_index_sequence(std::index_sequence_for<Archetypes...>{}, [&](auto... Is) {
-                ((archetypes[Is] = new index<Is>::T{}), ...);
-            });
+            __::with_index_sequence(std::index_sequence_for<Archetypes...>{},
+                                    [&](auto... Is) { ((archetypes[Is] = new index<Is>::T{}), ...); });
         };
 
         build(const build&) = delete;
@@ -688,7 +744,7 @@ namespace ecs {
         }
 
         Entity new_entity() {
-            entities.emplace_back(std::size_t(-1), std::size_t(-1));
+            entities.emplace_back(null_id, null_id);
 
             return entities.size() - 1;
         };
@@ -700,7 +756,7 @@ namespace ecs {
         template <typename... Extra, typename... Packs> void static_extend(Entity ent, Packs&&... packs) {
             constexpr auto possible = in_archetypes<Extra...>::value;
 
-            if (entities[ent].archetype_id == std::size_t(-1) || entities[ent].row == std::size_t(-1))
+            if (entities[ent].archetype_id == null_id || entities[ent].row == null_id)
                 assert(false && "static_extend called on uninitialized entity; PS: add exceptions");
 
             __::for_each_index(std::make_index_sequence<possible.size()>{}, [&](auto TI) -> bool {
@@ -715,8 +771,8 @@ namespace ecs {
                 }
 
                 return __::for_each_index(typename possible_to_extend<possible[Target], Extra...>::T{},
-                                          [&](auto PI) -> bool {
-                                              constexpr auto Possible = PI.value;
+                                          [&](auto PossibleI) -> bool {
+                                              constexpr auto Possible = PossibleI.value;
 
                                               if (entities[ent].archetype_id == Possible) {
                                                   static_extend_into<possible[Target], Possible, Extra...>(
@@ -732,7 +788,7 @@ namespace ecs {
         void dynamic_extend(Entity ent,
                             multi_vector<std::size_t, std::type_index, runtime::Dtor*, runtime::MoveCtor*>&& extra,
                             void* args[], std::size_t nargs) {
-            if (entities[ent].archetype_id == std::size_t(-1) || entities[ent].row == std::size_t(-1))
+            if (entities[ent].archetype_id == null_id || entities[ent].row == null_id)
                 assert(false && "extend called on uninitialized entity; PS: add exceptions");
 
             auto ts = archetype_types(entities[ent].archetype_id);
@@ -767,7 +823,7 @@ namespace ecs {
 
             if (is_runtime_archetype(orig_arch_id)) {
                 auto& orig_arch = get_runtime_archetype(orig_arch_id);
-                if (new_arch_id == size_t(-1)) {
+                if (new_arch_id == null_id) {
                     auto new_ts = orig_arch.extend(extra);
                     new_arch_id = add_archetype(runtime::Archetype{std::move(new_ts)});
                 }
@@ -779,7 +835,7 @@ namespace ecs {
                     if (Ix != orig_arch_id) return false;
 
                     auto orig_arch = reinterpret_cast<index<Ix>::T*>(archetypes[Ix]);
-                    if (new_arch_id == size_t(-1)) {
+                    if (new_arch_id == null_id) {
                         auto new_ts = reinterpret_cast<index<Ix>::T*>(archetypes[Ix])->extend(extra);
                         new_arch_id = add_archetype(runtime::Archetype{std::move(new_ts)});
                     }
@@ -790,8 +846,8 @@ namespace ecs {
             }
             new_args.insert(new_args.end(), args, args + nargs);
 
-            entities[ent].archetype_id = size_t(-1);
-            entities[ent].row = size_t(-1);
+            entities[ent].archetype_id = null_id;
+            entities[ent].row = null_id;
             dynamic_set_entity(new_arch_id, ent, new_args.data(), new_args.size());
 
             auto ent_info = entities[ent];
@@ -804,7 +860,7 @@ namespace ecs {
         }
 
         template <typename... Extra, typename... Args> void extend(Entity ent, Args&&... args) {
-            if (entities[ent].archetype_id == std::size_t(-1) || entities[ent].row == std::size_t(-1))
+            if (entities[ent].archetype_id == null_id || entities[ent].row == null_id)
                 assert(false && "static_extend called on uninitialized entity; PS: add exceptions");
 
             multi_vector<std::size_t, std::type_index, runtime::Dtor*, runtime::MoveCtor*> mv;
@@ -820,14 +876,14 @@ namespace ecs {
             constexpr auto archetype_id = to_index<Arch>::value;
 
             auto& e_link = entities[entity];
-            if (archetype_id != e_link.archetype_id && e_link.archetype_id != size_t(-1) && e_link.row != size_t(-1)) {
+            if (archetype_id != e_link.archetype_id && e_link.archetype_id != null_id && e_link.row != null_id) {
                 remove(entity);
             }
 
             e_link.archetype_id = archetype_id;
 
             auto* archetype = reinterpret_cast<Arch*>(archetypes[archetype_id]);
-            if (e_link.row != size_t(-1)) {
+            if (e_link.row != null_id) {
                 archetype->emplace_at(e_link.row, std::forward<Packs>(packs)...);
             } else {
                 archetype->new_entity(entities, entity, std::forward<Packs>(packs)...);
@@ -836,7 +892,7 @@ namespace ecs {
 
         void dynamic_set_entity(std::size_t archetype_id, Entity ent, void* args[], std::size_t nargs) {
             auto& e_link = entities[ent];
-            if (archetype_id != e_link.archetype_id && e_link.archetype_id != size_t(-1) && e_link.row != size_t(-1)) {
+            if (archetype_id != e_link.archetype_id && e_link.archetype_id != null_id && e_link.row != null_id) {
                 remove(ent);
             }
 
@@ -852,7 +908,7 @@ namespace ecs {
 
                     assert(nargs == typeset::set_size_v<ArchT>);
 
-                    if (e_link.row != size_t(-1)) {
+                    if (e_link.row != null_id) {
                         arch->emplace_at(e_link.row, args, nargs);
                     } else {
                         arch->new_entity(entities, ent, args, nargs);
@@ -868,7 +924,7 @@ namespace ecs {
             auto types = arch.get_types();
             assert(types.size() == nargs);
 
-            if (e_link.row != size_t(-1)) {
+            if (e_link.row != null_id) {
                 arch.emplace_at(e_link.row, args, nargs);
             } else {
                 arch.new_entity(entities, ent, args, nargs);
@@ -902,8 +958,7 @@ namespace ecs {
         }
 
         void remove(Entity entity) {
-            if (entity > entities.size() || entities[entity].archetype_id == size_t(-1) ||
-                entities[entity].row == size_t(-1))
+            if (entity > entities.size() || entities[entity].archetype_id == null_id || entities[entity].row == null_id)
                 return;
             auto& e_link = entities[entity];
 
@@ -924,21 +979,63 @@ namespace ecs {
                 assert(found);
             });
 
-            e_link.archetype_id = size_t(-1);
-            e_link.row = size_t(-1);
+            e_link.archetype_id = null_id;
+            e_link.row = null_id;
+        }
+
+        template <typename Arch, typename... Ts>
+        std::optional<typename Arch::template single<Ts...>> static_get(Entity ent) {
+            constexpr auto ArchIx = to_index<Arch>::value;
+
+            if (entities[ent].archetype_id != ArchIx) return std::nullopt;
+
+            return reinterpret_cast<Arch*>(archetypes[ArchIx])->template get<Ts...>(entities[ent].row);
+        }
+
+        std::optional<std::vector<void*>> dynamic_get(Entity ent, std::size_t expected_archetype,
+                                                      std::span<std::type_index> subset = {(std::type_index*)nullptr,
+                                                                                           0}) {
+            if (entities[ent].archetype_id != expected_archetype) return std::nullopt;
+
+            if (is_runtime_archetype(expected_archetype)) {
+                auto& arch = get_runtime_archetype(expected_archetype);
+                return arch.get_row(entities[ent].row, subset);
+            } else {
+                std::vector<void*> res;
+                __::for_each_index(std::index_sequence_for<Archetypes...>{}, [&](auto I) {
+                    constexpr auto Ix = I.value;
+                    if (entities[ent].archetype_id != Ix) return false;
+
+                    using Arch = index<Ix>::T;
+                    res = reinterpret_cast<Arch*>(archetypes[Ix])->get_row_vec(entities[ent].row, subset);
+                    return true;
+                });
+
+                return res;
+            }
+        }
+
+        template <typename... Ts> std::optional<std::tuple<Ts*...>> get(Entity ent, std::size_t expected_archetype) {
+            std::type_index ts[] = {typeid(Ts)...};
+            auto res = dynamic_get(ent, expected_archetype, {ts, sizeof...(Ts)});
+            if (!res) return std::nullopt;
+
+            return __::with_index_sequence(std::index_sequence_for<Ts...>{}, [&](auto... Is) {
+                return std::make_tuple(reinterpret_cast<Ts*>((*res)[Is])...);
+            });
         }
 
         template <typename F>
         void find_dead(F&& f, std::size_t limit = std::numeric_limits<std::size_t>::max(), std::size_t start_at = 0) {
             for (std::size_t i = start_at; i < std::min(start_at + limit, entities.size()); i++) {
-                if (entities[i].archetype_id == size_t(-1) && entities[i].row == size_t(-1)) {
+                if (entities[i].archetype_id == null_id && entities[i].row == null_id) {
                     f(i);
                 }
             }
         }
 
         template <typename... Subset> class System {
-          private:
+          public:
             static consteval decltype(auto) get_dirty_impl() {
                 std::array<bool, sizeof...(Subset)> mask{!std::is_const_v<Subset>...};
 
@@ -954,7 +1051,7 @@ namespace ecs {
 
                 std::array<std::size_t, mask.second> dirty;
                 std::size_t writer_ix = 0;
-                __::with_index_sequence(std::index_sequence_for<Subset...>{}, [&](auto... Is) { 
+                __::with_index_sequence(std::index_sequence_for<Subset...>{}, [&](auto... Is) {
                     ((mask.first[Is] ? (dirty[writer_ix++] = Is, 0) : 0), ...);
                 });
 
@@ -977,6 +1074,7 @@ namespace ecs {
 
             std::array<std::vector<void**>, sizeof...(Subset)> data{};
             std::vector<std::size_t*> data_sizes{};
+            std::vector<Entity**> data_backlinks{};
 
             template <std::size_t IX> void setup_archetype(const std::array<void*, sizeof...(Archetypes)>& arches) {
                 constexpr auto arch_id = archetypes[IX];
@@ -989,6 +1087,7 @@ namespace ecs {
                     data[i].emplace_back(subset[i + 1]);
                 }
                 data_sizes.emplace_back((std::size_t*)subset[0]);
+                data_backlinks.emplace_back(x->get_backlink());
             }
 
             void setup_runtime_archetypes(
@@ -1022,6 +1121,7 @@ namespace ecs {
                         data[i].emplace_back(subset[i + 1]);
                     }
                     data_sizes.emplace_back((std::size_t*)subset[0]);
+                    data_backlinks.emplace_back(archetype.get_backlink());
                 }
             }
 
@@ -1040,14 +1140,19 @@ namespace ecs {
           public:
             friend build;
 
-            template <typename F> void run(F&& f, bool mark_dirty = false) {
+            template <bool EntityId = false, typename F> void run(F&& f, bool mark_dirty = false) {
                 __::with_index_sequence(std::make_index_sequence<sizeof...(Subset)>{}, [&](auto... SubSeq) {
                     __::with_index_sequence(std::make_index_sequence<archetypes.size()>{}, [&](auto... ArchSeq) {
                         auto g = [&]<std::size_t ArchIx>() {
-                            std::size_t size = *data_sizes[ArchIx];
-                            for (std::size_t i = 0; i < size; i++) {
-                                f((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
-                                    *data[SubSeq][ArchIx])[i])...);
+                            for (std::size_t i = 0; i < *data_sizes[ArchIx]; i++) {
+                                if constexpr (EntityId) {
+                                    f(std::as_const((*data_backlinks[ArchIx])[i]),
+                                      (reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                          *data[SubSeq][ArchIx])[i])...);
+                                } else {
+                                    f((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                        *data[SubSeq][ArchIx])[i])...);
+                                }
                             }
                         };
 
@@ -1055,10 +1160,15 @@ namespace ecs {
                     });
 
                     for (std::size_t a = 0; a < runtime_archetypes.size(); a++) {
-                        std::size_t size = *data_sizes[archetypes.size() + a];
-                        for (std::size_t i = 0; i < size; i++) {
-                            f((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
-                                *data[SubSeq][archetypes.size() + a])[i])...);
+                        for (std::size_t i = 0; i < *data_sizes[archetypes.size() + a]; i++) {
+                            if constexpr (EntityId) {
+                                f(std::as_const((*data_backlinks[archetypes.size() + a])[i]),
+                                  (reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                      *data[SubSeq][archetypes.size() + a])[i])...);
+                            } else {
+                                f((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                    *data[SubSeq][archetypes.size() + a])[i])...);
+                            }
                         }
                     }
                 });
@@ -1077,12 +1187,32 @@ namespace ecs {
             }
         };
 
-        template <typename... Subset> System<Subset...> make_static_system() {
+        template <typename... Subset>
+            requires(sizeof...(Subset) > 1 || !__::is_archetype_v<typeset::nth_t<0, Subset...>>)
+        System<Subset...> make_static_system() {
             return System<Subset...>(archetypes, {}, {});
         }
 
-        template <typename... Subset> System<Subset...> make_system() {
+        template <typename Arch>
+            requires __::is_archetype_v<Arch>
+        decltype(auto) make_static_system() {
+            return [&]<typename... Ts>(std::in_place_type_t<Archetype<Ts...>>) {
+                return System<Ts...>(archetypes, {}, {});
+            }(std::in_place_type_t<Arch>{});
+        }
+
+        template <typename... Subset>
+            requires(sizeof...(Subset) > 1 || !__::is_archetype_v<typeset::nth_t<0, Subset...>>)
+        System<Subset...> make_system() {
             return System<Subset...>(archetypes, runtime_archetypes, components_of_runtime_archetype);
+        }
+
+        template <typename Arch>
+            requires __::is_archetype_v<Arch>
+        decltype(auto) make_system() {
+            return [&]<typename... Ts>(std::in_place_type_t<Archetype<Ts...>>) {
+                return System<Ts...>(archetypes, runtime_archetypes, components_of_runtime_archetype);
+            }(std::in_place_type_t<Arch>{});
         }
     };
 };

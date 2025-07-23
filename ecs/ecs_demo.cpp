@@ -2,22 +2,26 @@
 
 #include <print>
 
-using ECS = ecs::build<ecs::Archetype<int, float>, ecs::Archetype<int, float, std::string>>;
+using ECS = ecs::build<ecs::Archetype<int, float>, ecs::Archetype<int, char>>;
 
 int main() {
     auto ecs = ECS();
 
     auto ent1 = ecs.static_emplace_entity<ecs::Archetype<int, float>>(100, 0.111f);
     auto ent2 = ecs.static_emplace_entity<ecs::Archetype<int, float>>(200, 0.222f);
-    ecs.extend<std::string>(ent1, std::string("Hello"));
+    auto ent3 = ecs.static_emplace_entity<ecs::Archetype<int, char>>(300, 'c');
+    auto ent4 = ecs.static_emplace_entity<ecs::Archetype<int, char>>(400, 'h');
 
-    ecs.make_system<std::string>().run([&](std::string& s) {
-        std::println("{}", s);
+    ecs.make_system<int>().run([&](int& i) {
+        if (i == 100) ecs.static_emplace_entity<ecs::Archetype<int, float>>(500, 0.333f);
+        std::println("{}", i);
     });
 
-    ecs.make_system<int, float>().run([&](int& i, float& f) {
-        std::println("{}, {}", i, f);
-    });
+    std::println("{}", *std::get<0>(*ecs.get<int>(0, ent1)));
+
+    // ecs.make_system<int>().run([&](int& i) {
+    //     std::println("{}", i);
+    // });
 
     // ecs.extend<double>(ent, 0.69);
     // found = false;

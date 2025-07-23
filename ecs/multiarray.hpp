@@ -3,6 +3,7 @@
 #include <array>
 #include <cassert>
 #include <concepts>
+#include <print>
 #include <span>
 #include <tuple>
 #include <type_traits>

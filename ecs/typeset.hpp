@@ -191,4 +191,9 @@ namespace typeset {
 
     template <typename T>
     static constexpr std::size_t set_size_v = set_size<T>::value;
+
+    template <typename T>
+    struct wrapped {
+        using type = T;
+    };
 }
