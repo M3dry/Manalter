@@ -441,6 +441,7 @@ namespace ecs {
         };
     }
 
+    template <typename... Ts> struct Only;
     namespace __ {
         template <typename T> struct is_archetype {
             static constexpr bool value = false;
@@ -451,6 +452,25 @@ namespace ecs {
 
         template <typename T>
         concept is_archetype_v = is_archetype<T>::value;
+
+        template <typename... Ts> struct query;
+        template <typename T, typename... Ts> struct query<T, Ts...> {
+            template <template <typename...> typename Set> using archetypes = Set<>;
+
+            template <template <typename...> typename Set> using subset = Set<T, Ts...>;
+        };
+        template <typename... Arches, typename... Ts> struct query<Only<Arches...>, Ts...> {
+            template <template <typename...> typename Set> using archetypes = Set<Arches...>;
+
+            template <template <typename...> typename Set> using subset = Set<Ts...>;
+        };
+        template <typename Arch, typename... Ts>
+            requires is_archetype_v<Arch>
+        struct query<Arch, Ts...> {
+            template <template <typename...> typename Set> using archetypes = Set<Arch>;
+
+            template <template <typename...> typename Set> using subset = Set<Ts...>;
+        };
     }
 
     template <__::is_archetype_v... Archetypes>
@@ -461,30 +481,48 @@ namespace ecs {
             using T = typeset::nth_t<IX, Archetypes...>;
         };
 
+        template <typename F> void visit(F&& f, std::size_t archetype_id) {
+            if (is_runtime_archetype(archetype_id)) {
+                f(get_runtime_archetype(archetype_id));
+                return;
+            }
+
+            __::for_each_index(std::index_sequence_for<Archetypes...>{}, [&](auto I) {
+                constexpr auto Ix = I.value;
+                if (Ix != archetype_id) return false;
+
+                f(*reinterpret_cast<index<Ix>::T*>(archetypes[Ix]));
+                return true;
+            });
+        }
+
         template <typename... Components> struct in_archetypes {
-            static consteval std::pair<std::array<bool, sizeof...(Archetypes)>, std::size_t> _get() {
-                std::array<bool, sizeof...(Archetypes)> matches;
-                ((matches[to_index<Archetypes>::value] = typeset::is_subset_v<type_set<Components...>, Archetypes>),
+            template <typename... Arches>
+            static consteval std::pair<std::array<bool, sizeof...(Arches)>, std::size_t> _get() {
+                std::array<bool, sizeof...(Arches)> matches;
+                ((matches[to_index<Arches>::value] = typeset::is_subset_v<type_set<Components...>, Arches>),
                  ...);
-                std::size_t count = (0 + ... + (matches[to_index<Archetypes>::value] ? 1 : 0));
+                std::size_t count = (0 + ... + (matches[to_index<Arches>::value] ? 1 : 0));
 
                 return {matches, count};
             }
 
+            template <typename... Arches>
             static consteval auto get() {
-                constexpr auto out = _get();
+                constexpr auto out = _get<Arches...>();
                 constexpr auto matches = out.first;
                 constexpr auto size = out.second;
 
                 std::array<std::size_t, size> res;
                 std::size_t writer_ix = 0;
 
-                ((matches[to_index<Archetypes>::value] ? (res[writer_ix++] = to_index<Archetypes>::value, 0) : 0), ...);
+                ((matches[to_index<Arches>::value] ? (res[writer_ix++] = to_index<Arches>::value, 0) : 0), ...);
 
                 return res;
             };
 
-            static constexpr auto value = get();
+            template <typename... Arches>
+            static constexpr auto value = get<Arches...>();
         };
 
         template <std::size_t A, typename... Extra> struct possible_to_extend {
@@ -647,14 +685,17 @@ namespace ecs {
         ~build() {
             if (moved) return;
 
-            constexpr auto ix_seq = std::make_index_sequence<sizeof...(Archetypes)>();
-
-            __::with_index_sequence(
-                ix_seq, [&](auto... Is) { ((delete (reinterpret_cast<index<Is>::T*>(archetypes[Is]))), ...); });
+            __::with_index_sequence(std::make_index_sequence<sizeof...(Archetypes)>(), [&](auto... Is) {
+                ((delete (reinterpret_cast<index<Is>::T*>(archetypes[Is]))), ...);
+            });
         }
 
-        bool is_runtime_archetype(std::size_t archetype_id) {
+        inline bool is_runtime_archetype(std::size_t archetype_id) {
             return archetype_id >= sizeof...(Archetypes);
+        }
+
+        inline std::size_t get_archetype(Entity ent) {
+            return entities[ent].archetype_id;
         }
 
         std::optional<std::size_t> archetype_exists(const std::span<std::type_index>& types) {
@@ -677,6 +718,7 @@ namespace ecs {
                 return ok;
             }(std::in_place_type_t<Archetypes>{}) ||
                           ...);
+
             if (found) {
                 return archetype_id;
             }
@@ -689,6 +731,7 @@ namespace ecs {
                 bool ok = true;
                 for (std::size_t i = 0; i < ts.size(); i++) {
                     ok = ok && ts[i] == types[i];
+                    if (!ok) break;
                 }
 
                 if (ok) return std::size_t(arch_ix) + sizeof...(Archetypes);
@@ -754,7 +797,7 @@ namespace ecs {
         }
 
         template <typename... Extra, typename... Packs> void static_extend(Entity ent, Packs&&... packs) {
-            constexpr auto possible = in_archetypes<Extra...>::value;
+            constexpr auto possible = in_archetypes<Extra...>::template value<Archetypes...>;
 
             if (entities[ent].archetype_id == null_id || entities[ent].row == null_id)
                 assert(false && "static_extend called on uninitialized entity; PS: add exceptions");
@@ -897,38 +940,22 @@ namespace ecs {
             }
 
             e_link.archetype_id = archetype_id;
-            if (archetype_id < sizeof...(Archetypes)) {
-                __::for_each_index(std::index_sequence_for<Archetypes...>{}, [&](auto I) {
-                    constexpr auto Ix = I.value;
-
-                    if (archetype_id != Ix) return false;
-
-                    using ArchT = typeset::nth_t<Ix, Archetypes...>;
-                    auto arch = reinterpret_cast<ArchT*>(archetypes[Ix]);
-
-                    assert(nargs == typeset::set_size_v<ArchT>);
-
-                    if (e_link.row != null_id) {
-                        arch->emplace_at(e_link.row, args, nargs);
+            visit(
+                [&](auto& archetype) {
+                    using Arch = std::decay_t<decltype(archetype)>;
+                    if constexpr (std::is_same_v<Arch, runtime::Archetype>) {
+                        assert(archetype.get_types().size() == nargs);
                     } else {
-                        arch->new_entity(entities, ent, args, nargs);
+                        assert(nargs == typeset::set_size_v<Arch>);
                     }
 
-                    return true;
-                });
-
-                return;
-            }
-
-            runtime::Archetype& arch = get_runtime_archetype(archetype_id);
-            auto types = arch.get_types();
-            assert(types.size() == nargs);
-
-            if (e_link.row != null_id) {
-                arch.emplace_at(e_link.row, args, nargs);
-            } else {
-                arch.new_entity(entities, ent, args, nargs);
-            }
+                    if (e_link.row != null_id) {
+                        archetype.emplace_at(e_link.row, args, nargs);
+                    } else {
+                        archetype.new_entity(entities, ent, args, nargs);
+                    }
+                },
+                archetype_id);
         }
 
         template <typename... Args> void set_entity(std::size_t archetype_id, Entity ent, Args&&... args) {
@@ -960,24 +987,10 @@ namespace ecs {
         void remove(Entity entity) {
             if (entity > entities.size() || entities[entity].archetype_id == null_id || entities[entity].row == null_id)
                 return;
+
             auto& e_link = entities[entity];
 
-            __::with_index_sequence(std::index_sequence_for<Archetypes...>{}, [&](auto... Is) {
-                bool found = false;
-                ((!found ? (
-                               [&](std::size_t _) {
-                                   if (Is == e_link.archetype_id) {
-                                       auto* arch = reinterpret_cast<index<Is>::T*>(archetypes[Is]);
-                                       arch->remove(entities, e_link.row);
-                                       found = true;
-                                   }
-                               }(Is),
-                               0)
-                         : 0),
-                 ...);
-
-                assert(found);
-            });
+            visit([&](auto& archetype) { archetype.remove(entities, e_link.row); }, e_link.archetype_id);
 
             e_link.archetype_id = null_id;
             e_link.row = null_id;
@@ -997,31 +1010,28 @@ namespace ecs {
                                                                                            0}) {
             if (entities[ent].archetype_id != expected_archetype) return std::nullopt;
 
-            if (is_runtime_archetype(expected_archetype)) {
-                auto& arch = get_runtime_archetype(expected_archetype);
-                return arch.get_row(entities[ent].row, subset);
-            } else {
-                std::vector<void*> res;
-                __::for_each_index(std::index_sequence_for<Archetypes...>{}, [&](auto I) {
-                    constexpr auto Ix = I.value;
-                    if (entities[ent].archetype_id != Ix) return false;
+            std::vector<void*> ret;
+            visit(
+                [&](auto& archetype) {
+                    using Arch = std::decay_t<decltype(archetype)>;
+                    if constexpr (std::is_same_v<Arch, runtime::Archetype>) {
+                        ret = archetype.get_row(entities[ent].row, subset);
+                    } else {
+                        ret = archetype.get_row_vec(entities[ent].row, subset);
+                    }
+                },
+                expected_archetype);
 
-                    using Arch = index<Ix>::T;
-                    res = reinterpret_cast<Arch*>(archetypes[Ix])->get_row_vec(entities[ent].row, subset);
-                    return true;
-                });
-
-                return res;
-            }
+            return ret;
         }
 
-        template <typename... Ts> std::optional<std::tuple<Ts*...>> get(Entity ent, std::size_t expected_archetype) {
+        template <typename... Ts> std::optional<std::tuple<Ts&...>> get(Entity ent, std::size_t expected_archetype) {
             std::type_index ts[] = {typeid(Ts)...};
             auto res = dynamic_get(ent, expected_archetype, {ts, sizeof...(Ts)});
             if (!res) return std::nullopt;
 
-            return __::with_index_sequence(std::index_sequence_for<Ts...>{}, [&](auto... Is) {
-                return std::make_tuple(reinterpret_cast<Ts*>((*res)[Is])...);
+            return __::with_index_sequence(std::index_sequence_for<Ts...>{}, [&](auto... Is) -> std::tuple<Ts&...> {
+                return {*reinterpret_cast<Ts*>((*res)[Is])...};
             });
         }
 
@@ -1034,7 +1044,9 @@ namespace ecs {
             }
         }
 
-        template <typename... Subset> class System {
+        template <typename... Ts> class System;
+
+        template <typename... Arches, typename... Subset> class System<type_set<Arches...>, Subset...> {
           public:
             static consteval decltype(auto) get_dirty_impl() {
                 std::array<bool, sizeof...(Subset)> mask{!std::is_const_v<Subset>...};
@@ -1068,7 +1080,7 @@ namespace ecs {
 
             using dirty_components = decltype(get_dirty());
 
-            static constexpr auto archetypes = in_archetypes<std::remove_cvref_t<Subset>...>::value;
+            static constexpr auto archetypes = in_archetypes<std::remove_cvref_t<Subset>...>::template value<Arches...>;
             std::array<void*, archetypes.size()> archetype_pointers;
             std::vector<runtime::Archetype*> runtime_archetypes{};
 
@@ -1076,7 +1088,7 @@ namespace ecs {
             std::vector<std::size_t*> data_sizes{};
             std::vector<Entity**> data_backlinks{};
 
-            template <std::size_t IX> void setup_archetype(const std::array<void*, sizeof...(Archetypes)>& arches) {
+            template <std::size_t IX> void setup_archetype(const std::array<void*, sizeof...(Arches)>& arches) {
                 constexpr auto arch_id = archetypes[IX];
                 using archetype = index<arch_id>::T;
                 archetype_pointers[IX] = arches[arch_id];
@@ -1125,10 +1137,11 @@ namespace ecs {
                 }
             }
 
-            System(const std::array<void*, sizeof...(Archetypes)>& arches,
+            System(const std::array<void*, sizeof...(Arches)>& arches,
                    std::vector<runtime::Archetype>& runtime_arches,
                    std::unordered_map<std::type_index, std::vector<std::size_t>>& runtime_arches_table) {
                 data_sizes.reserve(archetypes.size());
+                data_backlinks.reserve(archetypes.size());
 
                 __::with_index_sequence(std::make_index_sequence<archetypes.size()>(), [&](auto... Is) {
                     ((data[Is].reserve(archetypes.size()), setup_archetype<Is>(arches)), ...);
@@ -1136,7 +1149,6 @@ namespace ecs {
 
                 setup_runtime_archetypes(runtime_arches, runtime_arches_table);
             }
-
           public:
             friend build;
 
@@ -1187,31 +1199,61 @@ namespace ecs {
             }
         };
 
+        template <typename... Qs>
+        decltype(auto) make_system_query() {
+            using query = __::query<Qs...>;
+            using arches = query::template archetypes<type_set>;
+
+            if constexpr (typeset::set_size_v<arches> == 0) {
+                using Sys = query::template subset<typeset::curry2<System, type_set<Archetypes...>>::template apply>;
+
+                std::vector<runtime::Archetype> ra;
+                std::unordered_map<std::type_index, std::vector<std::size_t>> m;
+                return Sys(archetypes, ra, m);
+            } else {
+                using Sys = query::template subset<typeset::curry2<System, arches>::template apply>;
+                std::array<void*, typeset::set_size_v<arches>> filtered_archetypes;
+
+                std::size_t i = 0;
+                [&]<typename... Arches>(std::in_place_type_t<type_set<Arches...>>) {
+                    __::for_each_index(std::make_index_sequence<filtered_archetypes.size()>{}, [&](auto I) {
+                        constexpr auto Ix = I.value;
+                        constexpr auto ArchIx = to_index<typeset::nth_t<Ix, Arches...>>::value;
+
+                        filtered_archetypes[i++] = archetypes[ArchIx];
+                        return false;
+                    });
+                }(std::in_place_type_t<arches>{});
+
+                return Sys(filtered_archetypes, {}, {});
+            }
+        };
+
         template <typename... Subset>
             requires(sizeof...(Subset) > 1 || !__::is_archetype_v<typeset::nth_t<0, Subset...>>)
-        System<Subset...> make_static_system() {
-            return System<Subset...>(archetypes, {}, {});
+        System<type_set<Archetypes...>, Subset...> make_static_system() {
+            return System<type_set<Archetypes...>, Subset...>(archetypes, {}, {});
         }
 
         template <typename Arch>
             requires __::is_archetype_v<Arch>
         decltype(auto) make_static_system() {
             return [&]<typename... Ts>(std::in_place_type_t<Archetype<Ts...>>) {
-                return System<Ts...>(archetypes, {}, {});
+                return System<type_set<Archetypes...>, Ts...>(archetypes, {}, {});
             }(std::in_place_type_t<Arch>{});
         }
 
         template <typename... Subset>
             requires(sizeof...(Subset) > 1 || !__::is_archetype_v<typeset::nth_t<0, Subset...>>)
-        System<Subset...> make_system() {
-            return System<Subset...>(archetypes, runtime_archetypes, components_of_runtime_archetype);
+        System<type_set<Archetypes...>, Subset...> make_system() {
+            return System<type_set<Archetypes...>, Subset...>(archetypes, runtime_archetypes, components_of_runtime_archetype);
         }
 
         template <typename Arch>
             requires __::is_archetype_v<Arch>
         decltype(auto) make_system() {
             return [&]<typename... Ts>(std::in_place_type_t<Archetype<Ts...>>) {
-                return System<Ts...>(archetypes, runtime_archetypes, components_of_runtime_archetype);
+                return System<type_set<Archetypes...>, Ts...>(archetypes, runtime_archetypes, components_of_runtime_archetype);
             }(std::in_place_type_t<Arch>{});
         }
     };

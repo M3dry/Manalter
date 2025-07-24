@@ -136,8 +136,9 @@ namespace typeset {
 
     template <typename... Sets> static constexpr bool different_sets_v = different_sets<Sets...>::value;
 
-    template <template <typename, typename> typename F, typename T> struct curry2 {
-        template <typename U> struct apply : F<T, U> {};
+    template <template <typename, typename...> typename F, typename T> struct curry2 {
+        template <typename... U>
+        using apply = F<T, U...>;
     };
 
     template <typename Set> struct to_unique;

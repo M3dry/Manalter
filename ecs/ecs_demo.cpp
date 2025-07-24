@@ -17,7 +17,10 @@ int main() {
         std::println("{}", i);
     });
 
-    std::println("{}", *std::get<0>(*ecs.get<int>(0, ent1)));
+
+    std::println("{}", std::get<0>(*ecs.get<int>(0, ent1)));
+
+    auto x = ecs.make_system_query<int>();
 
     // ecs.make_system<int>().run([&](int& i) {
     //     std::println("{}", i);
