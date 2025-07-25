@@ -137,8 +137,7 @@ namespace typeset {
     template <typename... Sets> static constexpr bool different_sets_v = different_sets<Sets...>::value;
 
     template <template <typename, typename...> typename F, typename T> struct curry2 {
-        template <typename... U>
-        using apply = F<T, U...>;
+        template <typename... U> using apply = F<T, U...>;
     };
 
     template <typename Set> struct to_unique;
@@ -190,11 +189,21 @@ namespace typeset {
         static constexpr std::size_t value = sizeof...(Ts);
     };
 
-    template <typename T>
-    static constexpr std::size_t set_size_v = set_size<T>::value;
+    template <typename T> static constexpr std::size_t set_size_v = set_size<T>::value;
 
-    template <typename T>
-    struct wrapped {
-        using type = T;
+    template <typename Old, template <typename...> typename NewCarrier> struct change_set_carrier;
+    template <typename... Ts, template <typename...> typename OldCarrier, template <typename...> typename NewCarrier>
+    struct change_set_carrier<OldCarrier<Ts...>, NewCarrier> {
+        using type = NewCarrier<Ts...>;
     };
+
+    template <typename Old, template <typename...> typename NewCarrier>
+    using change_set_carrier_t = change_set_carrier<Old, NewCarrier>::type;
+
+    template <std::size_t N, typename S> struct set_nth;
+    template <std::size_t N, template <typename...> typename Set, typename... Ts> struct set_nth<N, Set<Ts...>> {
+        using type = nth_t<N, Ts...>;
+    };
+
+    template <std::size_t N, typename S> using set_nth_t = set_nth<N, S>::type;
 }

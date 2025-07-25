@@ -20,11 +20,10 @@ int main() {
 
     std::println("{}", std::get<0>(*ecs.get<int>(0, ent1)));
 
-    auto x = ecs.make_system_query<int>();
-
-    // ecs.make_system<int>().run([&](int& i) {
-    //     std::println("{}", i);
-    // });
+    auto s = ecs.make_system_query<ecs::Archetype<int, char>>();
+    s.run([&](int& i, char& c) {
+        std::println("{} {}", i, c);
+    });
 
     // ecs.extend<double>(ent, 0.69);
     // found = false;

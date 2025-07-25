@@ -481,6 +481,21 @@ namespace ecs {
             using T = typeset::nth_t<IX, Archetypes...>;
         };
 
+        template <typename... Qs> struct setup_query {
+            using __impl = __::query<Qs...>;
+            template <template <typename...> typename Set> using __archetypes = __impl::template archetypes<Set>;
+            template <template <typename...> typename Set> using __subset = __impl::template subset<Set>;
+
+            template <template <typename...> typename Set>
+            using archetypes = std::conditional_t<typeset::set_size_v<__archetypes<type_set>> == 0, Set<Archetypes...>,
+                                                  __archetypes<Set>>;
+
+            template <template <typename...> typename Set>
+            using subset = std::conditional_t<
+                typeset::set_size_v<archetypes<type_set>> == 1 && typeset::set_size_v<__subset<type_set>> == 0,
+                typeset::change_set_carrier_t<typeset::set_nth_t<0, __archetypes<type_set>>, Set>, __subset<Set>>;
+        };
+
         template <typename F> void visit(F&& f, std::size_t archetype_id) {
             if (is_runtime_archetype(archetype_id)) {
                 f(get_runtime_archetype(archetype_id));
@@ -498,17 +513,15 @@ namespace ecs {
 
         template <typename... Components> struct in_archetypes {
             template <typename... Arches>
-            static consteval std::pair<std::array<bool, sizeof...(Arches)>, std::size_t> _get() {
-                std::array<bool, sizeof...(Arches)> matches;
-                ((matches[to_index<Arches>::value] = typeset::is_subset_v<type_set<Components...>, Arches>),
-                 ...);
+            static consteval std::pair<std::array<bool, sizeof...(Archetypes)>, std::size_t> _get() {
+                std::array<bool, sizeof...(Archetypes)> matches = {(typeset::void_f<Archetypes>::f(), 0)...};
+                ((matches[to_index<Arches>::value] = typeset::is_subset_v<type_set<Components...>, Arches>), ...);
                 std::size_t count = (0 + ... + (matches[to_index<Arches>::value] ? 1 : 0));
 
                 return {matches, count};
             }
 
-            template <typename... Arches>
-            static consteval auto get() {
+            template <typename... Arches> static consteval auto get() {
                 constexpr auto out = _get<Arches...>();
                 constexpr auto matches = out.first;
                 constexpr auto size = out.second;
@@ -521,8 +534,7 @@ namespace ecs {
                 return res;
             };
 
-            template <typename... Arches>
-            static constexpr auto value = get<Arches...>();
+            template <typename... Arches> static constexpr auto value = get<Arches...>();
         };
 
         template <std::size_t A, typename... Extra> struct possible_to_extend {
@@ -1088,7 +1100,7 @@ namespace ecs {
             std::vector<std::size_t*> data_sizes{};
             std::vector<Entity**> data_backlinks{};
 
-            template <std::size_t IX> void setup_archetype(const std::array<void*, sizeof...(Arches)>& arches) {
+            template <std::size_t IX> void setup_archetype(const std::array<void*, sizeof...(Archetypes)>& arches) {
                 constexpr auto arch_id = archetypes[IX];
                 using archetype = index<arch_id>::T;
                 archetype_pointers[IX] = arches[arch_id];
@@ -1137,7 +1149,7 @@ namespace ecs {
                 }
             }
 
-            System(const std::array<void*, sizeof...(Arches)>& arches,
+            System(const std::array<void*, sizeof...(Archetypes)>& arches,
                    std::vector<runtime::Archetype>& runtime_arches,
                    std::unordered_map<std::type_index, std::vector<std::size_t>>& runtime_arches_table) {
                 data_sizes.reserve(archetypes.size());
@@ -1149,6 +1161,7 @@ namespace ecs {
 
                 setup_runtime_archetypes(runtime_arches, runtime_arches_table);
             }
+
           public:
             friend build;
 
@@ -1199,34 +1212,16 @@ namespace ecs {
             }
         };
 
-        template <typename... Qs>
-        decltype(auto) make_system_query() {
-            using query = __::query<Qs...>;
+        template <typename... Qs> decltype(auto) make_system_query() {
+            using query = setup_query<Qs...>;
             using arches = query::template archetypes<type_set>;
+            using Sys = query::template subset<typeset::curry2<System, arches>::template apply>;
 
-            if constexpr (typeset::set_size_v<arches> == 0) {
-                using Sys = query::template subset<typeset::curry2<System, type_set<Archetypes...>>::template apply>;
+            std::vector<runtime::Archetype> ra;
+            std::unordered_map<std::type_index, std::vector<std::size_t>> m;
+            static_assert(std::is_same_v<Sys, System<type_set<Archetype<int, char>>, int, char>>);
 
-                std::vector<runtime::Archetype> ra;
-                std::unordered_map<std::type_index, std::vector<std::size_t>> m;
-                return Sys(archetypes, ra, m);
-            } else {
-                using Sys = query::template subset<typeset::curry2<System, arches>::template apply>;
-                std::array<void*, typeset::set_size_v<arches>> filtered_archetypes;
-
-                std::size_t i = 0;
-                [&]<typename... Arches>(std::in_place_type_t<type_set<Arches...>>) {
-                    __::for_each_index(std::make_index_sequence<filtered_archetypes.size()>{}, [&](auto I) {
-                        constexpr auto Ix = I.value;
-                        constexpr auto ArchIx = to_index<typeset::nth_t<Ix, Arches...>>::value;
-
-                        filtered_archetypes[i++] = archetypes[ArchIx];
-                        return false;
-                    });
-                }(std::in_place_type_t<arches>{});
-
-                return Sys(filtered_archetypes, {}, {});
-            }
+            return Sys(archetypes, ra, m);
         };
 
         template <typename... Subset>
@@ -1246,14 +1241,16 @@ namespace ecs {
         template <typename... Subset>
             requires(sizeof...(Subset) > 1 || !__::is_archetype_v<typeset::nth_t<0, Subset...>>)
         System<type_set<Archetypes...>, Subset...> make_system() {
-            return System<type_set<Archetypes...>, Subset...>(archetypes, runtime_archetypes, components_of_runtime_archetype);
+            return System<type_set<Archetypes...>, Subset...>(archetypes, runtime_archetypes,
+                                                              components_of_runtime_archetype);
         }
 
         template <typename Arch>
             requires __::is_archetype_v<Arch>
         decltype(auto) make_system() {
             return [&]<typename... Ts>(std::in_place_type_t<Archetype<Ts...>>) {
-                return System<type_set<Archetypes...>, Ts...>(archetypes, runtime_archetypes, components_of_runtime_archetype);
+                return System<type_set<Archetypes...>, Ts...>(archetypes, runtime_archetypes,
+                                                              components_of_runtime_archetype);
             }(std::in_place_type_t<Arch>{});
         }
     };
