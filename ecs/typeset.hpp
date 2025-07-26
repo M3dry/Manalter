@@ -1,7 +1,9 @@
 #pragma once
 
+#include <span>
 #include <tuple>
 #include <type_traits>
+#include <typeindex>
 #include <utility>
 
 template <typename... Ts> struct type_set {};
@@ -206,4 +208,32 @@ namespace typeset {
     };
 
     template <std::size_t N, typename S> using set_nth_t = set_nth<N, S>::type;
+
+    template <typename... Ts> struct ref_tuple {
+        using type = std::tuple<Ts&...>;
+    };
+
+    template <typename... Ts> using ref_tuple_t = ref_tuple<Ts...>::type;
+
+    template <typename V, typename... Ts> struct value_wrapper {
+        static constexpr auto value = V::template value<Ts...>;
+    };
+
+    constexpr bool subset(std::span<std::type_index> sub, std::span<std::type_index> super) {
+        if (sub.size() > super.size()) return false;
+
+        for (std::size_t s = 0; s < sub.size(); s++) {
+            bool found = false;
+            for (const auto& sup : super) {
+                if (sub[s] == sup) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) return false;
+        }
+
+        return true;
+    }
 }

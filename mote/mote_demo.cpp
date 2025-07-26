@@ -46,52 +46,52 @@ int main() {
     auto ecs = ParticleECS();
     auto s = ecs.make_system<LinkArchetype>();
 
-    ecs.static_emplace_entity<LinkArchetype>(ecs::null_id, Vector2{screen.x/2.0f, screen.y/2.0f}, 50.0f, true);
-
-    float prev_time = 0.;
-    bool print = true;
-    while (!WindowShouldClose()) {
-        float current_time = static_cast<float>(GetTime());
-        float delta_time = current_time - prev_time;
-        prev_time = current_time;
-
-        s.run<true>([&](auto& current, parent& parent, position& pos, radius& rad, tail& tail) {
-            if (parent == ecs::null_id) {
-                if (tail) {
-                    tail = false;
-                    ecs.static_emplace_entity<LinkArchetype>(current, pos, rad/1.05f, true);
-                }
-
-                return;
-            }
-            if (!tail) return;
-
-            position& parent_pos = std::get<0>(*ecs.static_get<LinkArchetype, position>(parent));
-            if (pos.y - parent_pos.y <= 1.05f*rad) {
-                pos = Vector2Add(pos, Vector2Scale(Vector2{0.0f, 100.0f}, delta_time));
-            } else if (rad/1.05f >= 30.0f) {
-                tail = false;
-                ecs.static_emplace_entity<LinkArchetype>(current, pos, rad/1.05f, true);
-            }
-        });
-
-        PollInputEvents();
-        BeginDrawing();
-            ClearBackground(DARKGRAY);
-
-            s.run([&](parent& parent, position& pos, radius& rad, tail& _) {
-                if (parent != ecs::null_id) {
-                    auto exists = ecs.static_get<LinkArchetype, position>(parent);
-                    assert(exists);
-
-                    auto parent_pos = std::get<0>(*exists);
-                    DrawLineV(parent_pos, pos, WHITE);
-                }
-                DrawCircleLinesV(pos, rad, RED);
-            });
-        EndDrawing();
-        SwapScreenBuffer();
-    }
+    // ecs.static_emplace_entity<LinkArchetype>(ecs::null_id, Vector2{screen.x/2.0f, screen.y/2.0f}, 50.0f, true);
+    //
+    // float prev_time = 0.;
+    // bool print = true;
+    // while (!WindowShouldClose()) {
+    //     float current_time = static_cast<float>(GetTime());
+    //     float delta_time = current_time - prev_time;
+    //     prev_time = current_time;
+    //
+    //     s.run<ecs::WithIDs>([&](auto& current, parent& parent, position& pos, radius& rad, tail& tail) {
+    //         if (parent == ecs::null_id) {
+    //             if (tail) {
+    //                 tail = false;
+    //                 ecs.static_emplace_entity<LinkArchetype>(current, pos, rad/1.05f, true);
+    //             }
+    //
+    //             return;
+    //         }
+    //         if (!tail) return;
+    //
+    //         position& parent_pos = std::get<0>(*ecs.static_get<LinkArchetype, position>(parent));
+    //         if (pos.y - parent_pos.y <= 1.05f*rad) {
+    //             pos = Vector2Add(pos, Vector2Scale(Vector2{0.0f, 100.0f}, delta_time));
+    //         } else if (rad/1.05f >= 30.0f) {
+    //             tail = false;
+    //             ecs.static_emplace_entity<LinkArchetype>(current, pos, rad/1.05f, true);
+    //         }
+    //     });
+    //
+    //     PollInputEvents();
+    //     BeginDrawing();
+    //         ClearBackground(DARKGRAY);
+    //
+    //         s.run([&](parent& parent, position& pos, radius& rad, tail& _) {
+    //             if (parent != ecs::null_id) {
+    //                 auto exists = ecs.static_get<LinkArchetype, position>(parent);
+    //                 assert(exists);
+    //
+    //                 auto parent_pos = std::get<0>(*exists);
+    //                 DrawLineV(parent_pos, pos, WHITE);
+    //             }
+    //             DrawCircleLinesV(pos, rad, RED);
+    //         });
+    //     EndDrawing();
+    //     SwapScreenBuffer();
+    // }
 
     CloseWindow();
     return 0;

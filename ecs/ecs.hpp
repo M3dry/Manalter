@@ -66,16 +66,6 @@ namespace ecs {
     }
 
     template <typeset::unique_v... Components> struct Archetype {
-        template <typename... Ts> struct _impl_single {
-            using type = std::tuple<Ts&...>;
-        };
-
-        template <> struct _impl_single<> {
-            using type = std::tuple<Components&...>;
-        };
-
-        template <typename... Ts> using single = _impl_single<Ts...>::type;
-
         struct Backlink {
             Entity entity;
             inline constexpr operator Entity() {
@@ -106,13 +96,13 @@ namespace ecs {
 
         bool get_dirty(std::size_t row) {}
 
-        template <typename... Ts> single<Ts...> get(std::size_t row) {
+        template <typename... Ts> decltype(auto) get(std::size_t row) {
             if constexpr (sizeof...(Ts) == 0) {
-                return components.template get<Components...>(row);
+                return std::tuple<Components&...>(components.template get<Components...>(row));
             } else if constexpr (sizeof...(Ts) == 1) {
                 return std::tuple<Ts&...>(components.template get<Ts...>(row));
             } else {
-                return components.template get<Ts...>(row);
+                return std::tuple<Ts&...>(components.template get<Ts...>(row));
             }
         }
 
@@ -363,6 +353,7 @@ namespace ecs {
                     }
                 }
 
+                assert(res.size() == subset.size() || res.size() == components.size());
                 return res;
             }
 
@@ -441,7 +432,9 @@ namespace ecs {
         };
     }
 
-    template <typename... Ts> struct Only;
+    template <typename... Ts> struct Static;
+    template <typename... Ts> struct WithRuntime;
+    struct All;
     namespace __ {
         template <typename T> struct is_archetype {
             static constexpr bool value = false;
@@ -456,21 +449,47 @@ namespace ecs {
         template <typename... Ts> struct query;
         template <typename T, typename... Ts> struct query<T, Ts...> {
             template <template <typename...> typename Set> using archetypes = Set<>;
-
             template <template <typename...> typename Set> using subset = Set<T, Ts...>;
+            static constexpr bool runtime = true;
         };
-        template <typename... Arches, typename... Ts> struct query<Only<Arches...>, Ts...> {
+        template <typename... Arches, typename... Ts> struct query<Static<Arches...>, Ts...> {
             template <template <typename...> typename Set> using archetypes = Set<Arches...>;
-
             template <template <typename...> typename Set> using subset = Set<Ts...>;
+            static constexpr bool runtime = false;
+        };
+        template <typename... Arches, typename... Ts> struct query<WithRuntime<Arches...>, Ts...> {
+            template <template <typename...> typename Set> using archetypes = Set<Arches...>;
+            template <template <typename...> typename Set> using subset = Set<Ts...>;
+            static constexpr bool runtime = true;
+        };
+        template <typename... Ts> struct query<All, Ts...> {
+            template <template <typename...> typename Set> using archetypes = Set<>;
+            template <template <typename...> typename Set> using subset = Set<Ts...>;
+            static constexpr bool runtime = true;
         };
         template <typename Arch, typename... Ts>
             requires is_archetype_v<Arch>
         struct query<Arch, Ts...> {
             template <template <typename...> typename Set> using archetypes = Set<Arch>;
-
             template <template <typename...> typename Set> using subset = Set<Ts...>;
+            static constexpr bool runtime = false;
         };
+    }
+
+    enum SystemRunnerOpts : uint8_t {
+        WithIDs = 1 << 0,
+        MarkDirty = 1 << 1,
+        SafeInsert = 1 << 2,
+    };
+
+    constexpr SystemRunnerOpts operator|(SystemRunnerOpts a, SystemRunnerOpts b) {
+        return static_cast<SystemRunnerOpts>(static_cast<std::underlying_type_t<SystemRunnerOpts>>(a) |
+                                             static_cast<std::underlying_type_t<SystemRunnerOpts>>(b));
+    }
+
+    constexpr SystemRunnerOpts operator&(SystemRunnerOpts a, SystemRunnerOpts b) {
+        return static_cast<SystemRunnerOpts>(static_cast<std::underlying_type_t<SystemRunnerOpts>>(a) &
+                                             static_cast<std::underlying_type_t<SystemRunnerOpts>>(b));
     }
 
     template <__::is_archetype_v... Archetypes>
@@ -493,7 +512,9 @@ namespace ecs {
             template <template <typename...> typename Set>
             using subset = std::conditional_t<
                 typeset::set_size_v<archetypes<type_set>> == 1 && typeset::set_size_v<__subset<type_set>> == 0,
-                typeset::change_set_carrier_t<typeset::set_nth_t<0, __archetypes<type_set>>, Set>, __subset<Set>>;
+                typeset::change_set_carrier_t<typeset::set_nth_t<0, archetypes<type_set>>, Set>, __subset<Set>>;
+
+            static constexpr bool runtime = __impl::runtime;
         };
 
         template <typename F> void visit(F&& f, std::size_t archetype_id) {
@@ -1008,15 +1029,49 @@ namespace ecs {
             e_link.row = null_id;
         }
 
-        template <typename Arch, typename... Ts>
-        std::optional<typename Arch::template single<Ts...>> static_get(Entity ent) {
-            constexpr auto ArchIx = to_index<Arch>::value;
+        template <typename... Qs> decltype(auto) get(Entity ent) {
+            using query = setup_query<Qs...>;
+            using arches = query::template archetypes<type_set>;
+            using return_t = query::template subset<typeset::ref_tuple_t>;
+            constexpr auto in_arches = query::template archetypes<typeset::curry2<
+                typeset::value_wrapper, typename query::template subset<in_archetypes>>::template apply>::value;
+            static_assert(in_arches.size() == typeset::set_size_v<arches>);
 
-            if (entities[ent].archetype_id != ArchIx) return std::nullopt;
+            auto ent_arch_id = entities[ent].archetype_id;
+            std::optional<return_t> ret = std::nullopt;
+            __::for_each_index(std::make_index_sequence<in_arches.size()>{}, [&](auto I) {
+                constexpr auto Ix = I.value;
+                if (ent_arch_id != in_arches[Ix]) return false;
+                using Arch = index<in_arches[Ix]>::T;
 
-            return reinterpret_cast<Arch*>(archetypes[ArchIx])->template get<Ts...>(entities[ent].row);
+                auto* arch = reinterpret_cast<Arch*>(archetypes[in_arches[Ix]]);
+
+                [&]<typename... Ts>(std::in_place_type_t<type_set<Ts...>>) {
+                    ret.emplace(arch->template get<Ts...>(entities[ent].row));
+                }(std::in_place_type_t<typename query::template subset<type_set>>{});
+                return true;
+            });
+
+            if (ret) return ret;
+            if (!query::runtime || !is_runtime_archetype(ent_arch_id)) return ret;
+
+            auto& arch = get_runtime_archetype(ent_arch_id);
+            auto ts = arch.get_types();
+            [&]<typename... Subset>(std::in_place_type_t<type_set<Subset...>>) {
+                std::type_index sub[] = {typeid(Subset)...};
+                std::span<std::type_index> sub_ts{sub, sizeof...(Subset)};
+                if (!typeset::subset({sub, sizeof...(Subset)}, ts)) return;
+
+                auto row = arch.get_row(entities[ent].row, sub_ts);
+                __::with_index_sequence(std::index_sequence_for<Subset...>{}, [&](auto... Is) {
+                    ret.emplace(*reinterpret_cast<Subset*>(row[Is])...);
+                });
+            }(std::in_place_type_t<typename query::template subset<type_set>>{});
+
+            return ret;
         }
 
+        // TODO: feature parity with `get`
         std::optional<std::vector<void*>> dynamic_get(Entity ent, std::size_t expected_archetype,
                                                       std::span<std::type_index> subset = {(std::type_index*)nullptr,
                                                                                            0}) {
@@ -1035,16 +1090,6 @@ namespace ecs {
                 expected_archetype);
 
             return ret;
-        }
-
-        template <typename... Ts> std::optional<std::tuple<Ts&...>> get(Entity ent, std::size_t expected_archetype) {
-            std::type_index ts[] = {typeid(Ts)...};
-            auto res = dynamic_get(ent, expected_archetype, {ts, sizeof...(Ts)});
-            if (!res) return std::nullopt;
-
-            return __::with_index_sequence(std::index_sequence_for<Ts...>{}, [&](auto... Is) -> std::tuple<Ts&...> {
-                return {*reinterpret_cast<Ts*>((*res)[Is])...};
-            });
         }
 
         template <typename F>
@@ -1165,18 +1210,32 @@ namespace ecs {
           public:
             friend build;
 
-            template <bool EntityId = false, typename F> void run(F&& f, bool mark_dirty = false) {
+            template <SystemRunnerOpts opts = static_cast<SystemRunnerOpts>(0), typename F> void run(F&& f) {
                 __::with_index_sequence(std::make_index_sequence<sizeof...(Subset)>{}, [&](auto... SubSeq) {
                     __::with_index_sequence(std::make_index_sequence<archetypes.size()>{}, [&](auto... ArchSeq) {
                         auto g = [&]<std::size_t ArchIx>() {
-                            for (std::size_t i = 0; i < *data_sizes[ArchIx]; i++) {
-                                if constexpr (EntityId) {
-                                    f(std::as_const((*data_backlinks[ArchIx])[i]),
+                            auto f_extra = [&]<typename... Extra>(std::size_t i, Extra&&... extra) {
+                                if constexpr ((opts & SafeInsert) != 0) {
+                                    std::tuple<std::remove_reference_t<Subset>...> copy{
+                                        reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                            *data[SubSeq][ArchIx])[i]...};
+
+                                    f(std::forward<Extra>(extra)..., std::get<SubSeq>(copy)...);
+
+                                    ((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                          *data[SubSeq][ArchIx])[i] = std::get<SubSeq>(copy)),
+                                     ...);
+                                } else {
+                                    f(std::forward<Extra>(extra)...,
                                       (reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
                                           *data[SubSeq][ArchIx])[i])...);
+                                }
+                            };
+                            for (std::size_t i = 0; i < *data_sizes[ArchIx]; i++) {
+                                if constexpr ((opts & WithIDs) != 0) {
+                                    f_extra(i, std::as_const((*data_backlinks[ArchIx])[i]));
                                 } else {
-                                    f((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
-                                        *data[SubSeq][ArchIx])[i])...);
+                                    f_extra(i);
                                 }
                             }
                         };
@@ -1186,7 +1245,7 @@ namespace ecs {
 
                     for (std::size_t a = 0; a < runtime_archetypes.size(); a++) {
                         for (std::size_t i = 0; i < *data_sizes[archetypes.size() + a]; i++) {
-                            if constexpr (EntityId) {
+                            if constexpr ((opts & WithIDs) != 0) {
                                 f(std::as_const((*data_backlinks[archetypes.size() + a])[i]),
                                   (reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
                                       *data[SubSeq][archetypes.size() + a])[i])...);
@@ -1198,7 +1257,8 @@ namespace ecs {
                     }
                 });
 
-                if (mark_dirty) {
+                if ((opts & MarkDirty) != 0) {
+                    // TODO: finish this
                     __::for_each_index(std::make_index_sequence<archetypes.size()>{}, [&](auto ArchI) {
                         constexpr auto ArchIx = ArchI.value;
                         using Arch = index<ArchIx>::T;
@@ -1217,11 +1277,15 @@ namespace ecs {
             using arches = query::template archetypes<type_set>;
             using Sys = query::template subset<typeset::curry2<System, arches>::template apply>;
 
-            std::vector<runtime::Archetype> ra;
-            std::unordered_map<std::type_index, std::vector<std::size_t>> m;
             static_assert(std::is_same_v<Sys, System<type_set<Archetype<int, char>>, int, char>>);
 
-            return Sys(archetypes, ra, m);
+            if (query::runtime) {
+                return Sys(archetypes, runtime_archetypes, components_of_runtime_archetype);
+            } else {
+                std::vector<runtime::Archetype> ra;
+                std::unordered_map<std::type_index, std::vector<std::size_t>> m;
+                return Sys(archetypes, ra, m);
+            }
         };
 
         template <typename... Subset>
