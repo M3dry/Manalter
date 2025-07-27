@@ -95,25 +95,80 @@ namespace ecs {
         };
 
         template <typename... Subset> void mark_dirty(std::size_t row, bool state = true) {
-            auto bitsets = dirty.template get<Bitset<Subset>...>(row / 64);
+            auto bitsets = dirty.template get<Bitset<Subset>...>(row / 64, std::integral_constant<bool, true>{});
             auto bit = row % 64;
 
             uint64_t mask = 1ULL << bit;
-            ((std::get<Bitset<Subset>>(bitsets) =
-                  (std::get<Bitset<Subset>>(bitsets) & ~mask) | (-static_cast<uint64_t>(state) & mask),
-              0),
+            ((std::get<Bitset<Subset>&>(bitsets).n =
+                  (std::get<Bitset<Subset>&>(bitsets).n & ~mask) | (-static_cast<uint64_t>(state) & mask)),
              ...);
         }
 
-        template <typename... Subset> void mark_dirty(std::size_t start, std::size_t end, bool state = true) {
+        template <> void mark_dirty<>(std::size_t row, bool state) {
+            return mark_dirty<Components...>(row, state);
+        }
 
+        template <typename... Subset> void mark_dirty(std::size_t start, std::size_t end, bool state = true) {
+            auto bitsets = dirty.template get_span<Bitset<Subset>...>(std::integral_constant<bool, true>{});
+
+            const std::size_t start_bit = start % 64;
+            const std::size_t end_bit = end % 64;
+            const std::size_t start_word = start / 64;
+            const std::size_t end_word = end / 64;
+
+            const uint64_t full_mask = ~0ULL;
+            const uint64_t start_mask = full_mask << start_bit;
+            const uint64_t end_mask = (end_bit == 0) ? 0 : (full_mask >> (64 - end_bit));
+            const bool single_word = (start_word == end_word);
+
+            const uint64_t first_word_mask = single_word ? (start_mask & end_mask) : start_mask;
+
+            if (state) {
+                ((std::get<std::span<Bitset<Subset>>>(bitsets)[start_word].n |= first_word_mask), ...);
+            } else {
+                ((std::get<std::span<Bitset<Subset>>>(bitsets)[start_word].n &= ~first_word_mask), ...);
+            }
+
+            if (!single_word) {
+                if (state) {
+                    ((std::get<std::span<Bitset<Subset>>>(bitsets)[start_word].n |= end_mask), ...);
+                } else {
+                    ((std::get<std::span<Bitset<Subset>>>(bitsets)[start_word].n &= ~end_mask), ...);
+                }
+
+                std::size_t full_word_start = start_word + 1;
+                std::size_t full_word_end = end_word;
+
+                if (full_word_start < full_word_end) {
+                    (std::memset(&std::get<std::span<Bitset<Subset>>>(bitsets)[full_word_start], state ? 0xFF : 0x00,
+                                 sizeof(uint64_t) * (full_word_end - full_word_start)),
+                     ...);
+                }
+            }
+        }
+
+        template <> void mark_dirty<>(std::size_t start, std::size_t end, bool state) {
+            return mark_dirty<Components...>(start, end, state);
         }
 
         template <typename... Subset> bool get_dirty(std::size_t row) {
-            auto bitsets = dirty.template get<Bitset<Subset>...>(row / 64);
             auto bit = row % 64;
+            auto bitsets = dirty.template get<Bitset<Subset>...>(row / 64, std::integral_constant<bool, true>{});
 
-            return (((std::get<Bitset<Subset>>(bitsets) >> bit) & 1) && ...);
+            return (((std::get<Bitset<Subset>&>(bitsets).n >> bit) & 1) || ...);
+        }
+
+        template <> bool get_dirty<>(std::size_t row) {
+            return get_dirty<Components...>(row);
+        }
+
+        template <typename... Subset> inline std::array<uint64_t**, sizeof...(Subset)> get_dirty_ptrs() {
+            auto t = dirty.template get_ptr<Bitset<Subset>...>(std::integral_constant<bool, true>{});
+
+            return __::with_index_sequence(std::index_sequence_for<Subset...>{}, [&](auto... Is) {
+                std::array<uint64_t**, sizeof...(Subset)> arr = {reinterpret_cast<uint64_t**>(std::get<Is>(t))...};
+                return arr;
+            });
         }
 
         template <typename... Ts> decltype(auto) get(std::size_t row) {
@@ -148,7 +203,7 @@ namespace ecs {
                 return false;
             });
 
-            mark_dirty<Components...>(row);
+            mark_dirty(row);
         }
 
         template <typename... Packs>
@@ -157,7 +212,8 @@ namespace ecs {
 
             link[entity].row = components.size() - 1;
 
-            mark_dirty<Components...>(link[entity].row);
+            if (components.size() > dirty.size() * 64) dirty.emplace_back((typeset::void_f<Components>::f(), 0ULL)...);
+            mark_dirty(link[entity].row);
         };
 
         void new_entity(std::vector<ArchetypeLink>& link, Entity entity, void* args[], std::size_t nargs) {
@@ -167,7 +223,8 @@ namespace ecs {
             link[entity].row = components.size() - 1;
             std::get<Backlink*>(t)->entity = entity;
 
-            mark_dirty<Components...>(link[entity].row);
+            if (components.size() > dirty.size() * 64) dirty.emplace_back((typeset::void_f<Components>::f(), 0ULL)...);
+            mark_dirty(link[entity].row);
         }
 
         std::tuple<Components*...> unsafe_push_entity(std::vector<ArchetypeLink>& link, Entity entity) {
@@ -176,6 +233,7 @@ namespace ecs {
             link[entity].row = components.size() - 1;
             std::get<Backlink*>(t)->entity = entity;
 
+            if (components.size() > dirty.size() * 64) dirty.emplace_back((typeset::void_f<Components>::f(), 0ULL)...);
             return std::make_tuple(std::get<Components*>(t)...);
         }
 
@@ -216,7 +274,7 @@ namespace ecs {
         }
 
         void remove(std::vector<ArchetypeLink>& link, std::size_t row) {
-            // mark_dirty(row, get_dirty(components.size() - 1));
+            (mark_dirty<Components>(row, get_dirty(components.size() - 1)), ...);
 
             components.swap(row, components.size() - 1);
             components.pop_back();
@@ -499,7 +557,9 @@ namespace ecs {
     enum SystemRunnerOpts : uint8_t {
         WithIDs = 1 << 0,
         MarkDirty = 1 << 1,
-        SafeInsert = 1 << 2,
+        OnlyDirty = 1 << 2,
+        StrictOnlyDirty = 1 << 3,
+        SafeInsert = 1 << 4,
     };
 
     constexpr SystemRunnerOpts operator|(SystemRunnerOpts a, SystemRunnerOpts b) {
@@ -839,6 +899,38 @@ namespace ecs {
             return arch_id;
         }
 
+        template <typename... Subset> bool is_dirty(Entity ent) {
+            bool ret = false;
+
+            if constexpr (sizeof...(Subset) != 0) {
+                constexpr auto in_arches = in_archetypes<Subset...>::template value<Archetypes...>;
+
+                __::for_each_index(std::make_index_sequence<in_arches.size()>{}, [&](auto I) {
+                    constexpr auto Ix = I.value;
+                    if (entities[ent].archetype_id != in_arches[Ix]) return false;
+
+                    auto* arch =
+                        reinterpret_cast<typeset::nth_t<in_arches[Ix], Archetypes...>*>(archetypes[in_arches[Ix]]);
+                    ret = arch->template get_dirty<Subset...>(entities[ent].row);
+                    return true;
+                });
+
+                return ret;
+            }
+
+            visit(
+                [&](auto& arch) {
+                    using Arch = std::decay_t<decltype(arch)>;
+                    if constexpr (std::is_same_v<Arch, runtime::Archetype>) {
+                        // TODO: runtime archetype dirty marking
+                    } else {
+                        ret = arch.get_dirty(entities[ent].row);
+                    }
+                },
+                entities[ent].archetype_id);
+            return ret;
+        }
+
         Entity new_entity() {
             entities.emplace_back(null_id, null_id);
 
@@ -1154,13 +1246,15 @@ namespace ecs {
                 });
             }
 
+            // these components will get marked as "dirty" in the runner with flag MarkDirty
             using dirty_components = decltype(get_dirty());
 
-            static constexpr auto archetypes = in_archetypes<std::remove_cvref_t<Subset>...>::template value<Arches...>;
+            static constexpr auto archetypes = in_archetypes<std::remove_const_t<Subset>...>::template value<Arches...>;
             std::array<void*, archetypes.size()> archetype_pointers;
             std::vector<runtime::Archetype*> runtime_archetypes{};
 
             std::array<std::vector<void**>, sizeof...(Subset)> data{};
+            std::vector<std::array<uint64_t**, sizeof...(Subset)>> dirty_indexes;
             std::vector<std::size_t*> data_sizes{};
             std::vector<Entity**> data_backlinks{};
 
@@ -1169,13 +1263,15 @@ namespace ecs {
                 using archetype = index<arch_id>::T;
                 archetype_pointers[IX] = arches[arch_id];
                 archetype* x = (archetype*)arches[arch_id];
-                auto subset = x->template get_subset<std::remove_cvref_t<Subset>...>();
+                auto subset = x->template get_subset<std::remove_const_t<Subset>...>();
 
                 for (std::size_t i = 0; i < data.size(); i++) {
                     data[i].emplace_back(subset[i + 1]);
                 }
+
                 data_sizes.emplace_back((std::size_t*)subset[0]);
                 data_backlinks.emplace_back(x->get_backlink());
+                dirty_indexes.emplace_back(x->template get_dirty_ptrs<std::remove_const_t<Subset>...>());
             }
 
             void setup_runtime_archetypes(
@@ -1216,6 +1312,7 @@ namespace ecs {
             System(const std::array<void*, sizeof...(Archetypes)>& arches,
                    std::vector<runtime::Archetype>& runtime_arches,
                    std::unordered_map<std::type_index, std::vector<std::size_t>>& runtime_arches_table) {
+                dirty_indexes.reserve(sizeof...(Subset));
                 data_sizes.reserve(archetypes.size());
                 data_backlinks.reserve(archetypes.size());
 
@@ -1230,40 +1327,95 @@ namespace ecs {
             friend build;
 
             template <SystemRunnerOpts opts = static_cast<SystemRunnerOpts>(0), typename F> void run(F&& f) {
+                constexpr auto StrictOnlyDirtyFlag = (opts & StrictOnlyDirty) != 0;
+                constexpr auto OnlyDirtyFlag = ((opts & OnlyDirty) != 0) || StrictOnlyDirtyFlag;
+                constexpr auto MarkDirtyFlag = (opts & MarkDirty) != 0;
+
+                std::vector<std::size_t> dirty_end_ranges;
+                if constexpr (MarkDirtyFlag && !OnlyDirtyFlag) dirty_end_ranges.reserve(data_sizes.size());
+
                 __::with_index_sequence(std::make_index_sequence<sizeof...(Subset)>{}, [&](auto... SubSeq) {
-                    __::with_index_sequence(std::make_index_sequence<archetypes.size()>{}, [&](auto... ArchSeq) {
-                        auto g = [&]<std::size_t ArchIx>() {
-                            auto f_extra = [&]<typename... Extra>(std::size_t i, Extra&&... extra) {
-                                if constexpr ((opts & SafeInsert) != 0) {
-                                    std::tuple<std::remove_reference_t<Subset>...> copy{
-                                        reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
-                                            *data[SubSeq][ArchIx])[i]...};
+                    __::for_each_index(std::make_index_sequence<archetypes.size()>{}, [&](auto ArchI) {
+                        constexpr auto ArchIx = ArchI.value;
+                        auto f_extra = [&]<typename... Extra>(std::size_t i, Extra&&... extra) {
+                            if constexpr ((opts & SafeInsert) != 0) {
+                                std::tuple<std::remove_reference_t<Subset>...> copy{
+                                    reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                        *data[SubSeq][ArchIx])[i]...};
 
-                                    f(std::forward<Extra>(extra)..., std::get<SubSeq>(copy)...);
+                                f(std::forward<Extra>(extra)..., std::get<SubSeq>(copy)...);
 
-                                    ((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
-                                          *data[SubSeq][ArchIx])[i] = std::get<SubSeq>(copy)),
-                                     ...);
-                                } else {
-                                    f(std::forward<Extra>(extra)...,
-                                      (reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
-                                          *data[SubSeq][ArchIx])[i])...);
-                                }
-                            };
-                            for (std::size_t i = 0; i < *data_sizes[ArchIx]; i++) {
-                                if constexpr ((opts & WithIDs) != 0) {
-                                    f_extra(i, std::as_const((*data_backlinks[ArchIx])[i]));
-                                } else {
-                                    f_extra(i);
-                                }
+                                ((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                      *data[SubSeq][ArchIx])[i] = std::get<SubSeq>(copy)),
+                                 ...);
+                            } else {
+                                f(std::forward<Extra>(extra)...,
+                                  (reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                      *data[SubSeq][ArchIx])[i])...);
+                            }
+                        };
+                        auto f_complete = [&](std::size_t i) {
+                            if constexpr ((opts & WithIDs) != 0) {
+                                f_extra(i, std::as_const((*data_backlinks[ArchIx])[i]));
+                            } else {
+                                f_extra(i);
                             }
                         };
 
-                        (g.template operator()<ArchSeq>(), ...);
+                        if constexpr (false && OnlyDirtyFlag &&
+                                      !MarkDirtyFlag) { // rough sketch of strict dirty (&&) iteration
+                            auto word_count = *data_sizes[ArchIx] / 64 + (*data_sizes[ArchIx] % 64 != 0 ? 1 : 0);
+                            std::array<uint64_t, sizeof...(Subset)> update_masks;
+                            for (std::size_t w = 0; w < word_count; w++) {
+                                std::array<uint64_t**, sizeof...(Subset)> words = dirty_indexes[ArchIx];
+                                std::memset(update_masks.data(), 0, update_masks.size() * sizeof(uint64_t));
+
+                                // Do the iteration, index removal
+
+                                ((dirty_indexes[ArchIx][w] &= update_masks[SubSeq]), ...);
+                            }
+                        } else if constexpr (OnlyDirtyFlag) {
+                            auto word_count = *data_sizes[ArchIx] / 64 + (*data_sizes[ArchIx] % 64 != 0 ? 1 : 0);
+                            std::array<uint64_t**, sizeof...(Subset)>& dirty_ixs = dirty_indexes[ArchIx];
+                            for (std::size_t w = 0; w < word_count; w++) {
+                                uint64_t mask_union = 0ULL;
+                                for (std::size_t i = 0; i < sizeof...(Subset); i++) {
+                                    if constexpr (StrictOnlyDirtyFlag) mask_union &= (*dirty_ixs[i])[w];
+                                    else mask_union |= (*dirty_ixs[i])[w];
+
+                                    // if constexpr (!MarkDirtyFlag) (*dirty_ixs[i])[w] = 0ULL;
+                                }
+
+                                if constexpr (!MarkDirtyFlag) {
+                                    
+                                }
+
+                                while (true) {
+                                    std::size_t ix = static_cast<std::size_t>(std::countr_zero(mask_union));
+                                    if (ix == 64) break;
+
+                                    f_complete(ix + w * 64);
+
+                                    if (ix == 63) break;
+                                    mask_union &= (~0ULL << (ix + 1));
+                                }
+                            }
+                        } else {
+                            for (std::size_t i = 0; i < *data_sizes[ArchIx]; i++) {
+                                f_complete(i);
+                            }
+                        }
+
+                        if constexpr (MarkDirtyFlag && !OnlyDirtyFlag) {
+                            dirty_end_ranges.emplace_back(*data_sizes[ArchIx]);
+                        }
+
+                        return false;
                     });
 
                     for (std::size_t a = 0; a < runtime_archetypes.size(); a++) {
                         for (std::size_t i = 0; i < *data_sizes[archetypes.size() + a]; i++) {
+                            // TODO: add safe insert
                             if constexpr ((opts & WithIDs) != 0) {
                                 f(std::as_const((*data_backlinks[archetypes.size() + a])[i]),
                                   (reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
@@ -1273,20 +1425,27 @@ namespace ecs {
                                     *data[SubSeq][archetypes.size() + a])[i])...);
                             }
                         }
+                        if constexpr (MarkDirtyFlag && !OnlyDirtyFlag)
+                            dirty_end_ranges.emplace_back(*data_sizes[archetypes.size() + a]);
                     }
                 });
 
-                if ((opts & MarkDirty) != 0) {
-                    // TODO: finish this
-                    __::for_each_index(std::make_index_sequence<archetypes.size()>{}, [&](auto ArchI) {
-                        constexpr auto ArchIx = ArchI.value;
+                if (MarkDirtyFlag && !OnlyDirtyFlag) {
+                    __::for_each_index(std::make_index_sequence<archetypes.size()>{}, [&](auto I) {
+                        constexpr auto Ix = I.value;
+                        constexpr auto ArchIx = archetypes[Ix];
                         using Arch = index<ArchIx>::T;
 
-                        std::size_t range = *data_sizes[ArchIx];
+                        std::size_t range_end = dirty_end_ranges[Ix];
                         auto* arch = reinterpret_cast<Arch*>(archetype_pointers[ArchIx]);
+                        [&]<typename... Ts>(type_set<Ts...>) {
+                            arch->template mark_dirty<Ts...>(0, range_end);
+                        }(dirty_components{});
 
                         return false;
                     });
+
+                    // TODO: runtiem component dirty marking
                 }
             }
         };
