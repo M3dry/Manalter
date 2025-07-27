@@ -73,8 +73,12 @@ namespace ecs {
             }
         };
 
+        template <typename T> struct Bitset {
+            uint64_t n;
+        };
+
         multi_vector<Components..., Backlink> components;
-        std::array<std::vector<uint64_t>, sizeof...(Components)> dirty;
+        multi_vector<Bitset<Components>...> dirty;
 
         Archetype() {};
 
@@ -90,11 +94,27 @@ namespace ecs {
             return mv;
         };
 
-        void mark_dirty(std::size_t row, bool state = true) {}
+        template <typename... Subset> void mark_dirty(std::size_t row, bool state = true) {
+            auto bitsets = dirty.template get<Bitset<Subset>...>(row / 64);
+            auto bit = row % 64;
 
-        void mark_dirty(std::size_t start, std::size_t end, bool state = true) {}
+            uint64_t mask = 1ULL << bit;
+            ((std::get<Bitset<Subset>>(bitsets) =
+                  (std::get<Bitset<Subset>>(bitsets) & ~mask) | (-static_cast<uint64_t>(state) & mask),
+              0),
+             ...);
+        }
 
-        bool get_dirty(std::size_t row) {}
+        template <typename... Subset> void mark_dirty(std::size_t start, std::size_t end, bool state = true) {
+
+        }
+
+        template <typename... Subset> bool get_dirty(std::size_t row) {
+            auto bitsets = dirty.template get<Bitset<Subset>...>(row / 64);
+            auto bit = row % 64;
+
+            return (((std::get<Bitset<Subset>>(bitsets) >> bit) & 1) && ...);
+        }
 
         template <typename... Ts> decltype(auto) get(std::size_t row) {
             if constexpr (sizeof...(Ts) == 0) {
@@ -128,7 +148,7 @@ namespace ecs {
                 return false;
             });
 
-            mark_dirty(row);
+            mark_dirty<Components...>(row);
         }
 
         template <typename... Packs>
@@ -137,7 +157,7 @@ namespace ecs {
 
             link[entity].row = components.size() - 1;
 
-            mark_dirty(link[entity].row);
+            mark_dirty<Components...>(link[entity].row);
         };
 
         void new_entity(std::vector<ArchetypeLink>& link, Entity entity, void* args[], std::size_t nargs) {
@@ -147,7 +167,7 @@ namespace ecs {
             link[entity].row = components.size() - 1;
             std::get<Backlink*>(t)->entity = entity;
 
-            mark_dirty(link[entity].row);
+            mark_dirty<Components...>(link[entity].row);
         }
 
         std::tuple<Components*...> unsafe_push_entity(std::vector<ArchetypeLink>& link, Entity entity) {
@@ -1063,9 +1083,8 @@ namespace ecs {
                 if (!typeset::subset({sub, sizeof...(Subset)}, ts)) return;
 
                 auto row = arch.get_row(entities[ent].row, sub_ts);
-                __::with_index_sequence(std::index_sequence_for<Subset...>{}, [&](auto... Is) {
-                    ret.emplace(*reinterpret_cast<Subset*>(row[Is])...);
-                });
+                __::with_index_sequence(std::index_sequence_for<Subset...>{},
+                                        [&](auto... Is) { ret.emplace(*reinterpret_cast<Subset*>(row[Is])...); });
             }(std::in_place_type_t<typename query::template subset<type_set>>{});
 
             return ret;
