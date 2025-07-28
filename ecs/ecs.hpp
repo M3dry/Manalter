@@ -559,7 +559,8 @@ namespace ecs {
         MarkDirty = 1 << 1,
         OnlyDirty = 1 << 2,
         StrictOnlyDirty = 1 << 3,
-        SafeInsert = 1 << 4,
+        KeepDirty = 1 << 4,
+        SafeInsert = 1 << 5,
     };
 
     constexpr SystemRunnerOpts operator|(SystemRunnerOpts a, SystemRunnerOpts b) {
@@ -1238,16 +1239,16 @@ namespace ecs {
                 return dirty;
             }
 
+            template <auto dirty>
             static consteval decltype(auto) get_dirty() {
-                constexpr auto dirty = get_dirty_impl2();
-
                 return __::with_index_sequence(std::make_index_sequence<dirty.size()>{}, [&](auto... Is) {
                     return type_set<typeset::nth_t<dirty[Is], Subset...>...>{};
                 });
             }
 
-            // these components will get marked as "dirty" in the runner with flag MarkDirty
-            using dirty_components = decltype(get_dirty());
+            // these components will get marked as "dirty" in the runner on flag MarkDirty
+            static constexpr auto dirty_components_ix = get_dirty_impl2();
+            using dirty_components = decltype(get_dirty<dirty_components_ix>());
 
             static constexpr auto archetypes = in_archetypes<std::remove_const_t<Subset>...>::template value<Arches...>;
             std::array<void*, archetypes.size()> archetype_pointers;
@@ -1330,6 +1331,7 @@ namespace ecs {
                 constexpr auto StrictOnlyDirtyFlag = (opts & StrictOnlyDirty) != 0;
                 constexpr auto OnlyDirtyFlag = ((opts & OnlyDirty) != 0) || StrictOnlyDirtyFlag;
                 constexpr auto MarkDirtyFlag = (opts & MarkDirty) != 0;
+                constexpr auto KeepDirtyFlag = (opts & KeepDirty) != 0;
 
                 std::vector<std::size_t> dirty_end_ranges;
                 if constexpr (MarkDirtyFlag && !OnlyDirtyFlag) dirty_end_ranges.reserve(data_sizes.size());
@@ -1362,19 +1364,7 @@ namespace ecs {
                             }
                         };
 
-                        if constexpr (false && OnlyDirtyFlag &&
-                                      !MarkDirtyFlag) { // rough sketch of strict dirty (&&) iteration
-                            auto word_count = *data_sizes[ArchIx] / 64 + (*data_sizes[ArchIx] % 64 != 0 ? 1 : 0);
-                            std::array<uint64_t, sizeof...(Subset)> update_masks;
-                            for (std::size_t w = 0; w < word_count; w++) {
-                                std::array<uint64_t**, sizeof...(Subset)> words = dirty_indexes[ArchIx];
-                                std::memset(update_masks.data(), 0, update_masks.size() * sizeof(uint64_t));
-
-                                // Do the iteration, index removal
-
-                                ((dirty_indexes[ArchIx][w] &= update_masks[SubSeq]), ...);
-                            }
-                        } else if constexpr (OnlyDirtyFlag) {
+                        if constexpr (OnlyDirtyFlag) {
                             auto word_count = *data_sizes[ArchIx] / 64 + (*data_sizes[ArchIx] % 64 != 0 ? 1 : 0);
                             std::array<uint64_t**, sizeof...(Subset)>& dirty_ixs = dirty_indexes[ArchIx];
                             for (std::size_t w = 0; w < word_count; w++) {
@@ -1383,21 +1373,30 @@ namespace ecs {
                                     if constexpr (StrictOnlyDirtyFlag) mask_union &= (*dirty_ixs[i])[w];
                                     else mask_union |= (*dirty_ixs[i])[w];
 
-                                    // if constexpr (!MarkDirtyFlag) (*dirty_ixs[i])[w] = 0ULL;
+                                    if constexpr (!KeepDirtyFlag && !StrictOnlyDirtyFlag) (*dirty_ixs[i])[w] = 0ULL;
                                 }
 
-                                if constexpr (!MarkDirtyFlag) {
-                                    
-                                }
-
+                                uint64_t index_mask = ~0ULL;
                                 while (true) {
                                     std::size_t ix = static_cast<std::size_t>(std::countr_zero(mask_union));
                                     if (ix == 64) break;
 
                                     f_complete(ix + w * 64);
 
+                                    index_mask &= ~0ULL ^ (1ULL << ix);
+
                                     if (ix == 63) break;
                                     mask_union &= (~0ULL << (ix + 1));
+                                }
+
+                                if constexpr (!KeepDirtyFlag && StrictOnlyDirtyFlag) {
+                                    for (std::size_t i = 0; i < sizeof...(Subset); i++) {
+                                        (*dirty_ixs[i])[w] &= index_mask;
+                                    }
+                                } else if constexpr (MarkDirtyFlag) {
+                                    for (std::size_t i = 0; i < dirty_components_ix.size(); i++) {
+                                        (*dirty_ixs[dirty_components_ix[i]])[w] |= ~index_mask;
+                                    }
                                 }
                             }
                         } else {
