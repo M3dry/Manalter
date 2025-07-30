@@ -24,9 +24,9 @@ set(COMMON_LINK_OPTIONS
 add_subdirectory(glad)
 add_subdirectory(src)
 add_subdirectory(particle)
-add_subdirectory(mote)
 add_subdirectory(julip)
 add_subdirectory(ecs)
+add_subdirectory(render_test)
 
 option(TEST "" OFF)
 

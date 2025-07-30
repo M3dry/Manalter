@@ -51,15 +51,34 @@
         devShell = pkgs.mkShell {
           nativeBuildInputs = with pkgs;
             [
-              cmake
-              pkg-config
               glfw
               libGLU
-              gdb
               catch2_3
-              julia
+
+              pkg-config
+              cmake
+              gdb
               renderdoc
               valgrind
+              shaderc
+
+              sdl3
+              ((imgui.override {
+                IMGUI_BUILD_SDL3_BINDING = true;
+                IMGUI_BUILD_SDLGPU3_BINDING = true;
+              }).overrideAttrs (oldAttrs: {
+                version = "1.91.8";
+                src = fetchFromGitHub {
+                  owner = "ocornut";
+                  repo = "imgui";
+                  tag = "v1.91.8";
+                  hash = "sha256-+BuSAXvLvOYOmENzxd1pGDE6llWhTGVu7C3RnoVLVzg=";
+                };
+              }))
+              glm
+              assimp
+
+              julia
 
               xorg.libX11
               xorg.libXi
@@ -71,7 +90,6 @@
           shellHook = ''
             export CC=clang
             export CXX=clang++
-            export JULIA="${pkgs.julia}"
           '';
         };
       }
