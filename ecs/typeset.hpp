@@ -6,6 +6,25 @@
 #include <typeindex>
 #include <utility>
 
+template <typename T> struct Named;
+
+template <typename T>
+concept IsNameTag = requires() { typename Named<T>::type; };
+
+template <typename T> struct get_type {
+    using type = T;
+};
+template <typename Tag> struct get_type<Named<Tag>> {
+    using type = Named<Tag>::type;
+};
+template <IsNameTag Tag> struct get_type<Tag> {
+    using type = Named<Tag>::type;
+};
+
+template <typename T> using get_type_t = get_type<T>::type;
+
+#define TAG_BY_NAME(T, tag_name) struct tag_name{}; template <> struct Named<tag_name> {using type = T;}
+
 template <typename... Ts> struct type_set {};
 namespace typeset {
     template <typename... Ts> struct pack {
@@ -210,10 +229,11 @@ namespace typeset {
     template <std::size_t N, typename S> using set_nth_t = set_nth<N, S>::type;
 
     template <typename... Ts> struct ref_tuple {
-        using type = std::tuple<Ts&...>;
+        using type = std::tuple<get_type_t<Ts>&...>;
     };
 
     template <typename... Ts> using ref_tuple_t = ref_tuple<Ts...>::type;
+
 
     template <typename V, typename... Ts> struct value_wrapper {
         static constexpr auto value = V::template value<Ts...>;

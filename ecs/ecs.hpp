@@ -173,11 +173,11 @@ namespace ecs {
 
         template <typename... Ts> decltype(auto) get(std::size_t row) {
             if constexpr (sizeof...(Ts) == 0) {
-                return std::tuple<Components&...>(components.template get<Components...>(row));
+                return components.template get<Components...>(row);
             } else if constexpr (sizeof...(Ts) == 1) {
-                return std::tuple<Ts&...>(components.template get<Ts...>(row));
+                return components.template get<Ts...>(row);
             } else {
-                return std::tuple<Ts&...>(components.template get<Ts...>(row));
+                return components.template get<Ts...>(row);
             }
         }
 
@@ -191,7 +191,7 @@ namespace ecs {
 
             __::for_each_index(std::index_sequence_for<Components...>{}, [&](auto I) {
                 constexpr auto Ix = I.value;
-                using T = typeset::nth_t<Ix, Components...>;
+                using T = get_type_t<typeset::nth_t<Ix, Components...>>;
 
                 if constexpr (std::is_move_constructible_v<T>) {
                     std::construct_at(reinterpret_cast<T*>(std::get<Ix>(t)),
@@ -227,17 +227,17 @@ namespace ecs {
             mark_dirty(link[entity].row);
         }
 
-        std::tuple<Components*...> unsafe_push_entity(std::vector<ArchetypeLink>& link, Entity entity) {
+        std::tuple<get_type_t<Components>*...> unsafe_push_entity(std::vector<ArchetypeLink>& link, Entity entity) {
             auto t = components.unsafe_push();
 
             link[entity].row = components.size() - 1;
             std::get<Backlink*>(t)->entity = entity;
 
             if (components.size() > dirty.size() * 64) dirty.emplace_back((typeset::void_f<Components>::f(), 0ULL)...);
-            return std::make_tuple(std::get<Components*>(t)...);
+            return std::make_tuple(std::get<get_type_t<Components>*>(t)...);
         }
 
-        std::tuple<Components*...> get_row(std::size_t row) {
+        std::tuple<get_type_t<Components>*...> get_row(std::size_t row) {
             return components.template get_ptr<Components...>(row);
         }
 
@@ -683,9 +683,10 @@ namespace ecs {
 
                 __::for_each_index(std::index_sequence_for<SrcComps...>{}, [&](auto I) {
                     constexpr auto Ix = I.value;
-                    using SrcT = typeset::nth_t<Ix, SrcComps...>;
+                    using SrcTag = typeset::nth_t<Ix, SrcComps...>;
+                    using SrcT = get_type_t<SrcTag>;
                     constexpr auto DestIx =
-                        typeset::find_first_v<typeset::is_same_to<SrcT>::template apply, TargetComps...>;
+                        typeset::find_first_v<typeset::is_same_to<SrcTag>::template apply, TargetComps...>;
 
                     if constexpr (std::is_move_constructible_v<SrcT>) {
                         std::construct_at(std::get<DestIx>(dest),
@@ -701,9 +702,10 @@ namespace ecs {
 
                 __::for_each_index(std::index_sequence_for<Extra...>{}, [&](auto I) {
                     constexpr auto Ix = I.value;
-                    using T = typeset::nth_t<Ix, Extra...>;
+                    using TTag = typeset::nth_t<Ix, Extra...>;
+                    using T = get_type_t<TTag>;
                     constexpr auto DestIx =
-                        typeset::find_first_v<typeset::is_same_to<T>::template apply, TargetComps...>;
+                        typeset::find_first_v<typeset::is_same_to<TTag>::template apply, TargetComps...>;
 
                     if constexpr (typeset::is_pack_v<typeset::nth_t<Ix, Packs...>> &&
                                   !std::is_same_v<T, typeset::nth_t<Ix, Packs...>>) {
@@ -1239,8 +1241,7 @@ namespace ecs {
                 return dirty;
             }
 
-            template <auto dirty>
-            static consteval decltype(auto) get_dirty() {
+            template <auto dirty> static consteval decltype(auto) get_dirty() {
                 return __::with_index_sequence(std::make_index_sequence<dirty.size()>{}, [&](auto... Is) {
                     return type_set<typeset::nth_t<dirty[Is], Subset...>...>{};
                 });
@@ -1277,13 +1278,13 @@ namespace ecs {
 
             void setup_runtime_archetypes(
                 std::vector<runtime::Archetype>& runtime_arches,
-                std::unordered_map<std::type_index, std::vector<std::size_t>>& runtime_arches_table) {
+                const std::unordered_map<std::type_index, std::vector<std::size_t>>& runtime_arches_table) {
                 std::array<std::type_index, sizeof...(Subset)> needed = {typeid(Subset)...};
 
-                std::vector<std::size_t> possible = runtime_arches_table[needed[0]];
+                std::vector<std::size_t> possible = runtime_arches_table.at(needed[0]);
 
                 for (std::size_t i = 1; i < needed.size(); i++) {
-                    auto opts = runtime_arches_table[needed[i]];
+                    const auto& opts = runtime_arches_table.at(needed[i]);
 
                     std::erase_if(possible, [&](std::size_t id) -> bool {
                         for (const auto& opt : opts) {
@@ -1311,8 +1312,8 @@ namespace ecs {
             }
 
             System(const std::array<void*, sizeof...(Archetypes)>& arches,
-                   std::vector<runtime::Archetype>& runtime_arches,
-                   std::unordered_map<std::type_index, std::vector<std::size_t>>& runtime_arches_table) {
+                   const std::vector<runtime::Archetype>& runtime_arches,
+                   const std::unordered_map<std::type_index, std::vector<std::size_t>>& runtime_arches_table) {
                 dirty_indexes.reserve(sizeof...(Subset));
                 data_sizes.reserve(archetypes.size());
                 data_backlinks.reserve(archetypes.size());
@@ -1321,7 +1322,10 @@ namespace ecs {
                     ((data[Is].reserve(archetypes.size()), setup_archetype<Is>(arches)), ...);
                 });
 
-                setup_runtime_archetypes(runtime_arches, runtime_arches_table);
+                if (runtime_arches_table.size() != 0) {
+                    setup_runtime_archetypes(const_cast<std::vector<runtime::Archetype>&>(runtime_arches),
+                                             runtime_arches_table);
+                }
             }
 
           public:
@@ -1336,23 +1340,25 @@ namespace ecs {
                 std::vector<std::size_t> dirty_end_ranges;
                 if constexpr (MarkDirtyFlag && !OnlyDirtyFlag) dirty_end_ranges.reserve(data_sizes.size());
 
-                __::with_index_sequence(std::make_index_sequence<sizeof...(Subset)>{}, [&](auto... SubSeq) {
+                __::with_index_sequence(std::index_sequence_for<Subset...>{}, [&](auto... SubSeq) {
                     __::for_each_index(std::make_index_sequence<archetypes.size()>{}, [&](auto ArchI) {
                         constexpr auto ArchIx = ArchI.value;
                         auto f_extra = [&]<typename... Extra>(std::size_t i, Extra&&... extra) {
                             if constexpr ((opts & SafeInsert) != 0) {
-                                std::tuple<std::remove_reference_t<Subset>...> copy{
-                                    reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
-                                        *data[SubSeq][ArchIx])[i]...};
+                                std::tuple<std::remove_reference_t<Subset>...> copy{reinterpret_cast<
+                                    get_type_t<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>>*>(
+                                    *data[SubSeq][ArchIx])[i]...};
 
                                 f(std::forward<Extra>(extra)..., std::get<SubSeq>(copy)...);
 
-                                ((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                ((reinterpret_cast<
+                                      get_type_t<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>>*>(
                                       *data[SubSeq][ArchIx])[i] = std::get<SubSeq>(copy)),
                                  ...);
                             } else {
                                 f(std::forward<Extra>(extra)...,
-                                  (reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                  (reinterpret_cast<
+                                      get_type_t<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>>*>(
                                       *data[SubSeq][ArchIx])[i])...);
                             }
                         };
@@ -1417,10 +1423,12 @@ namespace ecs {
                             // TODO: add safe insert
                             if constexpr ((opts & WithIDs) != 0) {
                                 f(std::as_const((*data_backlinks[archetypes.size() + a])[i]),
-                                  (reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                  (reinterpret_cast<
+                                      get_type_t<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>>*>(
                                       *data[SubSeq][archetypes.size() + a])[i])...);
                             } else {
-                                f((reinterpret_cast<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>*>(
+                                f((reinterpret_cast<
+                                    get_type_t<typeset::nth_t<SubSeq, std::remove_reference_t<Subset>...>>*>(
                                     *data[SubSeq][archetypes.size() + a])[i])...);
                             }
                         }

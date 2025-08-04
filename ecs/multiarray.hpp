@@ -13,22 +13,22 @@
 #include "typeset.hpp"
 
 template <typeset::unique_v... Ts>
-    requires((std::move_constructible<Ts> || std::copy_constructible<Ts>) && ...)
+    requires((std::move_constructible<get_type_t<Ts>> || std::copy_constructible<get_type_t<Ts>>) && ...)
 class multi_vector {
   public:
     multi_vector(std::size_t capacity = 5) : _capacity(std::max<std::size_t>(capacity, 1)), _size(0) {
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            ((vectors[Is] = ::operator new(capacity * sizeof(typeset::nth_t<Is, Ts...>))), ...);
+            ((vectors[Is] = ::operator new(capacity * sizeof(get_type_t<typeset::nth_t<Is, Ts...>>))), ...);
         }(std::index_sequence_for<Ts...>{});
     }
 
     multi_vector(const multi_vector& mv)
-        requires(std::is_copy_constructible_v<Ts> && ...)
+        requires(std::is_copy_constructible_v<get_type_t<Ts>> && ...)
         : _capacity(mv._capacity), _size(mv._size) {
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
             (
                 [&](std::size_t _) {
-                    using T = typeset::nth_t<Is, Ts...>;
+                    using T = get_type_t<typeset::nth_t<Is, Ts...>>;
 
                     vectors[Is] = ::operator new(_capacity * sizeof(T));
 
@@ -57,7 +57,7 @@ class multi_vector {
                     if (vectors[I] == nullptr) return;
 
                     for (std::size_t i = 0; i < _size; i++) {
-                        std::destroy_at(&reinterpret_cast<typeset::nth_t<Is, Ts...>*>(vectors[Is])[i]);
+                        std::destroy_at(&reinterpret_cast<get_type_t<typeset::nth_t<Is, Ts...>>*>(vectors[Is])[i]);
                     }
 
                     ::operator delete(vectors[Is]);
@@ -78,7 +78,7 @@ class multi_vector {
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
             (
                 [&](std::size_t _) {
-                    using T = typeset::nth_t<Is, Ts...>;
+                    using T = get_type_t<typeset::nth_t<Is, Ts...>>;
                     std::swap(reinterpret_cast<T*>(vectors[Is])[a], reinterpret_cast<T*>(vectors[Is])[b]);
                 }(Is),
                 ...);
@@ -105,11 +105,11 @@ class multi_vector {
             typeset::find_first_v<typeset::is_same_to<Subset>::template apply, Ts...>...};
 
         if constexpr (!AlwaysTuple && sizeof...(Subset) == 1) {
-            using T = typeset::nth_t<indexes[0], Ts...>;
+            using T = get_type_t<typeset::nth_t<indexes[0], Ts...>>;
             return reinterpret_cast<T*>(vectors[indexes[0]])[i];
         } else {
             return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<Subset&...> {
-                return {reinterpret_cast<typeset::nth_t<indexes[Is], Ts...>*>(vectors[indexes[Is]])[i]...};
+                return {reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>*>(vectors[indexes[Is]])[i]...};
             }(std::make_index_sequence<indexes.size()>());
         }
     }
@@ -121,32 +121,32 @@ class multi_vector {
             typeset::find_first_v<typeset::is_same_to<Subset>::template apply, Ts...>...};
 
         if constexpr (!AlwaysTuple && sizeof...(Subset) == 1) {
-            return std::span(reinterpret_cast<typeset::nth_t<0, Subset...>*>(vectors[indexes[0]]), _size);
+            return std::span(reinterpret_cast<get_type_t<typeset::nth_t<0, Subset...>>*>(vectors[indexes[0]]), _size);
         } else {
             return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<std::span<Subset>...> {
                 return {
-                    std::span(reinterpret_cast<typeset::nth_t<indexes[Is], Ts...>*>(vectors[indexes[Is]]), _size)...};
+                    std::span(reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>*>(vectors[indexes[Is]]), _size)...};
             }(std::make_index_sequence<indexes.size()>());
         }
     }
 
     template <typename T>
         requires typeset::in_set_v<T, Ts...>
-    T* get_ptr(std::size_t i) {
+    get_type_t<T>* get_ptr(std::size_t i) {
         constexpr std::size_t ix = typeset::find_first_v<typeset::is_same_to<T>::template apply, Ts...>;
 
-        return reinterpret_cast<T*>(&reinterpret_cast<T*>(vectors[ix])[i]);
+        return reinterpret_cast<get_type_t<T>*>(&reinterpret_cast<get_type_t<T>*>(vectors[ix])[i]);
     }
 
     template <typeset::unique_v... Subset>
         requires(sizeof...(Subset) > 1 && typeset::is_subset_v<type_set<Subset...>, type_set<Ts...>>)
-    std::tuple<Subset*...> get_ptr(std::size_t i) {
+    std::tuple<get_type_t<Subset>*...> get_ptr(std::size_t i) {
         constexpr std::array<std::size_t, sizeof...(Subset)> indexes = {
             typeset::find_first_v<typeset::is_same_to<Subset>::template apply, Ts...>...};
 
         return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<Subset*...> {
-            return {reinterpret_cast<typeset::nth_t<indexes[Is], Ts...>*>(
-                &reinterpret_cast<typeset::nth_t<indexes[Is], Ts...>*>(vectors[indexes[Is]])[i])...};
+            return {reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>*>(
+                &reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>*>(vectors[indexes[Is]])[i])...};
         }(std::make_index_sequence<indexes.size()>());
     }
 
@@ -157,11 +157,11 @@ class multi_vector {
             typeset::find_first_v<typeset::is_same_to<Subset>::template apply, Ts...>...};
 
         if constexpr (!AlwaysTuple && sizeof...(Subset) == 1) {
-            using T = typeset::nth_t<indexes[0], Ts...>;
+            using T = get_type_t<typeset::nth_t<indexes[0], Ts...>>;
             return reinterpret_cast<T**>(&vectors[indexes[0]]);
         } else {
             return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<Subset**...> {
-                return {reinterpret_cast<typeset::nth_t<indexes[Is], Ts...>**>(&vectors[indexes[Is]])...};
+                return {reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>**>(&vectors[indexes[Is]])...};
             }(std::make_index_sequence<indexes.size()>{});
         }
     }
@@ -195,25 +195,25 @@ class multi_vector {
 
     template <typename T>
         requires typeset::in_set_v<T, Ts...>
-    T& front() {
+    get_type_t<T>& front() {
         return get<T>(0);
     };
 
     template <typeset::unique_v... Subset>
         requires(sizeof...(Subset) > 1 && typeset::is_subset_v<type_set<Subset...>, type_set<Ts...>>)
-    std::tuple<Subset&...> front() {
+    std::tuple<get_type_t<Subset>&...> front() {
         return get<Subset...>(0);
     }
 
     template <typename T>
         requires typeset::in_set_v<T, Ts...>
-    T& back() {
+    get_type_t<T>& back() {
         return get<T>(_size - 1);
     };
 
     template <typeset::unique_v... Subset>
         requires(sizeof...(Subset) > 1 && typeset::is_subset_v<type_set<Subset...>, type_set<Ts...>>)
-    std::tuple<Subset&...> back() {
+    std::tuple<get_type_t<Subset>&...> back() {
         return get<Subset...>(_size - 1);
     }
 
@@ -224,7 +224,7 @@ class multi_vector {
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
                 (
                     [&](std::size_t _) {
-                        using T = typeset::nth_t<Is, Ts...>;
+                        using T = get_type_t<typeset::nth_t<Is, Ts...>>;
                         std::construct_at(&reinterpret_cast<T*>(vectors[Is])[_size - 1],
                                           reinterpret_cast<T*>(mv.vectors[Is])[i]);
                     }(Is),
@@ -241,7 +241,7 @@ class multi_vector {
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
             (
                 [&](std::size_t _) {
-                    using T = typeset::nth_t<Is, Ts...>;
+                    using T = get_type_t<typeset::nth_t<Is, Ts...>>;
 
                     if constexpr (typeset::is_pack_v<typeset::nth_t<Is, Packs...>> &&
                                   !std::is_same_v<T, typeset::nth_t<Is, Packs...>>) {
@@ -259,7 +259,7 @@ class multi_vector {
         _size++;
     }
 
-    std::tuple<Ts*...> unsafe_push() {
+    std::tuple<get_type_t<Ts>*...> unsafe_push() {
         if (!can_insert()) resize(_capacity * 2);
 
         _size++;
@@ -273,7 +273,7 @@ class multi_vector {
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
             (
                 [&](std::size_t _) {
-                    using T = typeset::nth_t<Is, Ts...>;
+                    using T = get_type_t<typeset::nth_t<Is, Ts...>>;
 
                     std::destroy_at(&reinterpret_cast<T*>(vectors[Is])[i]);
 
@@ -296,7 +296,7 @@ class multi_vector {
 
         _size--;
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            (std::destroy_at(&reinterpret_cast<typeset::nth_t<Is, Ts...>*>(vectors[Is])[_size]), ...);
+            (std::destroy_at(&reinterpret_cast<get_type_t<typeset::nth_t<Is, Ts...>>*>(vectors[Is])[_size]), ...);
         }(std::index_sequence_for<Ts...>{});
     }
 
@@ -314,7 +314,7 @@ class multi_vector {
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
             (
                 [&](std::size_t _) {
-                    using T = typeset::nth_t<Is, Ts...>;
+                    using T = get_type_t<typeset::nth_t<Is, Ts...>>;
 
                     tmp_vec = ::operator new(new_capacity * sizeof(T));
                     for (std::size_t i = 0; i < _size; i++) {
