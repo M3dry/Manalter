@@ -23,7 +23,19 @@ template <IsNameTag Tag> struct get_type<Tag> {
 
 template <typename T> using get_type_t = get_type<T>::type;
 
-#define TAG_BY_NAME(T, tag_name) struct tag_name{}; template <> struct Named<tag_name> {using type = T;}
+#define TAG_BY_NAME(T, tag_name)                                                                                       \
+    struct tag_name {};                                                                                                \
+    template <> struct Named<tag_name> {                                                                               \
+        using type = T;                                                                                                \
+    }
+
+template <typename... Ts> auto tupler_ptrs_to_refs(const std::tuple<Ts*...>& ptr_tuple) {
+    return std::apply(
+        [](Ts* const&... ptrs) {
+            return std::tuple<Ts&...>{(*ptrs)...};
+        },
+        ptr_tuple);
+}
 
 template <typename... Ts> struct type_set {};
 namespace typeset {
@@ -233,7 +245,6 @@ namespace typeset {
     };
 
     template <typename... Ts> using ref_tuple_t = ref_tuple<Ts...>::type;
-
 
     template <typename V, typename... Ts> struct value_wrapper {
         static constexpr auto value = V::template value<Ts...>;

@@ -14,8 +14,8 @@ int main() {
     auto ent3 = ecs.static_emplace_entity<ecs::Archetype<int, char>>(300, 'c');
     auto ent4 = ecs.static_emplace_entity<ecs::Archetype<int, char>>(400, 'h');
 
-    ecs.make_static_system<funny_int>().run([](int& i) {
-        std::println("{}", i);
+    ecs.make_system_query<ecs::All>().run<ecs::WithIDs>([](ecs::Entity id) {
+        std::println("hello: {}", id);
     });
 
     return 0;

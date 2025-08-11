@@ -1,22 +1,26 @@
 #include "SDL3/SDL_error.h"
 #include "SDL3/SDL_events.h"
 #include "SDL3/SDL_gpu.h"
+#include "SDL3/SDL_mouse.h"
 #include "SDL3/SDL_timer.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlgpu3.h"
 #include <SDL3/SDL.h>
+#include <SDL3_image/SDL_image.h>
 
 #include <glm/gtc/type_ptr.hpp>
 
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <glm/matrix.hpp>
 #include <imgui.h>
 #include <print>
 #include <string>
 
 #include "camera.hpp"
 #include "input.hpp"
+#include "mesh.hpp"
 
 void abort(const std::string& msg) {
     std::println("FATAL ERROR: {}", msg);
@@ -60,15 +64,21 @@ struct UniformBuffer {
     glm::mat4 mvp;
 };
 
+struct CubeUniformBuffer {
+    glm::mat4 mvp;
+    glm::vec4 color;
+};
+
 struct Vertex {
     float x, y, z;
     float r, g, b, a;
+    float u, v;
 };
 
 static Vertex vertices[]{
-    {3.0f, 0.0f, 3.0f, 1.0f, 0.0f, 0.0f, 1.0f},  // top vertex
-    {-3.0f, 0.0f, 3.0f, 1.0f, 1.0f, 0.0f, 1.0f}, // bottom left vertex
-    {0.0f, 0.0f, -3.0f, 1.0f, 0.0f, 1.0f, 1.0f}  // bottom right vertex
+    {3.0f, 0.0f, 3.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f},  // tip
+    {-3.0f, 0.0f, 3.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f}, // right (if tip is bottom)
+    {0.0f, 0.0f, -3.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.5f, 1.0f}  // left (if tip is bottom)
 };
 
 int main(int, char**) {
@@ -96,17 +106,11 @@ int main(int, char**) {
     }
     SDL_SetGPUSwapchainParameters(gpu_device, window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_IMMEDIATE);
 
-    // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     ImGui::StyleColorsDark();
-
-    // Setup scaling
-    // ImGuiStyle& style = ImGui::GetStyle();
-    // style.ScaleAllSizes(main_scale);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
-    // style.FontScaleDpi = main_scale;        // Set initial font scale. (using io.ConfigDpiScaleFonts=true makes this unnecessary. We leave both here for documentation purpose)
 
     ImGui_ImplSDL3_InitForSDLGPU(window);
     ImGui_ImplSDLGPU3_InitInfo init_info = {};
@@ -116,46 +120,7 @@ int main(int, char**) {
     ImGui_ImplSDLGPU3_Init(&init_info);
 
     auto* ver_shader = load_shader_from_file(gpu_device, "./vertex.spv", SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 0, 1);
-    auto* frag_shader = load_shader_from_file(gpu_device, "fragment.spv", SDL_GPU_SHADERSTAGE_FRAGMENT, 0, 0, 0, 0);
-
-    SDL_GPUBufferCreateInfo buffer_info{
-        .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-        .size = sizeof(vertices),
-        .props = 0,
-    };
-    SDL_GPUBuffer* vertex_buffer = SDL_CreateGPUBuffer(gpu_device, &buffer_info);
-
-    {
-        SDL_GPUTransferBufferCreateInfo transfer_info{
-            .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-            .size = sizeof(vertices),
-            .props = 0,
-        };
-        SDL_GPUTransferBuffer* transfer_buffer = SDL_CreateGPUTransferBuffer(gpu_device, &transfer_info);
-        Vertex* data = (Vertex*)SDL_MapGPUTransferBuffer(gpu_device, transfer_buffer, false);
-        std::memcpy(data, vertices, sizeof(vertices));
-        SDL_UnmapGPUTransferBuffer(gpu_device, transfer_buffer);
-
-        SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(gpu_device);
-        SDL_GPUCopyPass* copy_pass = SDL_BeginGPUCopyPass(command_buffer);
-
-        SDL_GPUTransferBufferLocation location{
-            .transfer_buffer = transfer_buffer,
-            .offset = 0,
-        };
-
-        SDL_GPUBufferRegion region{
-            .buffer = vertex_buffer,
-            .offset = 0,
-            .size = sizeof(vertices),
-        };
-        SDL_UploadToGPUBuffer(copy_pass, &location, &region, true);
-
-        SDL_EndGPUCopyPass(copy_pass);
-        SDL_SubmitGPUCommandBuffer(command_buffer);
-
-        SDL_ReleaseGPUTransferBuffer(gpu_device, transfer_buffer);
-    }
+    auto* frag_shader = load_shader_from_file(gpu_device, "./fragment.spv", SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0, 0, 0);
 
     SDL_GPUVertexBufferDescription vertex_buffer_desc{
         .slot = 0,
@@ -163,7 +128,7 @@ int main(int, char**) {
         .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
         .instance_step_rate = 0,
     };
-    SDL_GPUVertexAttribute vertex_atrib[2]{{
+    SDL_GPUVertexAttribute vertex_atrib[3]{{
                                                .location = 0,
                                                .buffer_slot = 0,
                                                .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
@@ -174,6 +139,12 @@ int main(int, char**) {
                                                .buffer_slot = 0,
                                                .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
                                                .offset = sizeof(float) * 3,
+                                           },
+                                           {
+                                               .location = 2,
+                                               .buffer_slot = 0,
+                                               .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+                                               .offset = sizeof(float) * 7,
                                            }};
     SDL_GPUColorTargetDescription color_target_desc{
         .format = SDL_GetGPUSwapchainTextureFormat(gpu_device, window),
@@ -197,7 +168,7 @@ int main(int, char**) {
                 .vertex_buffer_descriptions = &vertex_buffer_desc,
                 .num_vertex_buffers = 1,
                 .vertex_attributes = vertex_atrib,
-                .num_vertex_attributes = 2,
+                .num_vertex_attributes = 3,
             },
         .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
         .target_info =
@@ -207,13 +178,107 @@ int main(int, char**) {
                 .has_depth_stencil_target = false,
             },
     };
-
     SDL_GPUGraphicsPipeline* pipeline = SDL_CreateGPUGraphicsPipeline(gpu_device, &pipeline_info);
 
-    glm::vec3 cam_pos = {0.0f, 10.0f, 10.0f};
-    Camera cam{cam_pos, glm::vec3(0.0f), glm::vec3{0.0f, -1.0f, 0.0f}, 90.0f, 16.0f / 10.0f};
-    InputHandler ih{};
+    auto* cube_ver_shader =
+        load_shader_from_file(gpu_device, "./cube_vertex.spv", SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 0, 1);
+    auto* cube_frag_shader =
+        load_shader_from_file(gpu_device, "./cube_fragment.spv", SDL_GPU_SHADERSTAGE_FRAGMENT, 0, 0, 0, 0);
 
+    SDL_GPUVertexBufferDescription cube_vertex_buffer_desc{
+        .slot = 0,
+        .pitch = sizeof(glm::vec3),
+        .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+        .instance_step_rate = 0,
+    };
+    SDL_GPUVertexAttribute cube_vertex_atrib{
+        .location = 0,
+        .buffer_slot = 0,
+        .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+        .offset = 0,
+    };
+    SDL_GPUGraphicsPipelineCreateInfo cube_pipeline_info{
+        .vertex_shader = cube_ver_shader,
+        .fragment_shader = cube_frag_shader,
+        .vertex_input_state =
+            SDL_GPUVertexInputState{
+                .vertex_buffer_descriptions = &cube_vertex_buffer_desc,
+                .num_vertex_buffers = 1,
+                .vertex_attributes = &cube_vertex_atrib,
+                .num_vertex_attributes = 1,
+            },
+        .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+        .target_info =
+            SDL_GPUGraphicsPipelineTargetInfo{
+                .color_target_descriptions = &color_target_desc,
+                .num_color_targets = 1,
+                .has_depth_stencil_target = false,
+            },
+    };
+    SDL_GPUGraphicsPipeline* cube_pipeline = SDL_CreateGPUGraphicsPipeline(gpu_device, &cube_pipeline_info);
+
+    SDL_GPUBufferCreateInfo buffer_info{
+        .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+        .size = sizeof(vertices),
+        .props = 0,
+    };
+    SDL_GPUBuffer* vertex_buffer = SDL_CreateGPUBuffer(gpu_device, &buffer_info);
+
+    glm::vec3 cube_vertices[] = {glm::vec3{-0.5f, -0.5f, -0.5f}, glm::vec3{0.5f, -0.5f, -0.5f},
+                                 glm::vec3{0.5f, 0.5f, -0.5f},   glm::vec3{-0.5f, 0.5f, -0.5f},
+                                 glm::vec3{-0.5f, -0.5f, 0.5f},  glm::vec3{0.5f, -0.5f, 0.5f},
+                                 glm::vec3{0.5f, 0.5f, 0.5f},    glm::vec3{-0.5f, 0.5f, 0.5f}};
+    uint32_t cube_indexes[] = {0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 7, 3, 0, 0, 4, 7,
+                               6, 2, 1, 1, 5, 6, 0, 1, 5, 5, 4, 0, 3, 2, 6, 6, 7, 3};
+    Mesh cube{
+        .indexes = cube_indexes,
+        .index_count = 36,
+        .vertices = cube_vertices,
+        .vertex_count = 8,
+    };
+    GPUMesh gpu_cube;
+    glm::vec4 cube_color{1.0f, 1.0f, 1.0f, 1.0f};
+    glm::mat4 cube_model_mat = glm::mat4{1.0f};
+
+    SDL_GPUSamplerCreateInfo sampler_info{
+        .min_filter = SDL_GPU_FILTER_NEAREST,
+        .mag_filter = SDL_GPU_FILTER_NEAREST,
+        .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+        .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+        .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+        .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+    };
+    SDL_GPUSampler* sampler = SDL_CreateGPUSampler(gpu_device, &sampler_info);
+    SDL_Surface* texture_surface = IMG_Load("./fernando.png");
+
+    SDL_GPUTextureCreateInfo texture_info{
+        .type = SDL_GPU_TEXTURETYPE_2D,
+        .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+        .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        .width = static_cast<uint32_t>(texture_surface->w),
+        .height = static_cast<uint32_t>(texture_surface->h),
+        .layer_count_or_depth = 1,
+        .num_levels = 1,
+    };
+    SDL_GPUTexture* texture = SDL_CreateGPUTexture(gpu_device, &texture_info);
+
+    {
+        SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(gpu_device);
+
+        transfer_to_gpu(gpu_device, cmd_buf, vertex_buffer, vertices, 3, 0);
+        gpu_cube = cube.create_on_gpu(gpu_device, cmd_buf);
+        transfer_to_gpu(gpu_device, cmd_buf, texture, texture_surface);
+
+        SDL_SubmitGPUCommandBuffer(cmd_buf);
+    }
+
+    SDL_DestroySurface(texture_surface);
+
+    Camera cam{glm::vec3{0.0f, 10.0f, 10.0f}, glm::vec3{0.0f, 0.0f, 0.0f}, glm::vec3{0.0f, -1.0f, 0.0f}, 90.0f,
+               16.0f / 10.0f};
+    float sensitivity = 1.0f;
+    bool lock_cam = false;
+    InputHandler ih{};
 
     uint64_t accum = 0;
     uint64_t last_time = SDL_GetTicks();
@@ -227,34 +292,74 @@ int main(int, char**) {
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
+            bool process_event = lock_cam || !cam.is_freecam();
+            if (process_event) ImGui_ImplSDL3_ProcessEvent(&event);
 
-            ImGui_ImplSDL3_ProcessEvent(&event);
             if (event.type == SDL_EVENT_QUIT) done = true;
             if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))
                 done = true;
 
-            if (!io.WantCaptureKeyboard && (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP)) {
+            if ((!process_event || !io.WantCaptureKeyboard) &&
+                (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP)) {
                 ih.update(event.key);
+            } else if ((!process_event || !io.WantCaptureMouse) && event.type == SDL_EVENT_MOUSE_MOTION) {
+                ih.update(event.motion);
             }
         }
 
-        while (accum >= 1000/60) {
-            accum -= 1000/60;
+        while (accum >= 1000 / 60) {
+            accum -= 1000 / 60;
 
+            if (ih.was_released(SDL_SCANCODE_L)) {
+                lock_cam = !lock_cam;
+            }
+            if (ih.was_released(SDL_SCANCODE_F)) {
+                cam.enable_freecam();
+                lock_cam = false;
+            }
+
+            glm::vec3 movement{0.0f};
             if (ih.is_held(SDL_SCANCODE_W)) {
-                cam_pos.z -= 1.0f;
+                movement.z -= 1.0f;
             }
             if (ih.is_held(SDL_SCANCODE_S)) {
-                cam_pos.z += 1.0f;
+                movement.z += 1.0f;
             }
             if (ih.is_held(SDL_SCANCODE_A)) {
-                cam_pos.x -= 1.0f;
+                movement.x -= 1.0f;
             }
             if (ih.is_held(SDL_SCANCODE_D)) {
-                cam_pos.x += 1.0f;
+                movement.x += 1.0f;
             }
 
-            cam.set_position(cam_pos);
+            bool moved = movement.x != 0.0f || movement.z != 0.0f;
+            if (cam.is_freecam()) {
+                auto fcam = cam.get_freecam_data();
+                if (moved) {
+                    auto normalized_movement = glm::normalize(movement);
+                    cam.set_position(cam.get_position() + -normalized_movement.z * fcam.forward +
+                                     normalized_movement.x * fcam.right);
+                }
+
+                if (!lock_cam && (ih.mouse_delta.x != 0.0f || ih.mouse_delta.y != 0.0f)) {
+                    cam.set_freecam(fcam.yaw - ih.mouse_delta.x * sensitivity,
+                                    glm::clamp(fcam.pitch + ih.mouse_delta.y * sensitivity, -89.0f, 89.0f));
+                }
+            } else if (moved) {
+                cam.set_position(cam.get_position() + glm::normalize(movement));
+            }
+
+            ih.update_tick();
+
+            SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(gpu_device);
+            transfer_to_gpu(gpu_device, cmd_buf, vertex_buffer, vertices, 3, 0);
+            SDL_SubmitGPUCommandBuffer(cmd_buf);
+
+            if (!lock_cam && cam.is_freecam()) {
+                SDL_SetWindowRelativeMouseMode(window, true);
+            } else {
+                SDL_SetWindowRelativeMouseMode(window, false);
+            }
         }
 
         if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED) {
@@ -274,16 +379,26 @@ int main(int, char**) {
         ImGui_ImplSDLGPU3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
+        if (!lock_cam && cam.is_freecam()) ImGui::GetIO().MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
 
         ImGui::ShowDemoWindow();
 
         {
-            ImGui::Begin("Camera");
+            ImGui::Begin("Debugger");
 
-            ImGui::InputFloat3("Position", glm::value_ptr(cam_pos));
+            ImGui::SeparatorText("Camera: Main");
+            ImGui::SliderFloat("sensitivity", &sensitivity, 0.0f, 1.0f);
+            ImGui::Checkbox("locked", &lock_cam);
+
+            ImGui::SeparatorText("Triangle UVs");
+            ImGui::SliderFloat2("Tip", &vertices[0].u, 0.0f, 1.0f);
+            ImGui::SliderFloat2("Left", &vertices[1].u, 0.0f, 1.0f);
+            ImGui::SliderFloat2("Right", &vertices[2].u, 0.0f, 1.0f);
 
             ImGui::End();
         }
+
+        cam.imgui_window("Main");
 
         ImGui::Render();
         ImDrawData* draw_data = ImGui::GetDrawData();
@@ -310,16 +425,40 @@ int main(int, char**) {
 
         UniformBuffer uniform_buffer{cam.get_view_projection()};
         SDL_PushGPUVertexUniformData(command_buffer, 0, &uniform_buffer, sizeof(UniformBuffer));
+        SDL_GPUTextureSamplerBinding sampler_binding{
+            .texture = texture,
+            .sampler = sampler,
+        };
+        SDL_BindGPUFragmentSamplers(render_pass, 0, &sampler_binding, 1);
 
         SDL_DrawGPUPrimitives(render_pass, 3, 1, 0, 0);
+
+        SDL_BindGPUGraphicsPipeline(render_pass, cube_pipeline);
+        SDL_GPUBufferBinding cube_vertex_buf_binding{
+            .buffer = gpu_cube.vertex_buffer,
+            .offset = 0,
+        };
+        SDL_GPUBufferBinding cube_index_buf_binding{
+            .buffer = gpu_cube.index_buffer,
+            .offset = 0,
+        };
+        SDL_BindGPUVertexBuffers(render_pass, 0, &cube_vertex_buf_binding, 1);
+        SDL_BindGPUIndexBuffer(render_pass, &cube_index_buf_binding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+        CubeUniformBuffer cube_uniform_buffer{cam.get_view_projection(), cube_color};
+        SDL_PushGPUVertexUniformData(command_buffer, 0, &cube_uniform_buffer, sizeof(CubeUniformBuffer));
+        SDL_DrawGPUIndexedPrimitives(render_pass, static_cast<uint32_t>(cube.index_count), 1, 0, 0, 0);
+
         if (!is_minimized) ImGui_ImplSDLGPU3_RenderDrawData(draw_data, command_buffer, render_pass);
 
         SDL_EndGPURenderPass(render_pass);
-
         SDL_SubmitGPUCommandBuffer(command_buffer);
     }
 
     SDL_WaitForGPUIdle(gpu_device);
+
+    gpu_cube.release(gpu_device), SDL_ReleaseGPUShader(gpu_device, cube_ver_shader);
+    SDL_ReleaseGPUShader(gpu_device, cube_frag_shader);
+    SDL_ReleaseGPUGraphicsPipeline(gpu_device, cube_pipeline);
 
     SDL_ReleaseGPUShader(gpu_device, ver_shader);
     SDL_ReleaseGPUShader(gpu_device, frag_shader);

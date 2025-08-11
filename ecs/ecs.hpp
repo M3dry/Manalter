@@ -237,6 +237,11 @@ namespace ecs {
             return std::make_tuple(std::get<get_type_t<Components>*>(t)...);
         }
 
+        template <typename... Subset>
+        std::tuple<get_type_t<Subset>*...> get_row(std::size_t row) {
+            return components.template get_ptr<Subset...>(row, std::integral_constant<bool, false>{});
+        }
+
         std::tuple<get_type_t<Components>*...> get_row(std::size_t row) {
             return components.template get_ptr<Components...>(row);
         }
@@ -290,12 +295,12 @@ namespace ecs {
             std::array<void**, sizeof...(Components) + 1> arr;
             arr[0] = reinterpret_cast<void**>(components.unsafe_size_ptr());
 
-            if constexpr (sizeof...(Subset) > 1) {
+            if constexpr (sizeof...(Subset) == 1) {
+                arr[1] = reinterpret_cast<void**>(subset);
+            } else {
                 __::with_index_sequence(std::index_sequence_for<Subset...>{}, [&](auto... Is) {
                     ((arr[Is + 1] = reinterpret_cast<void**>(std::get<Is>(subset))), ...);
                 });
-            } else {
-                arr[1] = reinterpret_cast<void**>(subset);
             }
 
             return arr;
@@ -316,6 +321,10 @@ namespace ecs {
 
         Entity** get_backlink() {
             return (Entity**)components.template get_ptr<Backlink>();
+        }
+
+        std::size_t size() {
+            return components.size();
         }
     };
 
@@ -934,6 +943,47 @@ namespace ecs {
             return ret;
         }
 
+        template <typename... Subset> void mark_dirty(Entity ent, bool state = true) {
+            visit([&](auto& arch) {
+                using Arch = std::decay_t<decltype(arch)>;
+                if constexpr (std::is_same_v<Arch, runtime::Archetype>) {
+                    assert(false && "TODO: runtime archetypes don't support dirty tracking");
+                } else {
+                    arch.template mark_dirty<Subset...>(entities[ent].row, state);
+                }
+            }, entities[ent].archetype_id);
+        }
+
+        template <typename Arch, typename... Subset>
+        std::vector<std::tuple<get_type_t<Subset>&...>> get_dirty() {
+            std::vector<std::tuple<get_type_t<Subset>&...>> ret{};
+
+            constexpr auto arch_ix = to_index<Arch>::value;
+            auto* arch = reinterpret_cast<Arch*>(archetypes[arch_ix]);
+
+            [&]<typename... Components>(std::in_place_type_t<Archetype<Components...>>) {
+                auto dirty_sets = arch->template get_dirty_ptrs<Components...>();
+                for (std::size_t w = 0; w < arch->size(); w++) {
+                    uint64_t mask = ~0ULL;
+                    for (std::size_t i = 0; i < sizeof...(Components); i++) {
+                        mask &= (*dirty_sets[i])[w];
+                    }
+
+                    while (true) {
+                        std::size_t ix = static_cast<std::size_t>(std::countr_zero(mask));
+                        if (ix == 64) break;
+
+                        ret.emplace_back(tupler_ptrs_to_refs(arch->template get_row<Subset...>(ix + w * 64)));
+
+                        if (ix == 63) break;
+                        mask &= (~0ULL << (ix + 1));
+                    }
+                }
+            }(std::in_place_type_t<Arch>{});
+
+            return ret;
+        }
+
         Entity new_entity() {
             entities.emplace_back(null_id, null_id);
 
@@ -1179,7 +1229,7 @@ namespace ecs {
 
                 auto row = arch.get_row(entities[ent].row, sub_ts);
                 __::with_index_sequence(std::index_sequence_for<Subset...>{},
-                                        [&](auto... Is) { ret.emplace(*reinterpret_cast<Subset*>(row[Is])...); });
+                                        [&](auto... Is) { ret.emplace(*reinterpret_cast<get_type_t<Subset>*>(row[Is])...); });
             }(std::in_place_type_t<typename query::template subset<type_set>>{});
 
             return ret;
@@ -1319,7 +1369,7 @@ namespace ecs {
                 data_backlinks.reserve(archetypes.size());
 
                 __::with_index_sequence(std::make_index_sequence<archetypes.size()>(), [&](auto... Is) {
-                    ((data[Is].reserve(archetypes.size()), setup_archetype<Is>(arches)), ...);
+                    (setup_archetype<Is>(arches), ...);
                 });
 
                 if (runtime_arches_table.size() != 0) {
@@ -1374,7 +1424,7 @@ namespace ecs {
                             auto word_count = *data_sizes[ArchIx] / 64 + (*data_sizes[ArchIx] % 64 != 0 ? 1 : 0);
                             std::array<uint64_t**, sizeof...(Subset)>& dirty_ixs = dirty_indexes[ArchIx];
                             for (std::size_t w = 0; w < word_count; w++) {
-                                uint64_t mask_union = 0ULL;
+                                uint64_t mask_union = StrictOnlyDirtyFlag ? ~0ULL :  0ULL;
                                 for (std::size_t i = 0; i < sizeof...(Subset); i++) {
                                     if constexpr (StrictOnlyDirtyFlag) mask_union &= (*dirty_ixs[i])[w];
                                     else mask_union |= (*dirty_ixs[i])[w];
@@ -1461,8 +1511,6 @@ namespace ecs {
             using query = setup_query<Qs...>;
             using arches = query::template archetypes<type_set>;
             using Sys = query::template subset<typeset::curry2<System, arches>::template apply>;
-
-            static_assert(std::is_same_v<Sys, System<type_set<Archetype<int, char>>, int, char>>);
 
             if (query::runtime) {
                 return Sys(archetypes, runtime_archetypes, components_of_runtime_archetype);

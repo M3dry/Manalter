@@ -27,6 +27,7 @@ add_subdirectory(particle)
 add_subdirectory(julip)
 add_subdirectory(ecs)
 add_subdirectory(render_test)
+add_subdirectory(engine)
 
 option(TEST "" OFF)
 

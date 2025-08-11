@@ -108,7 +108,7 @@ class multi_vector {
             using T = get_type_t<typeset::nth_t<indexes[0], Ts...>>;
             return reinterpret_cast<T*>(vectors[indexes[0]])[i];
         } else {
-            return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<Subset&...> {
+            return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<get_type_t<Subset>&...> {
                 return {reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>*>(vectors[indexes[Is]])[i]...};
             }(std::make_index_sequence<indexes.size()>());
         }
@@ -123,31 +123,28 @@ class multi_vector {
         if constexpr (!AlwaysTuple && sizeof...(Subset) == 1) {
             return std::span(reinterpret_cast<get_type_t<typeset::nth_t<0, Subset...>>*>(vectors[indexes[0]]), _size);
         } else {
-            return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<std::span<Subset>...> {
+            return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<std::span<get_type_t<Subset>>...> {
                 return {
                     std::span(reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>*>(vectors[indexes[Is]]), _size)...};
             }(std::make_index_sequence<indexes.size()>());
         }
     }
 
-    template <typename T>
-        requires typeset::in_set_v<T, Ts...>
-    get_type_t<T>* get_ptr(std::size_t i) {
-        constexpr std::size_t ix = typeset::find_first_v<typeset::is_same_to<T>::template apply, Ts...>;
-
-        return reinterpret_cast<get_type_t<T>*>(&reinterpret_cast<get_type_t<T>*>(vectors[ix])[i]);
-    }
-
-    template <typeset::unique_v... Subset>
-        requires(sizeof...(Subset) > 1 && typeset::is_subset_v<type_set<Subset...>, type_set<Ts...>>)
-    std::tuple<get_type_t<Subset>*...> get_ptr(std::size_t i) {
+    template <typeset::unique_v... Subset, bool AlwaysTuple = false>
+        requires typeset::is_subset_v<type_set<Subset...>, type_set<Ts...>>
+    decltype(auto) get_ptr(std::size_t i, std::integral_constant<bool, AlwaysTuple> = std::integral_constant<bool, false>{}) {
         constexpr std::array<std::size_t, sizeof...(Subset)> indexes = {
             typeset::find_first_v<typeset::is_same_to<Subset>::template apply, Ts...>...};
 
-        return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<Subset*...> {
-            return {reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>*>(
-                &reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>*>(vectors[indexes[Is]])[i])...};
-        }(std::make_index_sequence<indexes.size()>());
+        if constexpr (!AlwaysTuple && sizeof...(Subset) == 1) {
+            using T = get_type_t<typeset::nth_t<indexes[0], Ts...>>;
+            return &reinterpret_cast<T*>(&vectors[indexes[0]])[i];
+        } else {
+            return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<get_type_t<Subset>*...> {
+                return {reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>*>(
+                    &reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>*>(vectors[indexes[Is]])[i])...};
+            }(std::make_index_sequence<indexes.size()>());
+        }
     }
 
     template <typeset::unique_v... Subset, bool AlwaysTuple = false>
@@ -160,7 +157,7 @@ class multi_vector {
             using T = get_type_t<typeset::nth_t<indexes[0], Ts...>>;
             return reinterpret_cast<T**>(&vectors[indexes[0]]);
         } else {
-            return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<Subset**...> {
+            return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> std::tuple<get_type_t<Subset>**...> {
                 return {reinterpret_cast<get_type_t<typeset::nth_t<indexes[Is], Ts...>>**>(&vectors[indexes[Is]])...};
             }(std::make_index_sequence<indexes.size()>{});
         }

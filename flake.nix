@@ -63,6 +63,7 @@
               shaderc
 
               sdl3
+              sdl3-image
               ((imgui.override {
                 IMGUI_BUILD_SDL3_BINDING = true;
                 IMGUI_BUILD_SDLGPU3_BINDING = true;
@@ -75,8 +76,8 @@
                   hash = "sha256-+BuSAXvLvOYOmENzxd1pGDE6llWhTGVu7C3RnoVLVzg=";
                 };
               }))
-              glm
               assimp
+              glm
 
               julia
 
