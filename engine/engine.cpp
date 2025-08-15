@@ -1,6 +1,6 @@
-#include "ecs_c.hpp"
 #include "gpu_c.hpp"
 #include "imgui_c.hpp"
+#include "texture_c.hpp"
 #include "window_c.hpp"
 #include <engine/engine.hpp>
 #include <engine/gpu.hpp>
@@ -25,9 +25,11 @@ namespace engine {
     void init(const InitConfig& init_conf) {
         init_sdl(init_conf);
         imgui::init();
+        texture::init();
     }
 
     void deinit() {
+        texture::deinit();
         imgui::deinit();
         gpu::deinit();
         window::deinit();

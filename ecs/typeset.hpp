@@ -15,10 +15,10 @@ template <typename T> struct get_type {
     using type = T;
 };
 template <typename Tag> struct get_type<Named<Tag>> {
-    using type = Named<Tag>::type;
+    using type = get_type<typename Named<Tag>::type>::type;
 };
 template <IsNameTag Tag> struct get_type<Tag> {
-    using type = Named<Tag>::type;
+    using type = get_type<typename Named<Tag>::type>::type;
 };
 
 template <typename T> using get_type_t = get_type<T>::type;
@@ -30,11 +30,7 @@ template <typename T> using get_type_t = get_type<T>::type;
     }
 
 template <typename... Ts> auto tupler_ptrs_to_refs(const std::tuple<Ts*...>& ptr_tuple) {
-    return std::apply(
-        [](Ts* const&... ptrs) {
-            return std::tuple<Ts&...>{(*ptrs)...};
-        },
-        ptr_tuple);
+    return std::apply([](Ts* const&... ptrs) { return std::tuple<Ts&...>{(*ptrs)...}; }, ptr_tuple);
 }
 
 template <typename... Ts> struct type_set {};

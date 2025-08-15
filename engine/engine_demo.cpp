@@ -71,16 +71,18 @@ int main(int argc, char** argv) {
     });
     {
         std::string warn{};
-        auto model_ = engine::model::load(argv[1], true, &warn);
+        auto gpu_group = engine::model::new_group();
+        auto model_ = engine::model::load(gpu_group, argv[1], true, &warn);
         if (model_) {
             std::println("id: {}", ecs::Entity(*model_));
         } else {
             std::println("err: {}", model_.error());
+            exit(-1);
         }
 
         {
             SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(engine::gpu_device);
-            engine::model::upload_to_gpu(cmd_buf);
+            engine::model::upload_to_gpu(gpu_group, cmd_buf);
             SDL_SubmitGPUCommandBuffer(cmd_buf);
         }
 

@@ -17,6 +17,7 @@ SET(ENGINE_SOURCES
     camera.cpp
     shader.cpp
     model.cpp
+    texture.cpp
 )
 
 add_library(engine STATIC ${ENGINE_SOURCES})

@@ -57,6 +57,12 @@ namespace engine {
             SDL_SetGPUBufferName(engine::gpu_device, buffer, name);
         }
 
+        SDL_GPUBuffer* release() {
+            auto buf = buffer;
+            buffer = nullptr;
+            return buf;
+        }
+
         operator SDL_GPUBuffer*() {
             return buffer;
         }
