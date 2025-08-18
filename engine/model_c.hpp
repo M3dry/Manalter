@@ -8,11 +8,7 @@
 #include <memory>
 
 namespace engine::model {
-    MAKE_WRAPPED_ID(MaterialId);
-    MAKE_WRAPPED_ID(SamplerId);
     MAKE_WRAPPED_ID(MeshId);
-    MAKE_WRAPPED_ID(MeshStorageBufId);
-    MAKE_WRAPPED_ID(GPUMeshId);
 
     struct MeshIndices {
         SDL_GPUIndexElementSize stride;
@@ -35,7 +31,7 @@ namespace engine::model {
 
     enum struct TexcoordKey {
         BaseColor = 0,
-        PBR = 1,
+        MetallicRoughnes = 1,
         Normal = 2,
         Occlusion = 3,
         Emissive = 4,
@@ -89,6 +85,12 @@ namespace engine::model {
         uint16_t width;
         uint16_t height;
         SDL_GPUTextureFormat format;
+    };
+
+    struct GPUMaterial {
+        glm::vec4 base_color;
+        glm::vec4 metallic_roughness_normal_occlusion_factors;
+        glm::vec3 emissive_factor;
     };
 
     inline constexpr SDL_GPUSamplerCreateInfo default_sampler{
