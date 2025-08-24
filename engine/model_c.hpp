@@ -1,11 +1,15 @@
 #pragma once
 
+#include "engine/collisions.hpp"
+#include "engine/pipeline.hpp"
 #include "engine/util.hpp"
 #include "util_c.hpp"
 #include <SDL3/SDL_gpu.h>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <memory>
+
+#include "engine/model.hpp"
 
 namespace engine::model {
     MAKE_WRAPPED_ID(MeshId);
@@ -125,4 +129,45 @@ namespace engine::model {
                 TexcoordMap::TEXCOORD_0,
             },
     };
+}
+
+TAG_BY_NAME(engine::pipeline::PrimitiveType, mesh_mode_tag);
+TAG_BY_NAME(uint32_t, mesh_vertex_count_tag);
+TAG_BY_NAME(array_unique_ptr<glm::vec3>, mesh_positions_tag);
+TAG_BY_NAME(array_unique_ptr<glm::vec3>, mesh_normals_tag);
+TAG_BY_NAME(array_unique_ptr<glm::vec4>, mesh_tangents_tag);
+struct mesh_texcoords_tag {};
+template <> struct Named<mesh_texcoords_tag> {
+    using type = std::array<array_unique_ptr<glm::vec2>, 4>;
+};
+TAG_BY_NAME(std::size_t, mesh_material_id);
+TAG_BY_NAME(engine::collisions::AABB, mesh_bounding_box_tag);
+
+TAG_BY_NAME(uint32_t, model_mesh_count_tag);
+TAG_BY_NAME(array_unique_ptr<glm::mat4>, model_mesh_transforms_tag);
+TAG_BY_NAME(array_unique_ptr<engine::model::MeshId>, model_meshes_tag);
+TAG_BY_NAME(uint32_t, gpu_mesh_draw_count);
+using model_gpumeshes = multi_vector<engine::model::GPUOffsets, engine::model::GPUMaterial, glm::mat4,
+                                     std::array<SDL_GPUTextureSamplerBinding, 5>, gpu_mesh_draw_count, SDL_GPUBuffer*>;
+TAG_BY_NAME(engine::collisions::AABB, model_bounding_box_tag);
+using model_materials = std::vector<engine::model::Material>;
+TAG_BY_NAME(std::size_t, model_sampler_id);
+TAG_BY_NAME(std::size_t, model_source_id);
+using model_textures = multi_vector<model_source_id, model_sampler_id>;
+using model_samplers = std::vector<SDL_GPUSamplerCreateInfo>;
+using model_sources = std::vector<engine::model::Source>;
+
+using gpugroup_models = std::vector<engine::ModelId>;
+using gpugroup_textures = std::vector<SDL_GPUTexture*>;
+using gpugroup_samplers = std::vector<SDL_GPUSampler*>;
+using gpugroup_buffer = SDL_GPUBuffer*;
+
+namespace engine::archetypes {
+    using Mesh =
+        ecs::Archetype<model::MeshIndices, mesh_mode_tag, mesh_vertex_count_tag, mesh_positions_tag, mesh_normals_tag,
+                       mesh_tangents_tag, mesh_texcoords_tag, mesh_material_id, mesh_bounding_box_tag>;
+    using Model =
+        ecs::Archetype<model_mesh_count_tag, model_mesh_transforms_tag, model_meshes_tag, model_gpumeshes,
+                       model_bounding_box_tag, model_materials, model_textures, model_samplers, model_sources>;
+    using GPUGroup = ecs::Archetype<gpugroup_models, gpugroup_textures, gpugroup_samplers, gpugroup_buffer>;
 }

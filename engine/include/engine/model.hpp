@@ -1,5 +1,6 @@
 #pragma once
 
+#include "engine/camera.hpp"
 #include "engine/util.hpp"
 
 #include <SDL3/SDL_gpu.h>
@@ -21,7 +22,8 @@ namespace engine::model {
     std::expected<ModelId, std::string> load(GPUGroupId group_id, std::span<std::byte> data, bool binary,
                                              std::string* warning = nullptr);
     void dump_data(ModelId model_id);
+    void dump_data(GPUGroupId gpugroup_id);
 
-    bool draw_model(ModelId model_id, glm::mat4 model, glm::mat4 view_projection, SDL_GPUCommandBuffer* cmd_buf,
+    bool draw_model(ModelId model_id, glm::mat4 model, const CamId& cam_id, SDL_GPUCommandBuffer* cmd_buf,
                     SDL_GPURenderPass* render_pass);
 }

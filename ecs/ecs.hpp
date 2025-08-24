@@ -237,8 +237,7 @@ namespace ecs {
             return std::make_tuple(std::get<get_type_t<Components>*>(t)...);
         }
 
-        template <typename... Subset>
-        std::tuple<get_type_t<Subset>*...> get_row(std::size_t row) {
+        template <typename... Subset> std::tuple<get_type_t<Subset>*...> get_row(std::size_t row) {
             return components.template get_ptr<Subset...>(row, std::integral_constant<bool, false>{});
         }
 
@@ -519,6 +518,8 @@ namespace ecs {
         };
     }
 
+    template <typename T, typename Arch> struct wrapper {};
+
     template <typename... Ts> struct Static;
     template <typename... Ts> struct WithRuntime;
     struct All;
@@ -532,6 +533,37 @@ namespace ecs {
 
         template <typename T>
         concept is_archetype_v = is_archetype<T>::value;
+
+        template <typename T, is_archetype_v... Archetypes> struct is_wrapper {
+            static constexpr bool value = false;
+        };
+        template <typename Wrapper, typename Arch, is_archetype_v... Archetypes>
+        struct is_wrapper<wrapper<Wrapper, Arch>, Archetypes...> {
+            static constexpr bool value = is_archetype_v<Arch> && typeset::in_set_v<Arch, Archetypes...>;
+        };
+
+        template <typename T, typename... Archetypes>
+        static constexpr bool is_wrapper_v = is_wrapper<T, Archetypes...>::value;
+
+        template <typename...  Ts> struct wrappers_ok;
+        template <typename... Wrappers, typename... Archetypes> struct wrappers_ok<type_set<Wrappers...>, Archetypes...> {
+            template <typename... Ts> struct _impl {
+                static constexpr bool value = false;
+            };
+            template <typename W, typename Arch, typename... Rest, typename... Collected>
+                requires (typeset::in_set_v<Arch, Archetypes...> && !typeset::in_set_v<W, Collected...> && std::is_convertible_v<W, ecs::Entity>)
+            struct _impl<type_set<wrapper<W, Arch>, Rest...>, Collected...> {
+                static constexpr bool value = _impl<type_set<Rest...>, Collected..., W>::value;
+            };
+            template <typename... Collected> struct _impl<type_set<>, Collected...> {
+                static constexpr bool value = true;
+            };
+
+            static constexpr bool value = _impl<type_set<Wrappers...>>::value;
+        };
+
+        template <typename Wrappers, typename... Archetypes>
+        static constexpr bool wrappers_ok_v = wrappers_ok<Wrappers, Archetypes...>::value;
 
         template <typename... Ts> struct query;
         template <typename T, typename... Ts> struct query<T, Ts...> {
@@ -582,11 +614,44 @@ namespace ecs {
                                              static_cast<std::underlying_type_t<SystemRunnerOpts>>(b));
     }
 
-    template <__::is_archetype_v... Archetypes>
-        requires typeset::different_sets_v<Archetypes...>
-    struct build {
+    template <typename... Ts> struct _build_impl;
+
+    template <typename... Wrappers, __::is_archetype_v... Archetypes>
+        requires (typeset::different_sets_v<Archetypes...> && __::wrappers_ok_v<type_set<Wrappers...>, Archetypes...>)
+    struct _build_impl<type_set<Wrappers...>, Archetypes...> {
       private:
-        template <std::size_t IX> struct index {
+        template <typename WrapperType> struct is_wrapper {
+            template <typename... Ts> struct _impl {
+                static constexpr bool value = false;
+            };
+            template <typename W, typename Arch, typename... Rest> struct _impl<wrapper<W, Arch>, Rest...> {
+                static constexpr bool value = std::is_same_v<W, WrapperType> || _impl<Rest...>::value;
+            };
+
+            static constexpr bool value = _impl<Wrappers...>::value;
+        };
+
+        template <std::size_t IX> struct wrapper_index {
+            using T = typeset::nth_t<IX, Wrappers...>;
+        };
+
+        template <typename WrapperType> struct wrapper_type_to_index {
+            template <typename W> struct pred {
+                static constexpr bool value = false;
+            };
+            template <typename W, typename Arch> struct pred<wrapper<W, Arch>> {
+                static constexpr bool value = std::is_same_v<W, WrapperType>;
+            };
+
+            static constexpr bool value = typeset::find_first_v<pred, Wrappers...>;
+        };
+
+        template <typename Wrapper> struct wrapper_arch;
+        template <typename T, typename Wrapper> struct wrapper_arch<wrapper<T, Wrapper>> {
+            using type = Wrapper;
+        };
+
+        template <std::size_t IX> struct arch_index {
             using T = typeset::nth_t<IX, Archetypes...>;
         };
 
@@ -617,9 +682,21 @@ namespace ecs {
                 constexpr auto Ix = I.value;
                 if (Ix != archetype_id) return false;
 
-                f(*reinterpret_cast<index<Ix>::T*>(archetypes[Ix]));
+                f(*reinterpret_cast<arch_index<Ix>::T*>(archetypes[Ix]));
                 return true;
             });
+        }
+
+        template <typename F, typename EntId>
+            requires (std::is_convertible_v<EntId, Entity>)
+        void visit_entity_archetype(F&& f, EntId ent) {
+            if constexpr (is_wrapper<EntId>::value) {
+                static constexpr std::size_t wrapper_ix = wrapper_type_to_index<EntId>::value;
+                using Archetype = wrapper_arch<typeset::nth_t<wrapper_ix, Wrappers...>>::type;
+                f(*reinterpret_cast<Archetype*>(archetypes[to_index<Archetype>::value]));
+            } else {
+                visit(f, entities[Entity{ent}].archetype_id);
+            }
         }
 
         template <typename... Components> struct in_archetypes {
@@ -657,7 +734,7 @@ namespace ecs {
             template <template <typename...> typename U, typename E, typename... Extras, std::size_t... Res>
             struct __impl<U<E, Extras...>, std::index_sequence<Res...>> {
                 static consteval std::size_t get() {
-                    using DiffT = typeset::set_difference_t<typename index<A>::T, type_set<E, Extras...>, Archetype>;
+                    using DiffT = typeset::set_difference_t<typename arch_index<A>::T, type_set<E, Extras...>, Archetype>;
                     if constexpr ((typeset::is_same_set_v<DiffT, Archetypes> || ...)) {
                         return to_index<DiffT>::value;
                     }
@@ -677,8 +754,8 @@ namespace ecs {
 
         template <std::size_t Target, std::size_t Current, typename... Extra, typename... Packs>
         void static_extend_into(Entity ent, Packs&&... packs) {
-            using TargetArch = index<Target>::T;
-            using CurrentArch = index<Current>::T;
+            using TargetArch = arch_index<Target>::T;
+            using CurrentArch = arch_index<Current>::T;
 
             auto* target_arch = reinterpret_cast<TargetArch*>(archetypes[Target]);
             auto* current_arch = reinterpret_cast<CurrentArch*>(archetypes[Current]);
@@ -779,26 +856,26 @@ namespace ecs {
                 typeset::find_first_v<typeset::curry2<typeset::is_same_set, Arch>::template apply, Archetypes...>;
         };
 
-        build() {
+        _build_impl() {
             __::with_index_sequence(std::index_sequence_for<Archetypes...>{},
-                                    [&](auto... Is) { ((archetypes[Is] = new index<Is>::T{}), ...); });
+                                    [&](auto... Is) { ((archetypes[Is] = new arch_index<Is>::T{}), ...); });
         };
 
-        build(const build&) = delete;
-        build& operator=(const build&) = delete;
+        _build_impl(const _build_impl&) = delete;
+        _build_impl& operator=(const _build_impl&) = delete;
 
-        build(build&& b) noexcept
+        _build_impl(_build_impl&& b) noexcept
             : entities(std::move(b.entities)), archetypes(std::move(b.archetypes)),
               runtime_archetypes(std::move(b.runtime_archetypes)) {
             b.moved = true;
         };
-        build& operator=(build&& b) noexcept {
+        _build_impl& operator=(_build_impl&& b) noexcept {
             if (this == &b) return *this;
 
             entities = std::move(b.entities);
 
             __::with_index_sequence(std::index_sequence_for<Archetypes...>{}, [&](auto... Is) {
-                ((delete reinterpret_cast<index<Is>::T*>(archetypes[Is])), ...);
+                ((delete reinterpret_cast<arch_index<Is>::T*>(archetypes[Is])), ...);
             });
             archetypes = b.archetypes;
             runtime_archetypes = std::move(b.runtime_archetypes);
@@ -807,11 +884,11 @@ namespace ecs {
             return *this;
         };
 
-        ~build() {
+        ~_build_impl() {
             if (moved) return;
 
             __::with_index_sequence(std::make_index_sequence<sizeof...(Archetypes)>(), [&](auto... Is) {
-                ((delete (reinterpret_cast<index<Is>::T*>(archetypes[Is]))), ...);
+                ((delete (reinterpret_cast<arch_index<Is>::T*>(archetypes[Is]))), ...);
             });
         }
 
@@ -944,18 +1021,19 @@ namespace ecs {
         }
 
         template <typename... Subset> void mark_dirty(Entity ent, bool state = true) {
-            visit([&](auto& arch) {
-                using Arch = std::decay_t<decltype(arch)>;
-                if constexpr (std::is_same_v<Arch, runtime::Archetype>) {
-                    assert(false && "TODO: runtime archetypes don't support dirty tracking");
-                } else {
-                    arch.template mark_dirty<Subset...>(entities[ent].row, state);
-                }
-            }, entities[ent].archetype_id);
+            visit(
+                [&](auto& arch) {
+                    using Arch = std::decay_t<decltype(arch)>;
+                    if constexpr (std::is_same_v<Arch, runtime::Archetype>) {
+                        assert(false && "TODO: runtime archetypes don't support dirty tracking");
+                    } else {
+                        arch.template mark_dirty<Subset...>(entities[ent].row, state);
+                    }
+                },
+                entities[ent].archetype_id);
         }
 
-        template <typename Arch, typename... Subset>
-        std::vector<std::tuple<get_type_t<Subset>&...>> get_dirty() {
+        template <typename Arch, typename... Subset> std::vector<std::tuple<get_type_t<Subset>&...>> get_dirty() {
             std::vector<std::tuple<get_type_t<Subset>&...>> ret{};
 
             constexpr auto arch_ix = to_index<Arch>::value;
@@ -1003,10 +1081,10 @@ namespace ecs {
             __::for_each_index(std::make_index_sequence<possible.size()>{}, [&](auto TI) -> bool {
                 constexpr auto Target = TI.value;
 
-                if constexpr (typeset::set_size_v<typename index<possible[Target]>::T> == sizeof...(Packs) &&
+                if constexpr (typeset::set_size_v<typename arch_index<possible[Target]>::T> == sizeof...(Packs) &&
                               sizeof...(Packs) == sizeof...(Extra)) {
                     if (entities[ent].archetype_id == possible[Target]) {
-                        static_set_entity<typename index<possible[Target]>::T>(ent, std::forward<Packs>(packs)...);
+                        static_set_entity<typename arch_index<possible[Target]>::T>(ent, std::forward<Packs>(packs)...);
                         return true;
                     }
                 }
@@ -1075,9 +1153,9 @@ namespace ecs {
                     constexpr auto Ix = I.value;
                     if (Ix != orig_arch_id) return false;
 
-                    auto orig_arch = reinterpret_cast<index<Ix>::T*>(archetypes[Ix]);
+                    auto orig_arch = reinterpret_cast<arch_index<Ix>::T*>(archetypes[Ix]);
                     if (new_arch_id == null_id) {
-                        auto new_ts = reinterpret_cast<index<Ix>::T*>(archetypes[Ix])->extend(extra);
+                        auto new_ts = reinterpret_cast<arch_index<Ix>::T*>(archetypes[Ix])->extend(extra);
                         new_arch_id = add_archetype(runtime::Archetype{std::move(new_ts)});
                     }
 
@@ -1182,19 +1260,27 @@ namespace ecs {
             return dynamic_emplace_entity(archetype_id, args_arr, sizeof...(Args));
         }
 
-        void remove(Entity entity) {
+        template <typename... Qs, typename EntId>
+            requires (std::is_convertible_v<EntId, Entity>)
+        void remove(EntId ent) {
+            Entity entity{ent};
+
             if (entity > entities.size() || entities[entity].archetype_id == null_id || entities[entity].row == null_id)
                 return;
 
             auto& e_link = entities[entity];
 
-            visit([&](auto& archetype) { archetype.remove(entities, e_link.row); }, e_link.archetype_id);
+            visit_entity_archetype([&](auto& archetype) { archetype.remove(entities, e_link.row); }, ent);
 
             e_link.archetype_id = null_id;
             e_link.row = null_id;
         }
 
-        template <typename... Qs> decltype(auto) get(Entity ent) {
+        template <typename... Qs, typename EntId>
+            requires (std::is_convertible_v<EntId, Entity>)
+        decltype(auto) get(EntId ent_id) {
+            Entity ent = ent_id;
+
             using query = setup_query<Qs...>;
             using arches = query::template archetypes<type_set>;
             using return_t = query::template subset<typeset::ref_tuple_t>;
@@ -1202,12 +1288,35 @@ namespace ecs {
                 typeset::value_wrapper, typename query::template subset<in_archetypes>>::template apply>::value;
             static_assert(in_arches.size() == typeset::set_size_v<arches>);
 
+
             auto ent_arch_id = entities[ent].archetype_id;
             std::optional<return_t> ret = std::nullopt;
+
+            if constexpr (is_wrapper<EntId>::value) {
+                static constexpr std::size_t wrapper_ix = wrapper_type_to_index<EntId>::value;
+                using Archetype = wrapper_arch<typeset::nth_t<wrapper_ix, Wrappers...>>::type;
+                []<typename... Arches>(type_set<Arches...>) {
+                    static_assert(typeset::in_set_v<Archetype, Arches...>);
+                }(arches{});
+
+                if (ent_arch_id == null_id || entities[ent].row == null_id) {
+                    ret.reset();
+                    return ret;
+                }
+                static constexpr auto ArchetypeIx = to_index<Archetype>::value;
+                assert(ent_arch_id == ArchetypeIx);
+
+                auto* arch = reinterpret_cast<Archetype*>(archetypes[ArchetypeIx]);
+                [&]<typename... Ts>(std::in_place_type_t<type_set<Ts...>>) {
+                    ret.emplace(arch->template get<Ts...>(entities[ent].row));
+                }(std::in_place_type_t<typename query::template subset<type_set>>{});
+            }
+            if (ret) return ret;
+
             __::for_each_index(std::make_index_sequence<in_arches.size()>{}, [&](auto I) {
                 constexpr auto Ix = I.value;
                 if (ent_arch_id != in_arches[Ix]) return false;
-                using Arch = index<in_arches[Ix]>::T;
+                using Arch = arch_index<in_arches[Ix]>::T;
 
                 auto* arch = reinterpret_cast<Arch*>(archetypes[in_arches[Ix]]);
 
@@ -1228,8 +1337,9 @@ namespace ecs {
                 if (!typeset::subset({sub, sizeof...(Subset)}, ts)) return;
 
                 auto row = arch.get_row(entities[ent].row, sub_ts);
-                __::with_index_sequence(std::index_sequence_for<Subset...>{},
-                                        [&](auto... Is) { ret.emplace(*reinterpret_cast<get_type_t<Subset>*>(row[Is])...); });
+                __::with_index_sequence(std::index_sequence_for<Subset...>{}, [&](auto... Is) {
+                    ret.emplace(*reinterpret_cast<get_type_t<Subset>*>(row[Is])...);
+                });
             }(std::in_place_type_t<typename query::template subset<type_set>>{});
 
             return ret;
@@ -1312,7 +1422,7 @@ namespace ecs {
 
             template <std::size_t IX> void setup_archetype(const std::array<void*, sizeof...(Archetypes)>& arches) {
                 constexpr auto arch_id = archetypes[IX];
-                using archetype = index<arch_id>::T;
+                using archetype = arch_index<arch_id>::T;
                 archetype_pointers[IX] = arches[arch_id];
                 archetype* x = (archetype*)arches[arch_id];
                 auto subset = x->template get_subset<std::remove_const_t<Subset>...>();
@@ -1368,9 +1478,8 @@ namespace ecs {
                 data_sizes.reserve(archetypes.size());
                 data_backlinks.reserve(archetypes.size());
 
-                __::with_index_sequence(std::make_index_sequence<archetypes.size()>(), [&](auto... Is) {
-                    (setup_archetype<Is>(arches), ...);
-                });
+                __::with_index_sequence(std::make_index_sequence<archetypes.size()>(),
+                                        [&](auto... Is) { (setup_archetype<Is>(arches), ...); });
 
                 if (runtime_arches_table.size() != 0) {
                     setup_runtime_archetypes(const_cast<std::vector<runtime::Archetype>&>(runtime_arches),
@@ -1379,7 +1488,7 @@ namespace ecs {
             }
 
           public:
-            friend build;
+            friend class _impl_build;
 
             template <SystemRunnerOpts opts = static_cast<SystemRunnerOpts>(0), typename F> void run(F&& f) {
                 constexpr auto StrictOnlyDirtyFlag = (opts & StrictOnlyDirty) != 0;
@@ -1424,7 +1533,7 @@ namespace ecs {
                             auto word_count = *data_sizes[ArchIx] / 64 + (*data_sizes[ArchIx] % 64 != 0 ? 1 : 0);
                             std::array<uint64_t**, sizeof...(Subset)>& dirty_ixs = dirty_indexes[ArchIx];
                             for (std::size_t w = 0; w < word_count; w++) {
-                                uint64_t mask_union = StrictOnlyDirtyFlag ? ~0ULL :  0ULL;
+                                uint64_t mask_union = StrictOnlyDirtyFlag ? ~0ULL : 0ULL;
                                 for (std::size_t i = 0; i < sizeof...(Subset); i++) {
                                     if constexpr (StrictOnlyDirtyFlag) mask_union &= (*dirty_ixs[i])[w];
                                     else mask_union |= (*dirty_ixs[i])[w];
@@ -1491,7 +1600,7 @@ namespace ecs {
                     __::for_each_index(std::make_index_sequence<archetypes.size()>{}, [&](auto I) {
                         constexpr auto Ix = I.value;
                         constexpr auto ArchIx = archetypes[Ix];
-                        using Arch = index<ArchIx>::T;
+                        using Arch = arch_index<ArchIx>::T;
 
                         std::size_t range_end = dirty_end_ranges[Ix];
                         auto* arch = reinterpret_cast<Arch*>(archetype_pointers[ArchIx]);
@@ -1551,4 +1660,13 @@ namespace ecs {
             }(std::in_place_type_t<Arch>{});
         }
     };
+
+    template <__::is_archetype_v... Archetypes>
+        requires typeset::different_sets_v<Archetypes...>
+    struct build : _build_impl<type_set<>, Archetypes...> {};
+
+    template <typename... Ts> struct build_with_wrappers;
+    template <typename... Wrappers, __::is_archetype_v... Archetypes>
+        requires(typeset::different_sets_v<Archetypes...> && __::wrappers_ok_v<type_set<Wrappers...>, Archetypes...>)
+    struct build_with_wrappers<type_set<Wrappers...>, Archetypes...> : _build_impl<type_set<Wrappers...>, Archetypes...> {};
 };

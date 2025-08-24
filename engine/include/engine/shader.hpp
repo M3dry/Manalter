@@ -4,6 +4,21 @@
 #include <cstdint>
 #include <span>
 namespace engine::shader {
+    class ShaderId {
+      public:
+        explicit ShaderId(uint16_t ix, SDL_GPUShader* shader) : ix(ix), shader(shader) {}
+        operator uint16_t() const {
+            return ix;
+        }
+
+        operator SDL_GPUShader*() const {
+            return shader;
+        }
+      private:
+        uint16_t ix;
+        SDL_GPUShader* shader;
+    };
+
     enum Stage {
         Vertex = SDL_GPU_SHADERSTAGE_VERTEX,
         Fragment = SDL_GPU_SHADERSTAGE_FRAGMENT,
@@ -38,8 +53,8 @@ namespace engine::shader {
             return *this;
         }
 
-        SDL_GPUShader* load(const std::span<uint8_t>& code);
-        SDL_GPUShader* load_from_file(const char* file);
+        ShaderId load(const std::span<uint8_t>& code);
+        ShaderId load_from_file(const char* file);
 
       private:
         uint32_t _uniforms = 0;

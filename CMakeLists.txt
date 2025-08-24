@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project("Manalter" VERSION 1.0 LANGUAGES CXX)
+project("Manalter" VERSION 1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

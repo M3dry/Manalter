@@ -1,12 +1,15 @@
 #pragma once
 
-#include "engine/gpu.hpp"
+#include "engine/shader.hpp"
 #include "typeset.hpp"
 #include <SDL3/SDL_gpu.h>
+#include <cstdio>
+#include <cstring>
 #include <glm/ext/quaternion_float.hpp>
 #include <glm/ext/vector_float1.hpp>
 #include <glm/ext/vector_float2.hpp>
 #include <glm/ext/vector_float3.hpp>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -100,7 +103,7 @@ namespace engine::pipeline {
                 offset_accum += to_vertex_elem<T>::offset;
             };
 
-            (assign.template operator ()<Ts>(i++), ...);
+            (assign.template operator()<Ts>(i++), ...);
         }
     };
 
@@ -185,10 +188,26 @@ namespace engine::pipeline {
         SDL_GPUColorTargetDescription target{};
     };
 
-    class Make {
+    class PipelineId {
+      public:
+        explicit PipelineId(std::size_t ix, SDL_GPUGraphicsPipeline* pipeline) : ix(ix), pipeline(pipeline) {}
+        operator std::size_t() const {
+            return ix;
+        }
+
+        operator SDL_GPUGraphicsPipeline*() const {
+            return pipeline;
+        }
+
+      private:
+        std::size_t ix;
+        SDL_GPUGraphicsPipeline* pipeline;
+    };
+
+    struct Make {
       public:
         constexpr Make()
-            : sdl_pipeline({
+            : _sdl_pipeline({
                   .vertex_shader = nullptr,
                   .fragment_shader = nullptr,
                   .vertex_input_state =
@@ -231,128 +250,136 @@ namespace engine::pipeline {
                   .props = 0,
               }) {};
 
-        constexpr Make& vertex_shader(SDL_GPUShader* shader) {
-            sdl_pipeline.vertex_shader = shader;
-            return *this;
+        constexpr Make&& vertex_shader(shader::ShaderId shader) {
+            _sdl_pipeline.vertex_shader = shader;
+            _vertex_shader_id = shader;
+            return std::move(*this);
         }
 
-        constexpr Make& fragment_shader(SDL_GPUShader* shader) {
-            sdl_pipeline.fragment_shader = shader;
-            return *this;
+        constexpr Make&& fragment_shader(shader::ShaderId shader) {
+            _sdl_pipeline.fragment_shader = shader;
+            _fragment_shader_id = shader;
+            return std::move(*this);
         }
 
-        constexpr Make& shaders(SDL_GPUShader* vertex, SDL_GPUShader* fragment) {
-            sdl_pipeline.vertex_shader = vertex;
-            sdl_pipeline.fragment_shader = fragment;
-            return *this;
+        constexpr Make&& shaders(shader::ShaderId vertex, shader::ShaderId fragment) {
+            vertex_shader(vertex);
+            fragment_shader(fragment);
+            return std::move(*this);
         }
 
-        constexpr Make& primitive(PrimitiveType draw_type) {
-            sdl_pipeline.primitive_type = static_cast<SDL_GPUPrimitiveType>(draw_type);
-            return *this;
+        constexpr Make&& primitive(PrimitiveType draw_type) {
+            _sdl_pipeline.primitive_type = static_cast<SDL_GPUPrimitiveType>(draw_type);
+            return std::move(*this);
         }
 
-        constexpr Make& vertex_buffers(std::vector<SDL_GPUVertexBufferDescription> vertex_buffers) {
-            _vertex_buffers = vertex_buffers;
+        constexpr Make&& vertex_buffers(std::vector<SDL_GPUVertexBufferDescription> vertex_buffers) {
+            _vertex_buffers.reset(new SDL_GPUVertexBufferDescription[vertex_buffers.size()]);
+            std::memcpy(_vertex_buffers.get(), vertex_buffers.data(),
+                        sizeof(SDL_GPUVertexBufferDescription) * vertex_buffers.size());
 
-            sdl_pipeline.vertex_input_state.vertex_buffer_descriptions = _vertex_buffers.data();
-            sdl_pipeline.vertex_input_state.num_vertex_buffers = static_cast<uint32_t>(_vertex_buffers.size());
+            _sdl_pipeline.vertex_input_state.vertex_buffer_descriptions = _vertex_buffers.get();
+            _sdl_pipeline.vertex_input_state.num_vertex_buffers = static_cast<uint32_t>(vertex_buffers.size());
 
-            return *this;
+            return std::move(*this);
         }
 
-        constexpr Make& vertex_attributes(std::vector<SDL_GPUVertexAttribute> vertex_attributes) {
-            _vertex_attributes = vertex_attributes;
+        constexpr Make&& vertex_attributes(std::vector<SDL_GPUVertexAttribute> vertex_attributes) {
+            _vertex_buffers.reset(new SDL_GPUVertexBufferDescription[vertex_attributes.size()]);
+            std::memcpy(_vertex_attributes.get(), vertex_attributes.data(),
+                        sizeof(SDL_GPUVertexAttribute) * vertex_attributes.size());
 
-            sdl_pipeline.vertex_input_state.vertex_attributes = _vertex_attributes.data();
-            sdl_pipeline.vertex_input_state.num_vertex_attributes = static_cast<uint32_t>(_vertex_attributes.size());
+            _sdl_pipeline.vertex_input_state.vertex_attributes = _vertex_attributes.get();
+            _sdl_pipeline.vertex_input_state.num_vertex_attributes = static_cast<uint32_t>(vertex_attributes.size());
 
-            return *this;
+            return std::move(*this);
         }
 
-        constexpr Make& fill_mode(FillMode fill_mode) {
-            sdl_pipeline.rasterizer_state.fill_mode = static_cast<SDL_GPUFillMode>(fill_mode);
-            return *this;
+        constexpr Make&& fill_mode(FillMode fill_mode) {
+            _sdl_pipeline.rasterizer_state.fill_mode = static_cast<SDL_GPUFillMode>(fill_mode);
+            return std::move(*this);
         }
 
-        constexpr Make& cull_mode(CullMode cull_mode) {
-            sdl_pipeline.rasterizer_state.cull_mode = static_cast<SDL_GPUCullMode>(cull_mode);
-            return *this;
+        constexpr Make&& cull_mode(CullMode cull_mode) {
+            _sdl_pipeline.rasterizer_state.cull_mode = static_cast<SDL_GPUCullMode>(cull_mode);
+            return std::move(*this);
         }
 
-        constexpr Make& front_face(FrontFace front_face) {
-            sdl_pipeline.rasterizer_state.front_face = static_cast<SDL_GPUFrontFace>(front_face);
-            return *this;
+        constexpr Make&& front_face(FrontFace front_face) {
+            _sdl_pipeline.rasterizer_state.front_face = static_cast<SDL_GPUFrontFace>(front_face);
+            return std::move(*this);
         }
 
-        constexpr Make& depth_bias(float constant_factor, float slope_factor, float clamp) {
-            sdl_pipeline.rasterizer_state.enable_depth_bias = true;
-            sdl_pipeline.rasterizer_state.depth_bias_constant_factor = constant_factor;
-            sdl_pipeline.rasterizer_state.depth_bias_clamp = clamp;
-            sdl_pipeline.rasterizer_state.depth_bias_slope_factor = slope_factor;
+        constexpr Make&& depth_bias(float constant_factor, float slope_factor, float clamp) {
+            _sdl_pipeline.rasterizer_state.enable_depth_bias = true;
+            _sdl_pipeline.rasterizer_state.depth_bias_constant_factor = constant_factor;
+            _sdl_pipeline.rasterizer_state.depth_bias_clamp = clamp;
+            _sdl_pipeline.rasterizer_state.depth_bias_slope_factor = slope_factor;
 
-            return *this;
+            return std::move(*this);
         }
 
-        constexpr Make& no_depth_bias() {
-            sdl_pipeline.rasterizer_state.enable_depth_bias = false;
-            return *this;
+        constexpr Make&& no_depth_bias() {
+            _sdl_pipeline.rasterizer_state.enable_depth_bias = false;
+            return std::move(*this);
         }
 
-        constexpr Make& depth_clip() {
-            sdl_pipeline.rasterizer_state.enable_depth_clip = true;
-            return *this;
+        constexpr Make&& depth_clip() {
+            _sdl_pipeline.rasterizer_state.enable_depth_clip = true;
+            return std::move(*this);
         }
 
-        constexpr Make& no_depth_clip() {
-            sdl_pipeline.rasterizer_state.enable_depth_clip = false;
-            return *this;
+        constexpr Make&& no_depth_clip() {
+            _sdl_pipeline.rasterizer_state.enable_depth_clip = false;
+            return std::move(*this);
         }
 
-        constexpr Make& sample_count(SampleCount samples) {
-            sdl_pipeline.multisample_state.sample_count = static_cast<SDL_GPUSampleCount>(samples);
-            return *this;
+        constexpr Make&& sample_count(SampleCount samples) {
+            _sdl_pipeline.multisample_state.sample_count = static_cast<SDL_GPUSampleCount>(samples);
+            return std::move(*this);
         }
 
-        constexpr Make& color_targets(std::vector<SDL_GPUColorTargetDescription> color_target_descs) {
-            _color_targets = color_target_descs;
+        constexpr Make&& color_targets(std::vector<SDL_GPUColorTargetDescription> color_target_descs) {
+            _color_targets.reset(new SDL_GPUColorTargetDescription[color_target_descs.size()]);
+            std::memcpy(_color_targets.get(), color_target_descs.data(),
+                        sizeof(SDL_GPUColorTargetDescription) * color_target_descs.size());
 
-            sdl_pipeline.target_info.color_target_descriptions = _color_targets.data();
-            sdl_pipeline.target_info.num_color_targets = static_cast<uint32_t>(_color_targets.size());
+            _sdl_pipeline.target_info.color_target_descriptions = _color_targets.get();
+            _sdl_pipeline.target_info.num_color_targets = static_cast<uint32_t>(color_target_descs.size());
 
-            return *this;
+            return std::move(*this);
         }
 
-        constexpr Make& depth_stencil_format(SDL_GPUTextureFormat format) {
-            sdl_pipeline.target_info.has_depth_stencil_target = true;
-            sdl_pipeline.target_info.depth_stencil_format = format;
-            return *this;
+        constexpr Make&& depth_stencil_format(SDL_GPUTextureFormat format) {
+            _sdl_pipeline.target_info.has_depth_stencil_target = true;
+            _sdl_pipeline.target_info.depth_stencil_format = format;
+            return std::move(*this);
         }
 
-        constexpr Make& no_depth_stencil() {
-            sdl_pipeline.target_info.has_depth_stencil_target = false;
-            return *this;
+        constexpr Make&& no_depth_stencil() {
+            _sdl_pipeline.target_info.has_depth_stencil_target = false;
+            return std::move(*this);
         }
 
-        constexpr Make& depth_testing(CompareOp compare_op) {
-            sdl_pipeline.depth_stencil_state.enable_depth_test = true;
-            sdl_pipeline.depth_stencil_state.compare_op = static_cast<SDL_GPUCompareOp>(compare_op);
-            return *this;
+        constexpr Make&& depth_testing(CompareOp compare_op) {
+            _sdl_pipeline.depth_stencil_state.enable_depth_test = true;
+            _sdl_pipeline.depth_stencil_state.compare_op = static_cast<SDL_GPUCompareOp>(compare_op);
+            return std::move(*this);
         }
 
-        constexpr Make& no_depth_testing() {
-            sdl_pipeline.depth_stencil_state.enable_depth_test = false;
-            return *this;
+        constexpr Make&& no_depth_testing() {
+            _sdl_pipeline.depth_stencil_state.enable_depth_test = false;
+            return std::move(*this);
         }
 
-        constexpr Make& depth_write() {
-            sdl_pipeline.depth_stencil_state.enable_depth_write = true;
-            return *this;
+        constexpr Make&& depth_write() {
+            _sdl_pipeline.depth_stencil_state.enable_depth_write = true;
+            return std::move(*this);
         }
 
-        constexpr Make& no_depth_write() {
-            sdl_pipeline.depth_stencil_state.enable_depth_write = false;
-            return *this;
+        constexpr Make&& no_depth_write() {
+            _sdl_pipeline.depth_stencil_state.enable_depth_write = false;
+            return std::move(*this);
         }
 
         struct StencilTest {
@@ -362,28 +389,27 @@ namespace engine::pipeline {
             uint8_t write_mask;
         };
 
-        constexpr Make& stencil_test(StencilTest stencil_test) {
-            sdl_pipeline.depth_stencil_state.enable_stencil_test = true;
-            sdl_pipeline.depth_stencil_state.back_stencil_state = stencil_test.back_stencil_state;
-            sdl_pipeline.depth_stencil_state.front_stencil_state = stencil_test.front_stencil_state;
-            sdl_pipeline.depth_stencil_state.compare_mask = stencil_test.compare_mask;
-            sdl_pipeline.depth_stencil_state.write_mask = stencil_test.write_mask;
-            return *this;
+        constexpr Make&& stencil_test(StencilTest stencil_test) {
+            _sdl_pipeline.depth_stencil_state.enable_stencil_test = true;
+            _sdl_pipeline.depth_stencil_state.back_stencil_state = stencil_test.back_stencil_state;
+            _sdl_pipeline.depth_stencil_state.front_stencil_state = stencil_test.front_stencil_state;
+            _sdl_pipeline.depth_stencil_state.compare_mask = stencil_test.compare_mask;
+            _sdl_pipeline.depth_stencil_state.write_mask = stencil_test.write_mask;
+            return std::move(*this);
         }
 
-        constexpr Make& no_stencil_test() {
-            sdl_pipeline.depth_stencil_state.enable_stencil_test = false;
-            return *this;
+        constexpr Make&& no_stencil_test() {
+            _sdl_pipeline.depth_stencil_state.enable_stencil_test = false;
+            return std::move(*this);
         }
 
-        SDL_GPUGraphicsPipeline* create() {
-            return SDL_CreateGPUGraphicsPipeline(engine::gpu_device, &sdl_pipeline);
-        }
+        PipelineId create();
 
-      private:
-        SDL_GPUGraphicsPipelineCreateInfo sdl_pipeline;
-        std::vector<SDL_GPUVertexBufferDescription> _vertex_buffers{};
-        std::vector<SDL_GPUVertexAttribute> _vertex_attributes{};
-        std::vector<SDL_GPUColorTargetDescription> _color_targets{};
+        SDL_GPUGraphicsPipelineCreateInfo _sdl_pipeline;
+        shader::ShaderId _vertex_shader_id{(uint16_t)-1, nullptr};
+        shader::ShaderId _fragment_shader_id{(uint16_t)-1, nullptr};
+        std::unique_ptr<SDL_GPUVertexBufferDescription[]> _vertex_buffers{};
+        std::unique_ptr<SDL_GPUVertexAttribute[]> _vertex_attributes{};
+        std::unique_ptr<SDL_GPUColorTargetDescription[]> _color_targets{};
     };
 }

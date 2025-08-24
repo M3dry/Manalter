@@ -78,6 +78,7 @@
               }))
               assimp
               glm
+              xxHash
 
               julia
 

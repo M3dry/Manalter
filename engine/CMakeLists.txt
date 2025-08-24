@@ -1,6 +1,7 @@
 find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared)
 find_package(SDL3_image REQUIRED CONFIG)
 find_package(glm REQUIRED CONFIG)
+find_package(xxHash 0.8 CONFIG REQUIRED)
 
 set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
 set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
@@ -16,15 +17,17 @@ SET(ENGINE_SOURCES
     ecs.cpp
     camera.cpp
     shader.cpp
+    pipeline.cpp
     model.cpp
     texture.cpp
+    MikkTSpace/mikktspace.c
 )
 
 add_library(engine STATIC ${ENGINE_SOURCES})
 target_compile_options(engine PRIVATE ${COMMON_COMPILE_OPTIONS})
 target_link_options(engine PRIVATE ${COMMON_LINK_OPTIONS})
-target_include_directories(engine PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} "./tinygltf")
-target_link_libraries(engine PUBLIC julip ecs SDL3::SDL3 SDL3_image::SDL3_image imgui glm::glm)
+target_include_directories(engine PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(engine PUBLIC julip ecs SDL3::SDL3 SDL3_image::SDL3_image imgui glm::glm xxHash::xxhash)
 target_compile_definitions(engine PUBLIC ENGINE_MODE)
 
 add_executable(engine_demo engine_demo.cpp)
