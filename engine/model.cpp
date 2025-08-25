@@ -663,43 +663,46 @@ namespace engine::model {
                      model_gpumeshes, model_materials, model_textures, model_samplers, model_sources>(model_id);
         gpu_meshes.clear();
 
+        const auto start_texture_ix = gpu_textures.size();
+        const auto start_sampler_ix = gpu_samplers.size();
+
+        gpu_textures.reserve(start_texture_ix + sources.size());
+        for (const auto& source : sources) {
+            SDL_GPUTextureCreateInfo create_info{};
+            create_info.type = SDL_GPU_TEXTURETYPE_2D;
+            create_info.format = source.format;
+            create_info.width = source.width;
+            create_info.height = source.height;
+            create_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+            create_info.num_levels = 1;
+            create_info.layer_count_or_depth = 1;
+
+            gpu_textures.emplace_back(SDL_CreateGPUTexture(gpu_device, &create_info));
+            texture_queue.emplace_back(texture_current_offset, SDL_GPUTextureRegion{
+                                                                   .texture = gpu_textures.back(),
+                                                                   .w = source.width,
+                                                                   .h = source.height,
+                                                                   .d = 1,
+                                                               });
+
+            std::memcpy(buffer + texture_current_offset, source.data.get(), source.size);
+
+            texture_current_offset += source.size;
+        }
+        gpu_samplers.reserve(start_sampler_ix + samplers.size());
+        for (auto sampler : samplers) {
+            gpu_samplers.emplace_back(SDL_CreateGPUSampler(gpu_device, &sampler));
+        }
+
+        std::println("mesh count: {}", mesh_count);
         for (std::size_t m = 0; m < mesh_count; m++) {
+            std::println("mesh: {}", m);
             auto [indices, vertex_count, positions, normals, tangents, texcoords, material_id] =
                 *ecs.get<archetypes::Mesh, model::MeshIndices, mesh_vertex_count_tag, mesh_positions_tag,
                          mesh_normals_tag, mesh_tangents_tag, mesh_texcoords_tag, mesh_material_id>(meshes[m]);
             const auto transform = transforms[m];
             const auto& material = materials[material_id];
-            const auto start_texture_ix = gpu_textures.size();
-            const auto start_sampler_ix = gpu_samplers.size();
-
-            gpu_textures.reserve(start_texture_ix + sources.size());
-            for (const auto& source : sources) {
-                SDL_GPUTextureCreateInfo create_info{};
-                create_info.type = SDL_GPU_TEXTURETYPE_2D;
-                create_info.format = source.format;
-                create_info.width = source.width;
-                create_info.height = source.height;
-                create_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-                create_info.num_levels = 1;
-                create_info.layer_count_or_depth = 1;
-
-                gpu_textures.emplace_back(SDL_CreateGPUTexture(gpu_device, &create_info));
-                texture_queue.emplace_back(texture_current_offset, SDL_GPUTextureRegion{
-                                                                       .texture = gpu_textures.back(),
-                                                                       .w = source.width,
-                                                                       .h = source.height,
-                                                                       .d = 1,
-                                                                   });
-
-                std::memcpy(buffer + texture_current_offset, source.data.get(), source.size);
-
-                texture_current_offset += source.size;
-                std::println("current texture offset: {}", texture_current_offset);
-            }
-            gpu_samplers.reserve(start_sampler_ix + samplers.size());
-            for (auto sampler : samplers) {
-                gpu_samplers.emplace_back(SDL_CreateGPUSampler(gpu_device, &sampler));
-            }
+            std::println("got all mesh[{}] info", m);
 
             uint32_t attribute_offset = 0;
             uint32_t stride = 0;
@@ -886,7 +889,7 @@ namespace engine::model {
                     *ecs.get<archetypes::Mesh, model::MeshIndices, mesh_vertex_count_tag, mesh_positions_tag,
                              mesh_normals_tag, mesh_tangents_tag, mesh_texcoords_tag, mesh_material_id>(meshes[m]);
                 if (indices.indices.get() != nullptr) {
-                    mesh_buffer_size = (uint32_t)(index_size * indices.count);
+                    mesh_buffer_size += (uint32_t)(index_size * indices.count);
                 }
 
                 if (positions.get() != nullptr) mesh_buffer_size += vertex_count * position_size;
@@ -1050,7 +1053,7 @@ namespace engine::model {
 
             std::println("mesh[{}]", ecs::Entity(meshes[i]));
             std::println("\tindices count: {}", mesh_indices.count);
-            std::println("\tstride: {}", static_cast<int>(mesh_indices.stride));
+            std::println("\tindex type: {}", mesh_indices.stride == SDL_GPU_INDEXELEMENTSIZE_16BIT ? "uint16_t" : "uint32_t");
             std::println("\tmode: {}", static_cast<int>(mode));
             std::println("\tvertices: {}", vertices);
             std::println("\tmaterial: {}", material);
@@ -1174,7 +1177,20 @@ namespace engine::model {
         std::println("buffer: {}", (std::uintptr_t)buffer);
     }
 
-    bool draw_model(ModelId model_id, glm::mat4 model, const CamId& cam_id, SDL_GPUCommandBuffer* cmd_buf,
+    void depth_pass(ModelId model_id, glm::mat4 model, glm::mat4 view_projection, SDL_GPUCommandBuffer* cmd_buf, SDL_GPURenderPass* render_pass) {
+        auto [gpu_meshes] = *ecs.get<archetypes::Model, model_gpumeshes>(model_id);
+        for (std::size_t m = 0; m < gpu_meshes.size(); m++) {
+            auto [offsets, material, model_transform, texture_bindings, draw_count, buffer] = gpu_meshes.get(m);
+
+            SDL_PushGPUVertexUniformData(cmd_buf, 0, &offsets, sizeof(GPUOffsets));
+            glm::mat4 uniform_block{view_projection * model * model_transform};
+            SDL_PushGPUVertexUniformData(cmd_buf, 1, &uniform_block, sizeof(glm::mat4));
+            SDL_BindGPUVertexStorageBuffers(render_pass, 0, &buffer, 1);
+            SDL_DrawGPUPrimitives(render_pass, draw_count, 1, 0, 0);
+        }
+    }
+
+    void draw_model(ModelId model_id, glm::mat4 model, const CamId& cam_id, SDL_GPUCommandBuffer* cmd_buf,
                     SDL_GPURenderPass* render_pass) {
         struct UniformBlock {
             glm::mat4 vp;
@@ -1188,7 +1204,7 @@ namespace engine::model {
 
             SDL_PushGPUVertexUniformData(cmd_buf, 0, &offsets, sizeof(GPUOffsets));
             UniformBlock uniform_block{camera::view_projection_matrix(cam_id), model * model_transform,
-                                       glm::mat4(glm::transpose(glm::inverse(glm::mat3(model))))};
+                                       glm::mat4(glm::transpose(glm::inverse(glm::mat3(model * model_transform))))};
             SDL_PushGPUVertexUniformData(cmd_buf, 1, &uniform_block, sizeof(UniformBlock));
             SDL_PushGPUFragmentUniformData(cmd_buf, 0, &material, sizeof(GPUMaterial));
             glm::vec3 cam_pos = camera::position(cam_id);
@@ -1197,7 +1213,5 @@ namespace engine::model {
             SDL_BindGPUFragmentSamplers(render_pass, 0, texture_bindings.data(), texture_bindings.size());
             SDL_DrawGPUPrimitives(render_pass, draw_count, 1, 0, 0);
         }
-
-        return true;
     }
 }

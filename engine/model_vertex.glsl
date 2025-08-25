@@ -86,6 +86,13 @@ Attribute init_attributes() {
     if (has(Normal)) {
         uint v_ix = base_ix + offsets1.w / 4;
         attrib.normal = vec3(uintBitsToFloat(raw[v_ix]), uintBitsToFloat(raw[v_ix + 1]), uintBitsToFloat(raw[v_ix + 2]));
+
+        if (any(isnan(attrib.normal))) {
+            attrib.normal = normalize(vec3(0.5));
+        }
+        if (any(isinf(attrib.normal))) {
+            attrib.normal = normalize(vec3(0.5));
+        }
     } else {
         attrib.normal = vec3(0.0);
     }

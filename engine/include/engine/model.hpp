@@ -24,6 +24,8 @@ namespace engine::model {
     void dump_data(ModelId model_id);
     void dump_data(GPUGroupId gpugroup_id);
 
-    bool draw_model(ModelId model_id, glm::mat4 model, const CamId& cam_id, SDL_GPUCommandBuffer* cmd_buf,
+    void depth_pass(ModelId model_id, glm::mat4 model, glm::mat4 view_projection, SDL_GPUCommandBuffer* cmd_buf,
+                    SDL_GPURenderPass* render_pass);
+    void draw_model(ModelId model_id, glm::mat4 model, const CamId& cam_id, SDL_GPUCommandBuffer* cmd_buf,
                     SDL_GPURenderPass* render_pass);
 }

@@ -48,16 +48,6 @@ vec3 get_normal() {
     n_ts.z = sqrt(max(1.0 - dot(n_ts.xy, n_ts.xy), 0.0));
 
     return normalize(TBN * n_ts);
-    // vec3 tangent_normal = texture(normal_tex, normal_uv).xyz * 2.0 - 1.0;
-    // tangent_normal.xy *= metallic_roughness_normal_occlusion_factors.z;
-    // tangent_normal = normalize(tangent_normal);
-    //
-    // vec3 N = normalize(v_normal);
-    // vec3 T = normalize(tangent.xyz - N * dot(N, tangent.xyz));
-    // vec3 B = cross(N, T) * tangent.w;
-    // mat3 TBN = mat3(T, B, N);
-    //
-    // return normalize(TBN * tangent_normal);
 }
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
