@@ -54,16 +54,16 @@ int main(int argc, char** argv) {
         bool lock_cam = true;
         float sensitivity = 0.5f;
 
-        // auto depth_vertex_shader = engine::shader::Make()
-        //                                .uniforms(2)
-        //                                .storage_buffers(1)
-        //                                .stage(engine::shader::Vertex)
-        //                                .load_from_file("./depth_vertex.spv");
-        // auto depth_fragment_shader =
-        //     engine::shader::Make().stage(engine::shader::Fragment).load_from_file("./depth_fragment.spv");
+        auto depth_vertex_shader = engine::shader::Make()
+                                       .uniforms(2)
+                                       .storage_buffers(2)
+                                       .stage(engine::shader::Vertex)
+                                       .load_from_file("./depth_vertex.spv");
+        auto depth_fragment_shader =
+            engine::shader::Make().stage(engine::shader::Fragment).load_from_file("./depth_fragment.spv");
         auto vertex_shader = engine::shader::Make()
                                  .uniforms(2)
-                                 .storage_buffers(1)
+                                 .storage_buffers(2)
                                  .stage(engine::shader::Vertex)
                                  .load_from_file("./model_vertex.spv");
         auto fragment_shader = engine::shader::Make()
@@ -71,21 +71,21 @@ int main(int argc, char** argv) {
                                    .samplers(5)
                                    .stage(engine::shader::Fragment)
                                    .load_from_file("./model_fragment.spv");
-        // auto depth_pipeline = engine::pipeline::Make()
-        //                           .shaders(depth_vertex_shader, depth_fragment_shader)
-        //                           .vertex_buffers({})
-        //                           .vertex_attributes({})
-        //                           .primitive(engine::pipeline::TriangleList)
-        //                           .fill_mode(engine::pipeline::Fill)
-        //                           .cull_mode(engine::pipeline::CullNone)
-        //                           .front_face(engine::pipeline::CCW)
-        //                           .no_depth_bias()
-        //                           .no_depth_clip()
-        //                           .depth_stencil_format(SDL_GPU_TEXTUREFORMAT_D16_UNORM)
-        //                           .depth_write()
-        //                           .depth_testing(engine::pipeline::Less)
-        //                           .color_targets({})
-        //                           .create();
+        auto depth_pipeline = engine::pipeline::Make()
+                                  .shaders(depth_vertex_shader, depth_fragment_shader)
+                                  .vertex_buffers({})
+                                  .vertex_attributes({})
+                                  .primitive(engine::pipeline::TriangleList)
+                                  .fill_mode(engine::pipeline::Fill)
+                                  .cull_mode(engine::pipeline::CullNone)
+                                  .front_face(engine::pipeline::CCW)
+                                  .no_depth_bias()
+                                  .no_depth_clip()
+                                  .depth_stencil_format(SDL_GPU_TEXTUREFORMAT_D16_UNORM)
+                                  .depth_write()
+                                  .depth_testing(engine::pipeline::Less)
+                                  .color_targets({})
+                                  .create();
         auto shading_pipeline = engine::pipeline::Make()
                                     .shaders(vertex_shader, fragment_shader)
                                     .vertex_buffers({})
@@ -97,9 +97,7 @@ int main(int argc, char** argv) {
                                     .no_depth_bias()
                                     .no_depth_clip()
                                     .depth_stencil_format(SDL_GPU_TEXTUREFORMAT_D16_UNORM)
-                                    // .depth_testing(engine::pipeline::Equal)
-                                    .depth_testing(engine::pipeline::Less)
-                                    .depth_write()
+                                    .depth_testing(engine::pipeline::Equal)
                                     .color_targets({engine::pipeline::ColorTarget().format(
                                         SDL_GetGPUSwapchainTextureFormat(engine::gpu_device, engine::win))})
                                     .create();
@@ -119,7 +117,9 @@ int main(int argc, char** argv) {
         glm::vec3 light_pos{5.0f, 5.0f, 5.0};
         glm::vec3 light_color{1000.0f, 1000.0f, 1000.0f};
 
-        float model_scale = 1.0f;
+        float model_scales[2] = {1.0f, 1.0f};
+        engine::Buffer model_transform{2 * sizeof(glm::mat4), engine::buffer::GraphicsStorageRead};
+        model_transform.name("Model transforms");
 
         bool done = false;
         uint64_t accum = 0;
@@ -170,6 +170,14 @@ int main(int argc, char** argv) {
 
                 engine::imgui::enable(lock_cam);
                 SDL_SetWindowRelativeMouseMode(engine::win, !lock_cam);
+
+                SDL_GPUCommandBuffer* cmd_buf = SDL_AcquireGPUCommandBuffer(engine::gpu_device);
+                glm::mat4 mat[2] = {
+                    glm::scale(glm::identity<glm::mat4>(), glm::vec3{model_scales[0]}),
+                    glm::scale(glm::translate(glm::identity<glm::mat4>(), glm::vec3{-10.0f, 0.0f, 5.0f}),
+                               glm::vec3{model_scales[1]})};
+                engine::gpu::transfer_to_gpu(cmd_buf, model_transform, &mat, 2 * sizeof(glm::mat4), 0);
+                SDL_SubmitGPUCommandBuffer(cmd_buf);
             }
 
             if (engine::window::is_minimized()) {
@@ -196,28 +204,29 @@ int main(int argc, char** argv) {
                 ImGui::DragFloat3("position", glm::value_ptr(light_pos), 0.1f, -10.0f, 10.0f, "%.1f");
                 ImGui::InputFloat3("color", glm::value_ptr(light_color));
 
-                ImGui::SeparatorText("Model");
-                ImGui::DragFloat("scale", &model_scale, 0.2f, 0.0f, 100.0f);
+                ImGui::SeparatorText("Models");
+                ImGui::DragFloat("scale 1", &model_scales[0], 0.2f, 0.0f, 100.0f);
+                ImGui::DragFloat("scale 2", &model_scales[1], 0.2f, 0.0f, 100.0f);
                 ImGui::End();
             }
             engine::imgui::prepare_data(command_buffer);
 
-            // SDL_GPUDepthStencilTargetInfo depth_prepass_info{
-            //     .texture = depth_texture,
-            //     .clear_depth = 1,
-            //     .load_op = SDL_GPU_LOADOP_CLEAR,
-            //     .store_op = SDL_GPU_STOREOP_STORE,
-            //     .stencil_load_op = SDL_GPU_LOADOP_CLEAR,
-            //     .stencil_store_op = SDL_GPU_STOREOP_STORE,
-            //     .cycle = true,
-            //     .clear_stencil = 1,
-            // };
-            //
-            // SDL_GPURenderPass* depth_prepass = SDL_BeginGPURenderPass(command_buffer, nullptr, 0, &depth_prepass_info);
-            // SDL_BindGPUGraphicsPipeline(depth_prepass, depth_pipeline);
-            // engine::model::depth_pass(*model_, glm::scale(glm::identity<glm::mat4>(), glm::vec3{model_scale}), engine::camera::view_projection_matrix(cam),
-            //                           command_buffer, depth_prepass);
-            // SDL_EndGPURenderPass(depth_prepass);
+            SDL_GPUDepthStencilTargetInfo depth_prepass_info{
+                .texture = depth_texture,
+                .clear_depth = 1,
+                .load_op = SDL_GPU_LOADOP_CLEAR,
+                .store_op = SDL_GPU_STOREOP_STORE,
+                .stencil_load_op = SDL_GPU_LOADOP_CLEAR,
+                .stencil_store_op = SDL_GPU_STOREOP_STORE,
+                .cycle = true,
+                .clear_stencil = 1,
+            };
+
+            SDL_GPURenderPass* depth_prepass = SDL_BeginGPURenderPass(command_buffer, nullptr, 0,
+            &depth_prepass_info); SDL_BindGPUGraphicsPipeline(depth_prepass, depth_pipeline);
+            engine::model::depth_pass(*model_, model_transform, 2, 0, engine::camera::view_projection_matrix(cam),
+                                      command_buffer, depth_prepass);
+            SDL_EndGPURenderPass(depth_prepass);
 
             SDL_GPUColorTargetInfo target_info = {};
             target_info.texture = swapchain_texture;
@@ -231,7 +240,7 @@ int main(int argc, char** argv) {
             SDL_GPUDepthStencilTargetInfo depth_stencil_info{
                 .texture = depth_texture,
                 .clear_depth = 1,
-                .load_op = SDL_GPU_LOADOP_CLEAR,
+                .load_op = SDL_GPU_LOADOP_LOAD,
                 .store_op = SDL_GPU_STOREOP_STORE,
                 .stencil_load_op = SDL_GPU_LOADOP_CLEAR,
                 .stencil_store_op = SDL_GPU_STOREOP_STORE,
@@ -245,7 +254,7 @@ int main(int argc, char** argv) {
             SDL_BindGPUGraphicsPipeline(render_pass, shading_pipeline);
             glm::vec4 light_data[2] = {glm::vec4(light_pos, 1.0), glm::vec4(light_color, 1.0)};
             SDL_PushGPUFragmentUniformData(command_buffer, 2, &light_data, 2 * sizeof(glm::vec4));
-            engine::model::draw_model(*model_, glm::scale(glm::identity<glm::mat4>(), glm::vec3{model_scale}), cam, command_buffer, render_pass);
+            engine::model::draw_model(*model_, model_transform, 2, 0, cam, command_buffer, render_pass);
 
             engine::imgui::draw(command_buffer, render_pass);
             SDL_EndGPURenderPass(render_pass);

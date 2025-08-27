@@ -29,18 +29,29 @@ const uint OcclusionCoord = 1 << 7;
 const uint EmissiveCoord = 1 << 8;
 
 layout(std140, set = 1, binding = 1) uniform UniformBlock {
-    mat4 mvp;
+    mat4 vp;
+    mat4 m;
+    uint instance_offset;
 };
 
 layout(std430, set = 0, binding = 0) buffer VertexData {
     uint raw[];
 };
 
+layout(std430, set = 0, binding = 1) buffer ModelTransforms {
+    mat4 model_transforms[];
+};
+
 bool has(uint flag) {
     return (offsets3.w & flag) != 0;
 }
 
+mat4 get_model() {
+    return model_transforms[instance_offset + gl_InstanceIndex] * m;
+}
+
 void main() {
+    mat4 mvp = vp * get_model();
     uint vertex_index;
     if (has(Indices)) {
         vertex_index = raw[offsets1.x/4 + offsets1.y/4 + gl_VertexIndex];

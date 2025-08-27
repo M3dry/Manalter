@@ -1053,7 +1053,8 @@ namespace engine::model {
 
             std::println("mesh[{}]", ecs::Entity(meshes[i]));
             std::println("\tindices count: {}", mesh_indices.count);
-            std::println("\tindex type: {}", mesh_indices.stride == SDL_GPU_INDEXELEMENTSIZE_16BIT ? "uint16_t" : "uint32_t");
+            std::println("\tindex type: {}",
+                         mesh_indices.stride == SDL_GPU_INDEXELEMENTSIZE_16BIT ? "uint16_t" : "uint32_t");
             std::println("\tmode: {}", static_cast<int>(mode));
             std::println("\tvertices: {}", vertices);
             std::println("\tmaterial: {}", material);
@@ -1177,25 +1178,13 @@ namespace engine::model {
         std::println("buffer: {}", (std::uintptr_t)buffer);
     }
 
-    void depth_pass(ModelId model_id, glm::mat4 model, glm::mat4 view_projection, SDL_GPUCommandBuffer* cmd_buf, SDL_GPURenderPass* render_pass) {
-        auto [gpu_meshes] = *ecs.get<archetypes::Model, model_gpumeshes>(model_id);
-        for (std::size_t m = 0; m < gpu_meshes.size(); m++) {
-            auto [offsets, material, model_transform, texture_bindings, draw_count, buffer] = gpu_meshes.get(m);
-
-            SDL_PushGPUVertexUniformData(cmd_buf, 0, &offsets, sizeof(GPUOffsets));
-            glm::mat4 uniform_block{view_projection * model * model_transform};
-            SDL_PushGPUVertexUniformData(cmd_buf, 1, &uniform_block, sizeof(glm::mat4));
-            SDL_BindGPUVertexStorageBuffers(render_pass, 0, &buffer, 1);
-            SDL_DrawGPUPrimitives(render_pass, draw_count, 1, 0, 0);
-        }
-    }
-
-    void draw_model(ModelId model_id, glm::mat4 model, const CamId& cam_id, SDL_GPUCommandBuffer* cmd_buf,
+    void depth_pass(ModelId model_id, SDL_GPUBuffer* model_transforms, uint32_t instance_count,
+                    uint32_t instance_start_offset, glm::mat4 view_projection, SDL_GPUCommandBuffer* cmd_buf,
                     SDL_GPURenderPass* render_pass) {
-        struct UniformBlock {
+        struct UniformBuffer {
             glm::mat4 vp;
-            glm::mat4 model;
-            glm::mat4 normal;
+            glm::mat4 m;
+            uint32_t instance_start_offset;
         };
 
         auto [gpu_meshes] = *ecs.get<archetypes::Model, model_gpumeshes>(model_id);
@@ -1203,15 +1192,42 @@ namespace engine::model {
             auto [offsets, material, model_transform, texture_bindings, draw_count, buffer] = gpu_meshes.get(m);
 
             SDL_PushGPUVertexUniformData(cmd_buf, 0, &offsets, sizeof(GPUOffsets));
-            UniformBlock uniform_block{camera::view_projection_matrix(cam_id), model * model_transform,
-                                       glm::mat4(glm::transpose(glm::inverse(glm::mat3(model * model_transform))))};
+            UniformBuffer uniform_block{view_projection, model_transform, instance_start_offset};
+            SDL_PushGPUVertexUniformData(cmd_buf, 1, &uniform_block, sizeof(UniformBuffer));
+
+            SDL_GPUBuffer* storage_buffers[2]{buffer, model_transforms};
+            SDL_BindGPUVertexStorageBuffers(render_pass, 0, storage_buffers, 2);
+
+            SDL_DrawGPUPrimitives(render_pass, draw_count, instance_count, 0, 0);
+        }
+    }
+
+    void draw_model(ModelId model_id, SDL_GPUBuffer* model_transforms, uint32_t instance_count,
+                    uint32_t instance_start_offset, const CamId& cam_id, SDL_GPUCommandBuffer* cmd_buf,
+                    SDL_GPURenderPass* render_pass) {
+        struct UniformBlock {
+            glm::mat4 vp;
+            glm::mat4 model;
+            uint32_t instance_start_offset;
+        };
+
+        auto [gpu_meshes] = *ecs.get<archetypes::Model, model_gpumeshes>(model_id);
+        for (std::size_t m = 0; m < gpu_meshes.size(); m++) {
+            auto [offsets, material, model_transform, texture_bindings, draw_count, buffer] = gpu_meshes.get(m);
+
+            SDL_PushGPUVertexUniformData(cmd_buf, 0, &offsets, sizeof(GPUOffsets));
+            UniformBlock uniform_block{camera::view_projection_matrix(cam_id), model_transform, instance_start_offset};
             SDL_PushGPUVertexUniformData(cmd_buf, 1, &uniform_block, sizeof(UniformBlock));
+
             SDL_PushGPUFragmentUniformData(cmd_buf, 0, &material, sizeof(GPUMaterial));
             glm::vec3 cam_pos = camera::position(cam_id);
             SDL_PushGPUFragmentUniformData(cmd_buf, 1, &cam_pos, sizeof(glm::vec3));
-            SDL_BindGPUVertexStorageBuffers(render_pass, 0, &buffer, 1);
+
+            SDL_GPUBuffer* storage_buffers[2] = {buffer, model_transforms};
+            SDL_BindGPUVertexStorageBuffers(render_pass, 0, storage_buffers, 2);
+
             SDL_BindGPUFragmentSamplers(render_pass, 0, texture_bindings.data(), texture_bindings.size());
-            SDL_DrawGPUPrimitives(render_pass, draw_count, 1, 0, 0);
+            SDL_DrawGPUPrimitives(render_pass, draw_count, instance_count, 0, 0);
         }
     }
 }

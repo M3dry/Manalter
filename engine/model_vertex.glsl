@@ -30,12 +30,16 @@ const uint EmissiveCoord = 1 << 8;
 
 layout(std140, set = 1, binding = 1) uniform UniformBlock {
     mat4 vp;
-    mat4 model;
-    mat3 normal_matrix;
+    mat4 m;
+    uint instance_offset;
 };
 
 layout(std430, set = 0, binding = 0) buffer VertexData {
     uint raw[];
+};
+
+layout(std430, set = 0, binding = 1) buffer ModelTransforms {
+    mat4 model_transforms[];
 };
 
 layout (location = 0) out vec3 world_pos;
@@ -147,8 +151,14 @@ Attribute init_attributes() {
     return attrib;
 }
 
+mat4 get_model() {
+    return model_transforms[instance_offset + gl_InstanceIndex] * m;
+}
+
 void main() {
     Attribute attrib = init_attributes();
+    mat4 model = get_model();
+    mat3 normal_matrix = transpose(inverse(mat3(model)));
 
     world_pos = vec3(model * vec4(attrib.position, 1.0));
     normal = normalize(normal_matrix * attrib.normal);
