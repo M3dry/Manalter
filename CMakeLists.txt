@@ -26,8 +26,8 @@ add_subdirectory(src)
 add_subdirectory(particle)
 add_subdirectory(julip)
 add_subdirectory(ecs)
-add_subdirectory(render_test)
 add_subdirectory(engine)
+add_subdirectory(vulkan_test)
 
 option(TEST "" OFF)
 

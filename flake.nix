@@ -67,6 +67,7 @@
               ((imgui.override {
                 IMGUI_BUILD_SDL3_BINDING = true;
                 IMGUI_BUILD_SDLGPU3_BINDING = true;
+                IMGUI_BUILD_VULKAN_BINDING = true;
               }).overrideAttrs (oldAttrs: {
                 version = "1.91.8";
                 src = fetchFromGitHub {
@@ -76,9 +77,14 @@
                   hash = "sha256-+BuSAXvLvOYOmENzxd1pGDE6llWhTGVu7C3RnoVLVzg=";
                 };
               }))
-              assimp
               glm
               xxHash
+              vk-bootstrap
+              vulkan-headers
+              vulkan-loader
+              vulkan-memory-allocator
+              vulkan-utility-libraries
+              vulkan-validation-layers
 
               julia
 
@@ -92,6 +98,9 @@
           shellHook = ''
             export CC=clang
             export CXX=clang++
+
+            # needed for stupid fucking renderdoc to work
+            export LD_LIBRARY_PATH="${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.vulkan-loader}/lib"
           '';
         };
       }
