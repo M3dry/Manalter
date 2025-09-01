@@ -3,6 +3,7 @@
 
 #include <VkBootstrap.h>
 #include <cmath>
+#include <csignal>
 #include <glm/ext/vector_float4.hpp>
 #include <vulkan/vulkan.h>
 
@@ -27,7 +28,7 @@
         }                                                                                                              \
     } while (0)
 
-#define FRAMES_IN_FLIGHT 2
+#define FRAMES_IN_FLIGHT 3
 
 struct FrameData {
     VkCommandPool cmd_pool;
@@ -118,13 +119,20 @@ int main(int argc, char** argv) {
                                         .set_required_features_13(features13)
                                         .set_required_features_12(features12)
                                         .set_surface(surface)
+                                        .add_required_extension("VK_EXT_present_mode_fifo_latest_ready")
                                         .select();
     if (!physical_device_selected) {
         std::println("error: {}", physical_device_selected.error().message());
         return -1;
     }
     auto physical_device = physical_device_selected.value();
-    vkb::Device vkb_device = vkb::DeviceBuilder{physical_device}.build().value();
+
+    VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT latest_ready_extension{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT,
+        .pNext = nullptr,
+        .presentModeFifoLatestReady = true,
+    };
+    vkb::Device vkb_device = vkb::DeviceBuilder{physical_device}.add_pNext(&latest_ready_extension).build().value();
 
     VkDevice device = vkb_device.device;
     VkPhysicalDevice chosen_gpu = physical_device.physical_device;
@@ -141,9 +149,10 @@ int main(int argc, char** argv) {
     vkb::Swapchain vkb_swapchain = vkb::SwapchainBuilder{chosen_gpu, device, surface}
                                        .set_desired_format(VkSurfaceFormatKHR{
                                            .format = swapchain_format, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-                                       .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+                                       .set_desired_present_mode(VK_PRESENT_MODE_FIFO_LATEST_READY_EXT)
                                        .set_desired_extent(1920, 1200)
                                        .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+                                       .set_desired_min_image_count(2)
                                        .build()
                                        .value();
     VkExtent2D swapchain_extent = vkb_swapchain.extent;
@@ -205,7 +214,6 @@ int main(int argc, char** argv) {
     imgui_info.Device = device;
     imgui_info.QueueFamily = graphics_queue_family;
     imgui_info.Queue = graphics_queue;
-    // imgui_info.PipelineCache;
     imgui_info.DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE;
     imgui_info.Subpass = 0;
     imgui_info.MinImageCount = 2;
@@ -228,13 +236,20 @@ int main(int argc, char** argv) {
     uint64_t last_time = SDL_GetTicks();
 
     bool done = false;
-    uint8_t i = 0;
     uint64_t frame_count = 0;
     while (!done) {
         uint64_t time = SDL_GetTicks();
         uint64_t frame_time = time - last_time;
         last_time = time;
         accum += frame_time;
+
+        FrameData& frame = frame_data[frame_count % 2];
+        VK_CHECK(vkWaitForFences(device, 1, &frame.render_fence, true, UINT64_MAX));
+        VK_CHECK(vkResetFences(device, 1, &frame.render_fence));
+
+        uint32_t image_ix;
+        auto result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, frame.swapchain_semaphore, VK_NULL_HANDLE, &image_ix);
+        if (result != VK_SUCCESS) std::println("acquire result: {}", string_VkResult(result));
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -258,26 +273,12 @@ int main(int argc, char** argv) {
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
 
-        // { ImGui::ShowDemoWindow(); }
-        {
-            ImGui::Begin("shello");
-            ImGui::End();
-        }
+        { ImGui::ShowDemoWindow(); }
 
         ImGui::Render();
         ImDrawData* draw_data = ImGui::GetDrawData();
 
-        VK_CHECK(vkWaitForFences(device, 1, &frame_data[i].render_fence, true, 1000000000));
-        VK_CHECK(vkResetFences(device, 1, &frame_data[i].render_fence));
-
-        uint32_t swapchain_image_ix;
-        if (vkAcquireNextImageKHR(device, swapchain, 0, frame_data[i].swapchain_semaphore, nullptr,
-                                       &swapchain_image_ix) == VK_NOT_READY) {
-            continue;
-        }
-
-        VkCommandBuffer cmd_buf = frame_data[i].cmd_buf;
-        VK_CHECK(vkResetCommandBuffer(cmd_buf, 0));
+        vkResetCommandBuffer(frame.cmd_buf, 0);
 
         VkCommandBufferBeginInfo begin_info{};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -285,34 +286,22 @@ int main(int argc, char** argv) {
         begin_info.pInheritanceInfo = nullptr;
         begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-        VK_CHECK(vkBeginCommandBuffer(cmd_buf, &begin_info));
+        VK_CHECK(vkBeginCommandBuffer(frame.cmd_buf, &begin_info));
 
-        transition_image(cmd_buf, swapchain_images[swapchain_image_ix], VK_IMAGE_LAYOUT_UNDEFINED,
+        transition_image(frame.cmd_buf, swapchain_images[image_ix], VK_IMAGE_LAYOUT_UNDEFINED,
                          VK_IMAGE_LAYOUT_GENERAL);
 
-        VkClearColorValue clear_value;
-        float flash = std::abs(std::sin(frame_count / 120.0f));
-        *(glm::vec4*)(&clear_value.float32) = {0.0f, 0.0f, flash, 1.0f};
-
-        VkImageSubresourceRange clear_range{};
-        clear_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        clear_range.baseMipLevel = 0;
-        clear_range.levelCount = VK_REMAINING_MIP_LEVELS;
-        clear_range.baseArrayLayer = 0;
-        clear_range.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
-        vkCmdClearColorImage(cmd_buf, swapchain_images[swapchain_image_ix], VK_IMAGE_LAYOUT_GENERAL, &clear_value, 1,
-                             &clear_range);
-
         if (!(draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f)) {
+            float flash = std::abs(std::sin(frame_count / 1200.0f));
+
             VkRenderingAttachmentInfo color_attachment{};
             color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             color_attachment.pNext = nullptr;
-            color_attachment.imageView = swapchain_image_views[swapchain_image_ix];
+            color_attachment.imageView = swapchain_image_views[image_ix];
             color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            *(glm::vec4*)(&color_attachment.clearValue.color.float32) = {0.0f, 0.0f, 0.0f, 1.0f};
+            *(glm::vec4*)(&color_attachment.clearValue.color.float32) = {0.0f, 0.0f, flash, 1.0f};
 
             VkRenderingInfo rendering_info{};
             rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -324,68 +313,63 @@ int main(int argc, char** argv) {
             rendering_info.pStencilAttachment = nullptr;
             rendering_info.renderArea = VkRect2D{.offset = VkOffset2D{}, .extent = swapchain_extent};
 
-            vkCmdBeginRendering(cmd_buf, &rendering_info);
+            vkCmdBeginRendering(frame.cmd_buf, &rendering_info);
 
-            ImGui_ImplVulkan_RenderDrawData(draw_data, cmd_buf);
+            ImGui_ImplVulkan_RenderDrawData(draw_data, frame.cmd_buf);
 
-            vkCmdEndRendering(cmd_buf);
+            vkCmdEndRendering(frame.cmd_buf);
         }
 
-        transition_image(cmd_buf, swapchain_images[swapchain_image_ix], VK_IMAGE_LAYOUT_GENERAL,
+        transition_image(frame.cmd_buf, swapchain_images[image_ix], VK_IMAGE_LAYOUT_GENERAL,
                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-        VK_CHECK(vkEndCommandBuffer(cmd_buf));
+        VK_CHECK(vkEndCommandBuffer(frame.cmd_buf));
 
-        VkCommandBufferSubmitInfo cmd_submit_info{};
-        cmd_submit_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-        cmd_submit_info.pNext = nullptr;
-        cmd_submit_info.commandBuffer = cmd_buf;
-        cmd_submit_info.deviceMask = 0;
+        VkSemaphoreSubmitInfo wait_info{};
+        wait_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        wait_info.semaphore = frame.swapchain_semaphore;
+        wait_info.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        wait_info.value = 1;
 
-        VkSemaphoreSubmitInfo semaphore_info{};
-        semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-        semaphore_info.pNext = nullptr;
-        semaphore_info.deviceIndex = 0;
-        semaphore_info.value = 1;
-
-        VkSemaphoreSubmitInfo wait_info = semaphore_info;
-        wait_info.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR;
-        wait_info.semaphore = frame_data[i].swapchain_semaphore;
-
-        VkSemaphoreSubmitInfo signal_info = semaphore_info;
+        VkSemaphoreSubmitInfo signal_info{};
+        signal_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        signal_info.semaphore = frame.render_semaphore;
         signal_info.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
-        signal_info.semaphore = frame_data[i].render_semaphore;
+        signal_info.value = 1;
+
+        VkCommandBufferSubmitInfo cmd_info{};
+        cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        cmd_info.commandBuffer = frame.cmd_buf;
 
         VkSubmitInfo2 submit_info{};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-        submit_info.pNext = nullptr;
         submit_info.waitSemaphoreInfoCount = 1;
         submit_info.pWaitSemaphoreInfos = &wait_info;
+        submit_info.commandBufferInfoCount = 1;
+        submit_info.pCommandBufferInfos = &cmd_info;
         submit_info.signalSemaphoreInfoCount = 1;
         submit_info.pSignalSemaphoreInfos = &signal_info;
-        submit_info.commandBufferInfoCount = 1;
-        submit_info.pCommandBufferInfos = &cmd_submit_info;
 
-        VK_CHECK(vkQueueSubmit2(graphics_queue, 1, &submit_info, frame_data[i].render_fence));
+        VK_CHECK(vkQueueSubmit2(graphics_queue, 1, &submit_info, frame.render_fence));
 
         VkPresentInfoKHR present_info{};
         present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        present_info.pNext = nullptr;
-        present_info.pSwapchains = &swapchain;
-        present_info.swapchainCount = 1;
-        present_info.pWaitSemaphores = &frame_data[i].render_semaphore;
         present_info.waitSemaphoreCount = 1;
-        present_info.pImageIndices = &swapchain_image_ix;
+        present_info.pWaitSemaphores = &frame.render_semaphore;
+        present_info.swapchainCount = 1;
+        present_info.pSwapchains = &swapchain;
+        present_info.pImageIndices = &image_ix;
 
-        VK_CHECK(vkQueuePresentKHR(graphics_queue, &present_info));
+        result = vkQueuePresentKHR(graphics_queue, &present_info);
+        if (result != VK_SUCCESS) std::println("present result: {}", string_VkResult(result));
 
-        i = (i + 1) % FRAMES_IN_FLIGHT;
         frame_count++;
     }
 
     vkDeviceWaitIdle(device);
 
     ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
 
     vmaDestroyAllocator(allocator);
@@ -396,6 +380,7 @@ int main(int argc, char** argv) {
         vkDestroyFence(device, frame_data[i].render_fence, nullptr);
 
         vkDestroySemaphore(device, frame_data[i].swapchain_semaphore, nullptr);
+        vkDestroySemaphore(device, frame_data[i].render_semaphore, nullptr);
     }
 
     vkDestroySwapchainKHR(device, swapchain, nullptr);
