@@ -1,3 +1,5 @@
+#define VK_NO_PROTOTYPES 1
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
@@ -5,17 +7,19 @@
 #include <cmath>
 #include <csignal>
 #include <glm/ext/vector_float4.hpp>
-#include <vulkan/vulkan.h>
+#include <memory>
+#include <span>
 
 #include <print>
 #include <vulkan/vk_enum_string_helper.h>
-#include <vulkan/vulkan_core.h>
 
-#include <imgui.h>
-#include <imgui_impl_sdl3.h>
-#include <imgui_impl_vulkan.h>
+#include "imgui.h"
+#include "imgui_impl_sdl3.h"
+#include "imgui_impl_vulkan.h"
 
-#define VMA_IMPLEMENTATION
+#include <volk.h>
+
+#define VMA_IMPLEMENTATION 1
 #include <vk_mem_alloc.h>
 #undef VMA_IMPLEMENTATION
 
@@ -24,7 +28,7 @@
         VkResult err = x;                                                                                              \
         if (err) {                                                                                                     \
             std::println("Detected Vulkan error: {} @{}", string_VkResult(err), __LINE__);                             \
-            abort();                                                                                                   \
+            exit(-1);                                                                                                  \
         }                                                                                                              \
     } while (0)
 
@@ -77,7 +81,44 @@ void transition_image(VkCommandBuffer cmd, VkImage image, VkImageLayout current_
     vkCmdPipelineBarrier2(cmd, &dep_info);
 }
 
+namespace shader {
+    std::pair<std::unique_ptr<uint8_t[]>, std::size_t> load_shader_code(const char* file_path) {
+        std::size_t code_size;
+        std::unique_ptr<uint8_t[]> code{(uint8_t*)SDL_LoadFile(file_path, &code_size)};
+
+        return {std::move(code), code_size};
+    }
+
+    VkShaderCreateInfoEXT create_info(VkShaderStageFlagBits stage, VkShaderStageFlags next_stage,
+                                      std::span<uint8_t> spriv_code, std::span<VkPushConstantRange> push_constants,
+                                      std::span<VkDescriptorSetLayout> set_layouts) {
+        return VkShaderCreateInfoEXT{
+            .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
+            .pNext = nullptr,
+            .flags = 0,
+            .stage = stage,
+            .nextStage = next_stage,
+            .codeType = VK_SHADER_CODE_TYPE_SPIRV_EXT,
+            .codeSize = spriv_code.size(),
+            .pCode = spriv_code.data(),
+            .pName = "main",
+            .setLayoutCount = (uint32_t)set_layouts.size(),
+            .pSetLayouts = set_layouts.data(),
+            .pushConstantRangeCount = (uint32_t)push_constants.size(),
+            .pPushConstantRanges = push_constants.data(),
+        };
+    }
+
+    VkShaderEXT create(VkDevice device, VkShaderCreateInfoEXT shader) {
+        VkShaderEXT shader_ext;
+        VK_CHECK(vkCreateShadersEXT(device, 1, &shader, nullptr, &shader_ext));
+        return shader_ext;
+    }
+}
+
 int main(int argc, char** argv) {
+    VK_CHECK(volkInitialize());
+
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::println("error: {}", SDL_GetError());
         return -1;
@@ -100,6 +141,8 @@ int main(int argc, char** argv) {
     vkb::Instance vkb_inst = vkb_inst_builder.value();
 
     VkInstance instance = vkb_inst.instance;
+    volkLoadInstance(instance);
+
     VkDebugUtilsMessengerEXT debug_messenger = vkb_inst.debug_messenger;
     VkSurfaceKHR surface;
     if (!SDL_Vulkan_CreateSurface(win, instance, nullptr, &surface)) {
@@ -119,12 +162,19 @@ int main(int argc, char** argv) {
                                         .set_required_features_13(features13)
                                         .set_required_features_12(features12)
                                         .set_surface(surface)
-                                        .add_required_extension("VK_EXT_present_mode_fifo_latest_ready")
+                                        .add_required_extensions({"VK_EXT_shader_object"})
+                                        .add_desired_extensions({"VK_EXT_present_mode_fifo_latest_ready"})
                                         .select();
     if (!physical_device_selected) {
         std::println("error: {}", physical_device_selected.error().message());
         return -1;
     }
+
+    auto physical_device_extensions = physical_device_selected->get_extensions();
+    bool latest_ready_extension_flag =
+        std::any_of(physical_device_extensions.begin(), physical_device_extensions.end(),
+                    [](const std::string& ext) { return ext == "VK_EXT_present_mode_fifo_latest_ready"; });
+
     auto physical_device = physical_device_selected.value();
 
     VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT latest_ready_extension{
@@ -132,29 +182,43 @@ int main(int argc, char** argv) {
         .pNext = nullptr,
         .presentModeFifoLatestReady = true,
     };
-    vkb::Device vkb_device = vkb::DeviceBuilder{physical_device}.add_pNext(&latest_ready_extension).build().value();
+    VkPhysicalDeviceShaderObjectFeaturesEXT shader_object_extension{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
+        .pNext = latest_ready_extension_flag ? &latest_ready_extension : nullptr,
+        .shaderObject = true,
+    };
+    vkb::Device vkb_device = vkb::DeviceBuilder{physical_device}.add_pNext(&shader_object_extension).build().value();
 
     VkDevice device = vkb_device.device;
     VkPhysicalDevice chosen_gpu = physical_device.physical_device;
+
+    volkLoadDevice(device);
+
+    VmaVulkanFunctions allocator_funcs{};
+    allocator_funcs.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    allocator_funcs.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
 
     VmaAllocatorCreateInfo allocator_info{};
     allocator_info.physicalDevice = chosen_gpu;
     allocator_info.device = device;
     allocator_info.instance = instance;
     allocator_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    allocator_info.pVulkanFunctions = &allocator_funcs;
     VmaAllocator allocator;
     vmaCreateAllocator(&allocator_info, &allocator);
 
     auto swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
-    vkb::Swapchain vkb_swapchain = vkb::SwapchainBuilder{chosen_gpu, device, surface}
-                                       .set_desired_format(VkSurfaceFormatKHR{
-                                           .format = swapchain_format, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-                                       .set_desired_present_mode(VK_PRESENT_MODE_FIFO_LATEST_READY_EXT)
-                                       .set_desired_extent(1920, 1200)
-                                       .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-                                       .set_desired_min_image_count(2)
-                                       .build()
-                                       .value();
+    vkb::Swapchain vkb_swapchain =
+        vkb::SwapchainBuilder{chosen_gpu, device, surface}
+            .set_desired_format(
+                VkSurfaceFormatKHR{.format = swapchain_format, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
+            .set_desired_present_mode(latest_ready_extension_flag ? VK_PRESENT_MODE_FIFO_LATEST_READY_EXT
+                                                                  : VK_PRESENT_MODE_IMMEDIATE_KHR)
+            .set_desired_extent(1920, 1200)
+            .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+            .set_desired_min_image_count(2)
+            .build()
+            .value();
     VkExtent2D swapchain_extent = vkb_swapchain.extent;
     VkSwapchainKHR swapchain = vkb_swapchain.swapchain;
     std::vector<VkImage> swapchain_images = vkb_swapchain.get_images().value();
@@ -219,7 +283,7 @@ int main(int argc, char** argv) {
     imgui_info.MinImageCount = 2;
     imgui_info.ImageCount = 2;
     imgui_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-    imgui_info.Allocator = allocator->GetAllocationCallbacks();
+    imgui_info.Allocator = nullptr;
     imgui_info.CheckVkResultFn = check_vk_result;
     imgui_info.PipelineRenderingCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -228,7 +292,16 @@ int main(int argc, char** argv) {
         .pColorAttachmentFormats = &swapchain_format,
     };
     ImGui_ImplVulkan_Init(&imgui_info);
-    ImGui_ImplVulkan_CreateFontsTexture();
+
+    auto [vertex_code, vertex_size] = shader::load_shader_code("./vertex.spv");
+    auto [fragment_code, fragment_size] = shader::load_shader_code("./fragment.spv");
+    auto vertex_info =
+        shader::create_info(VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT, {vertex_code.get(), vertex_size},
+                            {(VkPushConstantRange*)nullptr, 0}, {(VkDescriptorSetLayout*)nullptr, 0});
+    auto fragment_info = shader::create_info(VK_SHADER_STAGE_FRAGMENT_BIT, 0, {fragment_code.get(), fragment_size},
+                                             {(VkPushConstantRange*)nullptr, 0}, {(VkDescriptorSetLayout*)nullptr, 0});
+    auto vertex = shader::create(device, vertex_info);
+    auto fragment = shader::create(device, fragment_info);
 
     SDL_ShowWindow(win);
 
@@ -238,6 +311,8 @@ int main(int argc, char** argv) {
     bool done = false;
     uint64_t frame_count = 0;
     while (!done) {
+        if (frame_count < 5) vkDeviceWaitIdle(device); // gets rid of the fucking validation error
+
         uint64_t time = SDL_GetTicks();
         uint64_t frame_time = time - last_time;
         last_time = time;
@@ -248,7 +323,8 @@ int main(int argc, char** argv) {
         VK_CHECK(vkResetFences(device, 1, &frame.render_fence));
 
         uint32_t image_ix;
-        auto result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, frame.swapchain_semaphore, VK_NULL_HANDLE, &image_ix);
+        auto result =
+            vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, frame.swapchain_semaphore, VK_NULL_HANDLE, &image_ix);
         if (result != VK_SUCCESS) std::println("acquire result: {}", string_VkResult(result));
 
         SDL_Event event;
@@ -289,7 +365,7 @@ int main(int argc, char** argv) {
         VK_CHECK(vkBeginCommandBuffer(frame.cmd_buf, &begin_info));
 
         transition_image(frame.cmd_buf, swapchain_images[image_ix], VK_IMAGE_LAYOUT_UNDEFINED,
-                         VK_IMAGE_LAYOUT_GENERAL);
+                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
         if (!(draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f)) {
             float flash = std::abs(std::sin(frame_count / 1200.0f));
@@ -301,7 +377,7 @@ int main(int argc, char** argv) {
             color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            *(glm::vec4*)(&color_attachment.clearValue.color.float32) = {0.0f, 0.0f, flash, 1.0f};
+            *(glm::vec4*)(&color_attachment.clearValue.color.float32) = {0.0f, 0.0f, 0.0f, 1.0f};
 
             VkRenderingInfo rendering_info{};
             rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -315,12 +391,64 @@ int main(int argc, char** argv) {
 
             vkCmdBeginRendering(frame.cmd_buf, &rendering_info);
 
+            vkCmdSetCullModeEXT(frame.cmd_buf, VK_CULL_MODE_NONE);
+            vkCmdSetDepthTestEnableEXT(frame.cmd_buf, false);
+            vkCmdSetDepthWriteEnableEXT(frame.cmd_buf, false);
+            vkCmdSetRasterizerDiscardEnableEXT(frame.cmd_buf, false);
+            vkCmdSetPrimitiveRestartEnableEXT(frame.cmd_buf, false);
+            vkCmdSetStencilTestEnableEXT(frame.cmd_buf, false);
+            vkCmdSetDepthBiasEnableEXT(frame.cmd_buf, false);
+            vkCmdSetPolygonModeEXT(frame.cmd_buf, VK_POLYGON_MODE_FILL);
+            vkCmdSetRasterizationSamplesEXT(frame.cmd_buf, VK_SAMPLE_COUNT_1_BIT);
+            vkCmdSetVertexInputEXT(frame.cmd_buf, 0, nullptr, 0, nullptr);
+            vkCmdSetPrimitiveTopologyEXT(frame.cmd_buf, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+
+            uint32_t enable_blend = false;
+            vkCmdSetColorBlendEnableEXT(frame.cmd_buf, 0, 1, &enable_blend);
+            VkSampleMask sample_mask = 0xFFFFFFFF;
+            vkCmdSetSampleMaskEXT(frame.cmd_buf, VK_SAMPLE_COUNT_1_BIT, &sample_mask);
+            vkCmdSetFrontFaceEXT(frame.cmd_buf, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+            vkCmdSetAlphaToCoverageEnableEXT(frame.cmd_buf, false);
+            VkViewport viewport{
+                .x = 0,
+                .y = 1200,
+                .width = 1920,
+                .height = -1200,
+                .minDepth = 0,
+                .maxDepth = 1,
+            };
+            vkCmdSetViewportWithCountEXT(frame.cmd_buf, 1, &viewport);
+            VkRect2D scissor{
+                .offset =
+                    VkOffset2D{
+                        .x = 0,
+                        .y = 0,
+                    },
+                .extent =
+                    VkExtent2D{
+                        .width = 1920,
+                        .height = 1200,
+                    },
+            };
+            vkCmdSetScissorWithCountEXT(frame.cmd_buf, 1, &scissor);
+            VkColorComponentFlags color_components{};
+            color_components |= VK_COLOR_COMPONENT_R_BIT;
+            color_components |= VK_COLOR_COMPONENT_G_BIT;
+            color_components |= VK_COLOR_COMPONENT_B_BIT;
+            color_components |= VK_COLOR_COMPONENT_A_BIT;
+            vkCmdSetColorWriteMaskEXT(frame.cmd_buf, 0, 1, &color_components);
+
+            VkShaderStageFlagBits stages[2] = {VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT};
+            VkShaderEXT shaders[2] = {vertex, fragment};
+            vkCmdBindShadersEXT(frame.cmd_buf, 2, stages, shaders);
+            vkCmdDraw(frame.cmd_buf, 3, 1, 0, 0);
+
             ImGui_ImplVulkan_RenderDrawData(draw_data, frame.cmd_buf);
 
             vkCmdEndRendering(frame.cmd_buf);
         }
 
-        transition_image(frame.cmd_buf, swapchain_images[image_ix], VK_IMAGE_LAYOUT_GENERAL,
+        transition_image(frame.cmd_buf, swapchain_images[image_ix], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         VK_CHECK(vkEndCommandBuffer(frame.cmd_buf));
@@ -367,6 +495,9 @@ int main(int argc, char** argv) {
     }
 
     vkDeviceWaitIdle(device);
+
+    vkDestroyShaderEXT(device, vertex, nullptr);
+    vkDestroyShaderEXT(device, fragment, nullptr);
 
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
