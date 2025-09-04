@@ -80,7 +80,6 @@
               glm
               xxHash
               vulkan-volk
-              vk-bootstrap
               vulkan-headers
               vulkan-loader
               vulkan-memory-allocator

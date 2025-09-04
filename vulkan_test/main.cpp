@@ -1,9 +1,10 @@
+#include <cstring>
 #define VK_NO_PROTOTYPES 1
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
-#include <VkBootstrap.h>
+#include "vk-bootstrap/src/VkBootstrap.h"
 #include <cmath>
 #include <csignal>
 #include <glm/ext/vector_float4.hpp>
@@ -12,6 +13,7 @@
 
 #include <print>
 #include <vulkan/vk_enum_string_helper.h>
+#include <vulkan/vulkan_core.h>
 
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
@@ -116,6 +118,29 @@ namespace shader {
     }
 }
 
+namespace transport {
+    VkCommandPool pool;
+    VkCommandBuffer cmd_buf;
+
+    VkBuffer ring_buffer;
+
+    void init(VkDevice device, VkCommandPool transport_pool, VkCommandBuffer transport_cmd_buf, uint32_t queue_family) {
+        pool = transport_pool;
+        cmd_buf = transport_cmd_buf;
+
+        VkBufferCreateInfo create_info{};
+        create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        create_info.queueFamilyIndexCount = 1;
+        create_info.pQueueFamilyIndices = &queue_family;
+        create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+        vkCreateBuffer(device, &create_info, nullptr, &ring_buffer);
+    }
+
+    void deinit() {}
+}
+
 int main(int argc, char** argv) {
     VK_CHECK(volkInitialize());
 
@@ -150,6 +175,8 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    VkPhysicalDeviceVulkan14Features features14{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES};
+    features14.maintenance5 = true;
     VkPhysicalDeviceVulkan13Features features13{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     features13.dynamicRendering = true;
     features13.synchronization2 = true;
@@ -158,24 +185,28 @@ int main(int argc, char** argv) {
     features12.descriptorIndexing = true;
 
     auto physical_device_selected = vkb::PhysicalDeviceSelector{vkb_inst}
-                                        .set_minimum_version(1, 3)
+                                        .set_minimum_version(1, 4)
                                         .set_required_features_13(features13)
                                         .set_required_features_12(features12)
                                         .set_surface(surface)
                                         .add_required_extensions({"VK_EXT_shader_object"})
-                                        .add_desired_extensions({"VK_EXT_present_mode_fifo_latest_ready"})
                                         .select();
     if (!physical_device_selected) {
         std::println("error: {}", physical_device_selected.error().message());
         return -1;
     }
 
-    auto physical_device_extensions = physical_device_selected->get_extensions();
-    bool latest_ready_extension_flag =
-        std::any_of(physical_device_extensions.begin(), physical_device_extensions.end(),
-                    [](const std::string& ext) { return ext == "VK_EXT_present_mode_fifo_latest_ready"; });
-
     auto physical_device = physical_device_selected.value();
+
+    uint32_t extension_count;
+    vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extension_count, nullptr);
+    std::vector<VkExtensionProperties> physical_device_extensions{extension_count};
+    vkEnumerateDeviceExtensionProperties(physical_device, nullptr, &extension_count, physical_device_extensions.data());
+
+    bool latest_ready_extension_flag = std::any_of(
+        physical_device_extensions.begin(), physical_device_extensions.end(), [](const VkExtensionProperties& ext) {
+            return std::strcmp(ext.extensionName, "VK_EXT_present_mode_fifo_latest_ready") == 0;
+        });
 
     VkPhysicalDevicePresentModeFifoLatestReadyFeaturesEXT latest_ready_extension{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_MODE_FIFO_LATEST_READY_FEATURES_EXT,
@@ -227,6 +258,9 @@ int main(int argc, char** argv) {
     VkQueue graphics_queue = vkb_device.get_queue(vkb::QueueType::graphics).value();
     auto graphics_queue_family = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
 
+    VkQueue transport_queue = vkb_device.get_queue(vkb::QueueType::transfer).value();
+    auto transport_queue_family = vkb_device.get_queue_index(vkb::QueueType::transfer).value();
+
     VkCommandPoolCreateInfo cmd_pool_info{};
     cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cmd_pool_info.pNext = nullptr;
@@ -261,7 +295,23 @@ int main(int argc, char** argv) {
         VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame_data[i].render_semaphore));
     }
 
-    IMGUI_CHECKVERSION();
+    VkCommandPoolCreateInfo transport_pool_info{};
+    transport_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    transport_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    transport_pool_info.queueFamilyIndex = transport_queue_family;
+
+    VkCommandPool transport_pool{};
+    vkCreateCommandPool(device, &transport_pool_info, nullptr, &transport_pool);
+
+    VkCommandBufferAllocateInfo transport_alloc_info{};
+    transport_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    transport_alloc_info.commandBufferCount = 1;
+    transport_alloc_info.commandPool = transport_pool;
+    transport_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+    VkCommandBuffer transport_buf;
+    vkAllocateCommandBuffers(device, &transport_alloc_info, &transport_buf);
+
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -504,6 +554,8 @@ int main(int argc, char** argv) {
     ImGui::DestroyContext();
 
     vmaDestroyAllocator(allocator);
+
+    vkDestroyCommandPool(device, transport_pool, nullptr);
 
     for (std::size_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
         vkDestroyCommandPool(device, frame_data[i].cmd_pool, nullptr);
