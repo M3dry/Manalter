@@ -272,11 +272,14 @@ int main(int argc, char** argv) {
 
     vkb::InstanceBuilder instance_builder;
 
-    auto vkb_inst_builder = instance_builder.set_app_name("Vulkan test")
-                                .enable_validation_layers()
-                                .use_default_debug_messenger()
-                                .require_api_version(1, 3, 0)
-                                .build();
+    auto vkb_inst_builder =
+        instance_builder.set_app_name("Vulkan test")
+            .enable_validation_layers()
+            .add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT)
+            .add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
+            .use_default_debug_messenger()
+            .require_api_version(1, 3, 0)
+            .build();
     if (!vkb_inst_builder) {
         std::println("error: {}", vkb_inst_builder.error().message());
         return -1;
@@ -344,7 +347,6 @@ int main(int argc, char** argv) {
     VkPhysicalDevice chosen_gpu = physical_device.physical_device;
 
     volkLoadDevice(device);
-    vkCmdPushConstants2 = (PFN_vkCmdPushConstants2) vkGetInstanceProcAddr(instance, "vkCmdPushConstants2");
 
     VmaVulkanFunctions allocator_funcs{};
     allocator_funcs.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
@@ -467,9 +469,17 @@ int main(int argc, char** argv) {
         shader::create_info(VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT, {vertex_code.get(), vertex_size},
                             {&vertex_push_constant, 1}, {(VkDescriptorSetLayout*)nullptr, 0});
     auto fragment_info = shader::create_info(VK_SHADER_STAGE_FRAGMENT_BIT, 0, {fragment_code.get(), fragment_size},
-                                             {(VkPushConstantRange*)nullptr, 0}, {(VkDescriptorSetLayout*)nullptr, 0});
+                                             {&vertex_push_constant, 1}, {(VkDescriptorSetLayout*)nullptr, 0});
     auto vertex = shader::create(device, vertex_info);
     auto fragment = shader::create(device, fragment_info);
+
+    VkPipelineLayoutCreateInfo vertex_layout_info{};
+    vertex_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    vertex_layout_info.pushConstantRangeCount = 1;
+    vertex_layout_info.pPushConstantRanges = &vertex_push_constant;
+
+    VkPipelineLayout vertex_layout;
+    vkCreatePipelineLayout(device, &vertex_layout_info, nullptr, &vertex_layout);
 
     SDL_ShowWindow(win);
 
@@ -488,7 +498,8 @@ int main(int argc, char** argv) {
         create_info.size = sizeof(glm::vec4) * 3;
         create_info.queueFamilyIndexCount = 1;
         create_info.pQueueFamilyIndices = &graphics_queue_family;
-        create_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        create_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                            VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
         VmaAllocationCreateInfo alloc_info{};
         alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -500,7 +511,8 @@ int main(int argc, char** argv) {
     vertices_barrier.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
     vertices_barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
 
-    auto vertices_time = transport::upload(allocator, &vertices_barrier, vertices_data, sizeof(glm::vec4) * 3, vertices, 0);
+    auto vertices_time =
+        transport::upload(allocator, &vertices_barrier, vertices_data, sizeof(glm::vec4) * 3, vertices, 0);
 
     uint64_t accum = 0;
     uint64_t last_time = SDL_GetTicks();
@@ -637,19 +649,14 @@ int main(int argc, char** argv) {
             vertices_address_info.buffer = vertices;
             vertices_address_info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
 
-            uint64_t vertices_address = vkGetBufferDeviceAddress(device, &vertices_address_info);
-            VkPushConstantsInfo push_constant_info{};
-            push_constant_info.sType = VK_STRUCTURE_TYPE_PUSH_CONSTANTS_INFO;
-            push_constant_info.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-            push_constant_info.offset = 0;
-            push_constant_info.pValues = &vertices_address;
-            push_constant_info.size = sizeof(uint64_t);
-            assert(vkCmdPushConstants2 != nullptr);
-            vkCmdPushConstants2(frame.cmd_buf, &push_constant_info);
-
             VkShaderStageFlagBits stages[2] = {VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT};
             VkShaderEXT shaders[2] = {vertex, fragment};
             vkCmdBindShadersEXT(frame.cmd_buf, 2, stages, shaders);
+
+            uint64_t vertices_address = vkGetBufferDeviceAddress(device, &vertices_address_info);
+            vkCmdPushConstants(frame.cmd_buf, vertex_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(uint64_t),
+                               &vertices_address);
+
             vkCmdDraw(frame.cmd_buf, 3, 1, 0, 0);
 
             ImGui_ImplVulkan_RenderDrawData(draw_data, frame.cmd_buf);

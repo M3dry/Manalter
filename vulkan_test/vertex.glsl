@@ -11,5 +11,5 @@ layout(push_constant) uniform Push {
 };
 
 void main() {
-    gl_Position = verts.data[gl_VertexIndex % 3]; //vec4(positions[gl_VertexIndex % 3], 0.0, 1.0);
+    gl_Position = verts.data[gl_VertexIndex % 3];
 }
