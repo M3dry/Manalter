@@ -119,16 +119,34 @@ namespace shader {
 }
 
 namespace transport {
+    uint32_t queue_family;
+    VkQueue queue;
+
     VkCommandPool pool;
     VkCommandBuffer cmd_buf;
 
+    bool coherent = false;
+    uint8_t* ring_buffer_data;
     VkBuffer ring_buffer;
     VmaAllocation ring_buffer_allocation;
 
-    void init(VkDevice device, VkCommandPool transport_pool, VkCommandBuffer transport_cmd_buf, uint32_t queue_family,
+    uint64_t current_signal = 0;
+    VkSemaphore timeline;
+
+    void init(VkDevice device, VkQueue transport_queue, VkCommandPool transport_pool, uint32_t queue_family_ix,
               VmaAllocator alloc) {
+        queue_family = queue_family_ix;
+        queue = transport_queue;
+
         pool = transport_pool;
-        cmd_buf = transport_cmd_buf;
+
+        VkCommandBufferAllocateInfo transport_alloc_info{};
+        transport_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        transport_alloc_info.commandBufferCount = 1;
+        transport_alloc_info.commandPool = transport_pool;
+        transport_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+        vkAllocateCommandBuffers(device, &transport_alloc_info, &cmd_buf);
 
         VkBufferCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -140,13 +158,105 @@ namespace transport {
 
         VmaAllocationCreateInfo alloc_info{};
         alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
-        alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-        vmaCreateBuffer(alloc, &create_info, &alloc_info, &ring_buffer, &ring_buffer_allocation, nullptr);
+        VmaAllocationInfo out_alloc_info;
+        vmaCreateBuffer(alloc, &create_info, &alloc_info, &ring_buffer, &ring_buffer_allocation, &out_alloc_info);
+
+        ring_buffer_data = (uint8_t*)out_alloc_info.pMappedData;
+
+        VkMemoryPropertyFlags props;
+        vmaGetMemoryTypeProperties(alloc, out_alloc_info.memoryType, &props);
+        coherent = props & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+        VkSemaphoreTypeCreateInfo semaphore_type{};
+        semaphore_type.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+        semaphore_type.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+        semaphore_type.initialValue = 0;
+
+        VkSemaphoreCreateInfo semaphore_info{};
+        semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        semaphore_info.pNext = &semaphore_type;
+
+        vkCreateSemaphore(device, &semaphore_info, nullptr, &timeline);
     }
 
-    void deinit(VmaAllocator alloc) {
+    // `barrer` needs dstStageMask, dstAccessMask and dstQueueFamilyIndex set
+    // the QueueFamilyIndexes will be swapped so the barrier can be easily applied in the main queue
+    uint64_t upload(VmaAllocator alloc, VkBufferMemoryBarrier2* barrier, void* src, uint32_t size, VkBuffer dst,
+                    uint32_t dst_start_offset = 0) {
+        std::memcpy(ring_buffer_data, src, size);
+        if (!coherent) {
+            vmaFlushAllocation(alloc, ring_buffer_allocation, 0, size);
+        }
+
+        vkResetCommandBuffer(cmd_buf, 0);
+
+        VkCommandBufferBeginInfo begin_info{};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        VK_CHECK(vkBeginCommandBuffer(cmd_buf, &begin_info));
+
+        VkBufferCopy region{};
+        region.srcOffset = 0;
+        region.size = size;
+        region.dstOffset = dst_start_offset;
+        vkCmdCopyBuffer(cmd_buf, ring_buffer, dst, 1, &region);
+
+        auto dstStage = barrier->dstStageMask;
+        auto dstAccess = barrier->dstAccessMask;
+        barrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+        barrier->srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        barrier->srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        barrier->dstStageMask = VK_PIPELINE_STAGE_2_NONE;
+        barrier->dstAccessMask = 0;
+        barrier->buffer = dst;
+        barrier->offset = dst_start_offset;
+        barrier->size = size;
+        barrier->srcQueueFamilyIndex = queue_family;
+
+        VkDependencyInfo dep_info{};
+        dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_info.bufferMemoryBarrierCount = 1;
+        dep_info.pBufferMemoryBarriers = barrier;
+        vkCmdPipelineBarrier2(cmd_buf, &dep_info);
+
+        uint32_t dst_queue_family = barrier->dstQueueFamilyIndex;
+        barrier->srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+        barrier->srcAccessMask = 0;
+        barrier->srcAccessMask = dstStage;
+        barrier->dstStageMask = dstAccess;
+        barrier->dstQueueFamilyIndex = barrier->srcQueueFamilyIndex;
+        barrier->srcQueueFamilyIndex = dst_queue_family;
+
+        VK_CHECK(vkEndCommandBuffer(cmd_buf));
+
+        VkCommandBufferSubmitInfo cmd_info{};
+        cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        cmd_info.commandBuffer = cmd_buf;
+
+        VkSemaphoreSubmitInfo signal_info{};
+        signal_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        signal_info.semaphore = timeline;
+        signal_info.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        signal_info.value = ++current_signal;
+
+        VkSubmitInfo2 submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submit_info.waitSemaphoreInfoCount = 0;
+        submit_info.commandBufferInfoCount = 1;
+        submit_info.pCommandBufferInfos = &cmd_info;
+        submit_info.signalSemaphoreInfoCount = 1;
+        submit_info.pSignalSemaphoreInfos = &signal_info;
+
+        VK_CHECK(vkQueueSubmit2(queue, 1, &submit_info, nullptr));
+
+        return current_signal;
+    }
+
+    void deinit(VkDevice device, VmaAllocator alloc) {
         vmaDestroyBuffer(alloc, ring_buffer, ring_buffer_allocation);
+        vkDestroySemaphore(device, timeline, nullptr);
     }
 }
 
@@ -192,6 +302,7 @@ int main(int argc, char** argv) {
     VkPhysicalDeviceVulkan12Features features12{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
     features12.bufferDeviceAddress = true;
     features12.descriptorIndexing = true;
+    features12.timelineSemaphore = true;
 
     auto physical_device_selected = vkb::PhysicalDeviceSelector{vkb_inst}
                                         .set_minimum_version(1, 4)
@@ -233,6 +344,7 @@ int main(int argc, char** argv) {
     VkPhysicalDevice chosen_gpu = physical_device.physical_device;
 
     volkLoadDevice(device);
+    vkCmdPushConstants2 = (PFN_vkCmdPushConstants2) vkGetInstanceProcAddr(instance, "vkCmdPushConstants2");
 
     VmaVulkanFunctions allocator_funcs{};
     allocator_funcs.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
@@ -312,14 +424,7 @@ int main(int argc, char** argv) {
     VkCommandPool transport_pool{};
     vkCreateCommandPool(device, &transport_pool_info, nullptr, &transport_pool);
 
-    VkCommandBufferAllocateInfo transport_alloc_info{};
-    transport_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    transport_alloc_info.commandBufferCount = 1;
-    transport_alloc_info.commandPool = transport_pool;
-    transport_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-
-    VkCommandBuffer transport_buf;
-    vkAllocateCommandBuffers(device, &transport_alloc_info, &transport_buf);
+    transport::init(device, transport_queue, transport_pool, transport_queue_family, allocator);
 
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -354,15 +459,48 @@ int main(int argc, char** argv) {
 
     auto [vertex_code, vertex_size] = shader::load_shader_code("./vertex.spv");
     auto [fragment_code, fragment_size] = shader::load_shader_code("./fragment.spv");
+    VkPushConstantRange vertex_push_constant{};
+    vertex_push_constant.size = sizeof(uint64_t);
+    vertex_push_constant.offset = 0;
+    vertex_push_constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     auto vertex_info =
         shader::create_info(VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT, {vertex_code.get(), vertex_size},
-                            {(VkPushConstantRange*)nullptr, 0}, {(VkDescriptorSetLayout*)nullptr, 0});
+                            {&vertex_push_constant, 1}, {(VkDescriptorSetLayout*)nullptr, 0});
     auto fragment_info = shader::create_info(VK_SHADER_STAGE_FRAGMENT_BIT, 0, {fragment_code.get(), fragment_size},
                                              {(VkPushConstantRange*)nullptr, 0}, {(VkDescriptorSetLayout*)nullptr, 0});
     auto vertex = shader::create(device, vertex_info);
     auto fragment = shader::create(device, fragment_info);
 
     SDL_ShowWindow(win);
+
+    VkBuffer vertices;
+    VmaAllocation vertices_allocation;
+    glm::vec4 vertices_data[3] = {
+        glm::vec4{0.0, 0.5, 0.0f, 1.0f},
+        glm::vec4{-0.5, -0.5, 0.0f, 1.0f},
+        glm::vec4{0.5, -0.5, 0.0f, 1.0f},
+    };
+
+    {
+        VkBufferCreateInfo create_info{};
+        create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        create_info.size = sizeof(glm::vec4) * 3;
+        create_info.queueFamilyIndexCount = 1;
+        create_info.pQueueFamilyIndices = &graphics_queue_family;
+        create_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+        VmaAllocationCreateInfo alloc_info{};
+        alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+        vmaCreateBuffer(allocator, &create_info, &alloc_info, &vertices, &vertices_allocation, nullptr);
+    }
+
+    VkBufferMemoryBarrier2 vertices_barrier;
+    vertices_barrier.dstQueueFamilyIndex = graphics_queue_family;
+    vertices_barrier.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+    vertices_barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+
+    auto vertices_time = transport::upload(allocator, &vertices_barrier, vertices_data, sizeof(glm::vec4) * 3, vertices, 0);
 
     uint64_t accum = 0;
     uint64_t last_time = SDL_GetTicks();
@@ -417,8 +555,6 @@ int main(int argc, char** argv) {
 
         VkCommandBufferBeginInfo begin_info{};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.pNext = nullptr;
-        begin_info.pInheritanceInfo = nullptr;
         begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
         VK_CHECK(vkBeginCommandBuffer(frame.cmd_buf, &begin_info));
@@ -497,6 +633,20 @@ int main(int argc, char** argv) {
             color_components |= VK_COLOR_COMPONENT_A_BIT;
             vkCmdSetColorWriteMaskEXT(frame.cmd_buf, 0, 1, &color_components);
 
+            VkBufferDeviceAddressInfo vertices_address_info{};
+            vertices_address_info.buffer = vertices;
+            vertices_address_info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+
+            uint64_t vertices_address = vkGetBufferDeviceAddress(device, &vertices_address_info);
+            VkPushConstantsInfo push_constant_info{};
+            push_constant_info.sType = VK_STRUCTURE_TYPE_PUSH_CONSTANTS_INFO;
+            push_constant_info.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+            push_constant_info.offset = 0;
+            push_constant_info.pValues = &vertices_address;
+            push_constant_info.size = sizeof(uint64_t);
+            assert(vkCmdPushConstants2 != nullptr);
+            vkCmdPushConstants2(frame.cmd_buf, &push_constant_info);
+
             VkShaderStageFlagBits stages[2] = {VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT};
             VkShaderEXT shaders[2] = {vertex, fragment};
             vkCmdBindShadersEXT(frame.cmd_buf, 2, stages, shaders);
@@ -561,6 +711,10 @@ int main(int argc, char** argv) {
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
+
+    transport::deinit(device, allocator);
+
+    vmaDestroyBuffer(allocator, vertices, vertices_allocation);
 
     vmaDestroyAllocator(allocator);
 

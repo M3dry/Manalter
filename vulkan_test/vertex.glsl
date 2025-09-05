@@ -1,11 +1,15 @@
 #version 460
 
-const vec2 positions[3] = {
-    vec2(0.0, 0.5),
-    vec2(-0.5, -0.5),
-    vec2(0.5, -0.5),
+#extension GL_EXT_buffer_reference : require
+
+layout(buffer_reference, std430) readonly buffer Vertices {
+    vec4 data[];
+};
+
+layout(push_constant) uniform Push {
+    Vertices verts;
 };
 
 void main() {
-    gl_Position = vec4(positions[gl_VertexIndex % 3], 0.0, 1.0);
+    gl_Position = verts.data[gl_VertexIndex % 3]; //vec4(positions[gl_VertexIndex % 3], 0.0, 1.0);
 }
