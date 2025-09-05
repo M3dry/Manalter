@@ -1,5 +1,5 @@
-#include <cstring>
 #define VK_NO_PROTOTYPES 1
+#include <cstring>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
@@ -123,8 +123,10 @@ namespace transport {
     VkCommandBuffer cmd_buf;
 
     VkBuffer ring_buffer;
+    VmaAllocation ring_buffer_allocation;
 
-    void init(VkDevice device, VkCommandPool transport_pool, VkCommandBuffer transport_cmd_buf, uint32_t queue_family) {
+    void init(VkDevice device, VkCommandPool transport_pool, VkCommandBuffer transport_cmd_buf, uint32_t queue_family,
+              VmaAllocator alloc) {
         pool = transport_pool;
         cmd_buf = transport_cmd_buf;
 
@@ -133,12 +135,19 @@ namespace transport {
         create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         create_info.queueFamilyIndexCount = 1;
         create_info.pQueueFamilyIndices = &queue_family;
-        create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        create_info.size = 64000000;
 
-        vkCreateBuffer(device, &create_info, nullptr, &ring_buffer);
+        VmaAllocationCreateInfo alloc_info{};
+        alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+        alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+        vmaCreateBuffer(alloc, &create_info, &alloc_info, &ring_buffer, &ring_buffer_allocation, nullptr);
     }
 
-    void deinit() {}
+    void deinit(VmaAllocator alloc) {
+        vmaDestroyBuffer(alloc, ring_buffer, ring_buffer_allocation);
+    }
 }
 
 int main(int argc, char** argv) {
@@ -361,7 +370,7 @@ int main(int argc, char** argv) {
     bool done = false;
     uint64_t frame_count = 0;
     while (!done) {
-        if (frame_count < 5) vkDeviceWaitIdle(device); // gets rid of the fucking validation error
+        vkDeviceWaitIdle(device); // gets rid of the fucking validation error
 
         uint64_t time = SDL_GetTicks();
         uint64_t frame_time = time - last_time;
