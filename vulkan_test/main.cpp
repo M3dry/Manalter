@@ -25,6 +25,10 @@
 #include <vk_mem_alloc.h>
 #undef VMA_IMPLEMENTATION
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#undef STB_IMAGE_IMPLEMENTATION
+
 #define VK_CHECK(x)                                                                                                    \
     do {                                                                                                               \
         VkResult err = x;                                                                                              \
@@ -33,6 +37,21 @@
             exit(-1);                                                                                                  \
         }                                                                                                              \
     } while (0)
+
+struct FormatInfo {
+    uint32_t blockWidth;
+    uint32_t blockHeight;
+    uint32_t bytesPerBlock;
+};
+
+FormatInfo get_format_info(VkFormat format) {
+    switch (format) {
+        case VK_FORMAT_R8G8B8A8_UNORM: return {1,1,4};
+        case VK_FORMAT_BC1_RGBA_UNORM_BLOCK: return {4,4,8};
+        case VK_FORMAT_R32G32B32_SFLOAT: return {1,1,12};
+        default: assert(false && "Unsupported format");
+    }
+}
 
 #define FRAMES_IN_FLIGHT 3
 
@@ -133,6 +152,8 @@ namespace transport {
     uint64_t current_signal = 0;
     VkSemaphore timeline;
 
+    std::optional<uint32_t> started = false;
+
     void init(VkDevice device, VkQueue transport_queue, VkCommandPool transport_pool, uint32_t queue_family_ix,
               VmaAllocator alloc) {
         queue_family = queue_family_ix;
@@ -181,14 +202,8 @@ namespace transport {
         vkCreateSemaphore(device, &semaphore_info, nullptr, &timeline);
     }
 
-    // `barrer` needs dstStageMask, dstAccessMask and dstQueueFamilyIndex set
-    // the QueueFamilyIndexes will be swapped so the barrier can be easily applied in the main queue
-    uint64_t upload(VmaAllocator alloc, VkBufferMemoryBarrier2* barrier, void* src, uint32_t size, VkBuffer dst,
-                    uint32_t dst_start_offset = 0) {
-        std::memcpy(ring_buffer_data, src, size);
-        if (!coherent) {
-            vmaFlushAllocation(alloc, ring_buffer_allocation, 0, size);
-        }
+    void begin() {
+        started = 0;
 
         vkResetCommandBuffer(cmd_buf, 0);
 
@@ -196,9 +211,49 @@ namespace transport {
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         VK_CHECK(vkBeginCommandBuffer(cmd_buf, &begin_info));
+    }
+
+    uint64_t end() {
+        started = std::nullopt;
+
+        VK_CHECK(vkEndCommandBuffer(cmd_buf));
+
+        VkCommandBufferSubmitInfo cmd_info{};
+        cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        cmd_info.commandBuffer = cmd_buf;
+
+        VkSemaphoreSubmitInfo signal_info{};
+        signal_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        signal_info.semaphore = timeline;
+        signal_info.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        signal_info.value = ++current_signal;
+
+        VkSubmitInfo2 submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submit_info.waitSemaphoreInfoCount = 0;
+        submit_info.commandBufferInfoCount = 1;
+        submit_info.pCommandBufferInfos = &cmd_info;
+        submit_info.signalSemaphoreInfoCount = 1;
+        submit_info.pSignalSemaphoreInfos = &signal_info;
+
+        VK_CHECK(vkQueueSubmit2(queue, 1, &submit_info, nullptr));
+
+        return current_signal;
+    }
+
+    // `barrer` needs dstStageMask, dstAccessMask and dstQueueFamilyIndex set
+    // the QueueFamilyIndexes will be swapped so the barrier can be easily applied in the main queue
+    void upload(VmaAllocator alloc, VkBufferMemoryBarrier2* barrier, void* src, uint32_t size, VkBuffer dst,
+                    uint32_t dst_start_offset = 0) {
+        assert(started);
+
+        std::memcpy(ring_buffer_data + *started, src, size);
+        if (!coherent) {
+            vmaFlushAllocation(alloc, ring_buffer_allocation, *started, size);
+        }
 
         VkBufferCopy region{};
-        region.srcOffset = 0;
+        region.srcOffset = *started;
         region.size = size;
         region.dstOffset = dst_start_offset;
         vkCmdCopyBuffer(cmd_buf, ring_buffer, dst, 1, &region);
@@ -224,34 +279,117 @@ namespace transport {
         uint32_t dst_queue_family = barrier->dstQueueFamilyIndex;
         barrier->srcStageMask = VK_PIPELINE_STAGE_2_NONE;
         barrier->srcAccessMask = 0;
-        barrier->srcAccessMask = dstStage;
-        barrier->dstStageMask = dstAccess;
+        barrier->dstStageMask = dstStage;
+        barrier->dstAccessMask = dstAccess;
         barrier->dstQueueFamilyIndex = barrier->srcQueueFamilyIndex;
         barrier->srcQueueFamilyIndex = dst_queue_family;
 
-        VK_CHECK(vkEndCommandBuffer(cmd_buf));
+        started = *started + size;
+    }
 
-        VkCommandBufferSubmitInfo cmd_info{};
-        cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-        cmd_info.commandBuffer = cmd_buf;
+    // `barrer` needs dstStageMask, dstAccessMask, dstQueueFamilyIndex and oldLayout set and oldLayout to be a layout that allows for transfer to it
+    // the QueueFamilyIndexes will be swapped so the barrier can be easily applied in the main queue
+    void upload(VmaAllocator alloc, VkImageMemoryBarrier2* barrier, void* src, uint32_t size, uint32_t width, uint32_t height, VkFormat format,
+                    VkImage dst, uint32_t dst_start_offset = 0) {
+        assert(started);
 
-        VkSemaphoreSubmitInfo signal_info{};
-        signal_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-        signal_info.semaphore = timeline;
-        signal_info.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-        signal_info.value = ++current_signal;
+        std::memcpy(ring_buffer_data + *started, src, size);
+        if (!coherent) {
+            vmaFlushAllocation(alloc, ring_buffer_allocation, *started, size);
+        }
 
-        VkSubmitInfo2 submit_info{};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-        submit_info.waitSemaphoreInfoCount = 0;
-        submit_info.commandBufferInfoCount = 1;
-        submit_info.pCommandBufferInfos = &cmd_info;
-        submit_info.signalSemaphoreInfoCount = 1;
-        submit_info.pSignalSemaphoreInfos = &signal_info;
+        FormatInfo fmt_info = get_format_info(format);
 
-        VK_CHECK(vkQueueSubmit2(queue, 1, &submit_info, nullptr));
+        VkBufferImageCopy region{};
+        region.bufferOffset = *started;
+        if (fmt_info.blockWidth == 1 && fmt_info.blockHeight == 1) {
+            region.bufferRowLength = 0;
+            region.bufferImageHeight = 0;
+        } else {
+            region.bufferRowLength = (width + fmt_info.blockWidth - 1) / fmt_info.blockWidth;
+            region.bufferImageHeight = (height + fmt_info.blockHeight - 1) / fmt_info.blockHeight;
+        }
+        region.imageExtent = VkExtent3D{
+            .width = width,
+            .height = height,
+            .depth = 1,
+        };
+        region.imageOffset = VkOffset3D{
+            .x = 0,
+            .y = 0,
+            .z = 0,
+        };
+        region.imageSubresource = VkImageSubresourceLayers{
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .mipLevel = 0,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        };
 
-        return current_signal;
+        if (barrier->oldLayout == VK_IMAGE_LAYOUT_UNDEFINED) {
+            VkImageMemoryBarrier2 pre_barrier{};
+            pre_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            pre_barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+            pre_barrier.srcAccessMask = 0;
+            pre_barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+            pre_barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            pre_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            pre_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            pre_barrier.image = dst;
+            pre_barrier.subresourceRange = VkImageSubresourceRange{
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = VK_REMAINING_ARRAY_LAYERS,
+            };
+
+            VkDependencyInfo dep{};
+            dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dep.imageMemoryBarrierCount = 1;
+            dep.pImageMemoryBarriers = &pre_barrier;
+            vkCmdPipelineBarrier2(cmd_buf, &dep);
+
+            barrier->oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        }
+        vkCmdCopyBufferToImage(cmd_buf, ring_buffer, dst, barrier->oldLayout, 1, &region);
+
+        auto dstStage = barrier->dstStageMask;
+        auto dstAccess = barrier->dstAccessMask;
+        auto newLayout = barrier->newLayout;
+        barrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier->srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        barrier->srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        barrier->dstStageMask = VK_PIPELINE_STAGE_2_NONE;
+        barrier->dstAccessMask = 0;
+        barrier->image = dst;
+        barrier->subresourceRange = VkImageSubresourceRange{
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = VK_REMAINING_ARRAY_LAYERS,
+        };
+        barrier->newLayout = barrier->oldLayout;
+        barrier->srcQueueFamilyIndex = queue_family;
+
+        VkImageMemoryBarrier2 barrier_cpy = *barrier;
+        VkDependencyInfo dep_info{};
+        dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_info.imageMemoryBarrierCount = 1;
+        dep_info.pImageMemoryBarriers = &barrier_cpy;
+        vkCmdPipelineBarrier2(cmd_buf, &dep_info);
+
+        uint32_t dst_queue_family = barrier->dstQueueFamilyIndex;
+        barrier->srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        barrier->srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        barrier->dstStageMask = dstStage;
+        barrier->dstAccessMask = dstAccess;
+        barrier->dstQueueFamilyIndex = barrier->srcQueueFamilyIndex;
+        barrier->srcQueueFamilyIndex = dst_queue_family;
+        barrier->newLayout = newLayout;
+
+        started = *started + size;
     }
 
     void deinit(VkDevice device, VmaAllocator alloc) {
@@ -275,7 +413,6 @@ int main(int argc, char** argv) {
     auto vkb_inst_builder =
         instance_builder.set_app_name("Vulkan test")
             .enable_validation_layers()
-            .add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT)
             .add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
             .use_default_debug_messenger()
             .require_api_version(1, 3, 0)
@@ -496,8 +633,6 @@ int main(int argc, char** argv) {
         create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         create_info.size = sizeof(glm::vec4) * 3;
-        create_info.queueFamilyIndexCount = 1;
-        create_info.pQueueFamilyIndices = &graphics_queue_family;
         create_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                             VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
@@ -506,13 +641,94 @@ int main(int argc, char** argv) {
         vmaCreateBuffer(allocator, &create_info, &alloc_info, &vertices, &vertices_allocation, nullptr);
     }
 
+    int image_width, image_height, image_channels;
+    uint8_t* image_data = stbi_load(argv[1], &image_width, &image_height, &image_channels, 4);
+
+    VkImage image;
+    VmaAllocation image_allocation;
+    {
+        VkImageCreateInfo create_info{};
+        create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        create_info.imageType = VK_IMAGE_TYPE_2D;
+        create_info.arrayLayers = 1;
+        create_info.extent = VkExtent3D{
+            .width = (uint32_t)image_width,
+            .height = (uint32_t)image_height,
+            .depth = 1,
+        };
+        create_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+        create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        create_info.mipLevels = 1;
+        create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        create_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+
+        VmaAllocationCreateInfo alloc_info{};
+        alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+        vmaCreateImage(allocator, &create_info, &alloc_info, &image, &image_allocation, nullptr);
+    }
+
+    transport::begin();
+
     VkBufferMemoryBarrier2 vertices_barrier;
     vertices_barrier.dstQueueFamilyIndex = graphics_queue_family;
     vertices_barrier.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
     vertices_barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+    transport::upload(allocator, &vertices_barrier, vertices_data, sizeof(glm::vec4) * 3, vertices, 0);
 
-    auto vertices_time =
-        transport::upload(allocator, &vertices_barrier, vertices_data, sizeof(glm::vec4) * 3, vertices, 0);
+    VkImageMemoryBarrier2 image_barrier;
+    image_barrier.dstQueueFamilyIndex = graphics_queue_family;
+    image_barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    image_barrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+    image_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    transport::upload(allocator, &image_barrier, image_data, image_width*image_height*4, image_width, image_height, VK_FORMAT_R8G8B8A8_UNORM, image);
+    assert(image_barrier.oldLayout != VK_IMAGE_LAYOUT_UNDEFINED);
+
+    auto upload_wait_time = transport::end();
+
+    {
+        auto& frame = frame_data[0];
+        VK_CHECK(vkResetFences(device, 1, &frame.render_fence));
+
+        VK_CHECK(vkResetCommandBuffer(frame.cmd_buf, 0));
+
+        VkCommandBufferBeginInfo begin_info{};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        VK_CHECK(vkBeginCommandBuffer(frame.cmd_buf, &begin_info));
+
+        VkDependencyInfo dep_info{};
+        dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_info.bufferMemoryBarrierCount = 1;
+        dep_info.pBufferMemoryBarriers = &vertices_barrier;
+        dep_info.imageMemoryBarrierCount = 1;
+        dep_info.pImageMemoryBarriers = &image_barrier;
+        vkCmdPipelineBarrier2(frame.cmd_buf, &dep_info);
+
+        VK_CHECK(vkEndCommandBuffer(frame.cmd_buf));
+
+        VkCommandBufferSubmitInfo cmd_info{};
+        cmd_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        cmd_info.commandBuffer = frame.cmd_buf;
+
+        VkSemaphoreSubmitInfo wait_info{};
+        wait_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        wait_info.stageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+        wait_info.semaphore = transport::timeline;
+        wait_info.value = upload_wait_time;
+
+        VkSubmitInfo2 submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submit_info.commandBufferInfoCount = 1;
+        submit_info.pCommandBufferInfos = &cmd_info;
+        submit_info.signalSemaphoreInfoCount = 0;
+        submit_info.waitSemaphoreInfoCount = 1;
+        submit_info.pWaitSemaphoreInfos = &wait_info;
+        VK_CHECK(vkQueueSubmit2(graphics_queue, 1, &submit_info, frame.render_fence));
+    }
 
     uint64_t accum = 0;
     uint64_t last_time = SDL_GetTicks();
@@ -722,6 +938,10 @@ int main(int argc, char** argv) {
     transport::deinit(device, allocator);
 
     vmaDestroyBuffer(allocator, vertices, vertices_allocation);
+    vkDestroyPipelineLayout(device, vertex_layout, nullptr);
+
+    vmaDestroyImage(allocator, image, image_allocation);
+    stbi_image_free(image_data);
 
     vmaDestroyAllocator(allocator);
 

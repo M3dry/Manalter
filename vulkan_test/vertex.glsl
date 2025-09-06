@@ -6,7 +6,7 @@ layout(buffer_reference, std430) readonly buffer Vertices {
     vec4 data[];
 };
 
-layout(push_constant) uniform Push {
+layout(push_constant, std430) uniform Push {
     Vertices verts;
 };
 
