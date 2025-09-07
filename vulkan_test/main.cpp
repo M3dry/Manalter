@@ -138,6 +138,8 @@ namespace shader {
 }
 
 namespace transport {
+    uint32_t alignment = 1;
+
     uint32_t queue_family;
     VkQueue queue;
 
@@ -154,8 +156,14 @@ namespace transport {
 
     std::optional<uint32_t> started = false;
 
+    inline uint32_t align(uint32_t addr) {
+        return (addr + (alignment - 1)) / alignment * alignment;
+    }
+
     void init(VkDevice device, VkQueue transport_queue, VkCommandPool transport_pool, uint32_t queue_family_ix,
-              VmaAllocator alloc) {
+              VmaAllocator alloc, uint32_t copy_alignment) {
+        alignment = copy_alignment;
+
         queue_family = queue_family_ix;
         queue = transport_queue;
 
@@ -246,6 +254,7 @@ namespace transport {
     void upload(VmaAllocator alloc, VkBufferMemoryBarrier2* barrier, void* src, uint32_t size, VkBuffer dst,
                     uint32_t dst_start_offset = 0) {
         assert(started);
+        started = align(*started);
 
         std::memcpy(ring_buffer_data + *started, src, size);
         if (!coherent) {
@@ -292,6 +301,7 @@ namespace transport {
     void upload(VmaAllocator alloc, VkImageMemoryBarrier2* barrier, void* src, uint32_t size, uint32_t width, uint32_t height, VkFormat format,
                     VkImage dst, uint32_t dst_start_offset = 0) {
         assert(started);
+        started = align(*started);
 
         std::memcpy(ring_buffer_data + *started, src, size);
         if (!coherent) {
@@ -435,7 +445,6 @@ int main(int argc, char** argv) {
     }
 
     VkPhysicalDeviceVulkan14Features features14{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES};
-    features14.maintenance5 = true;
     VkPhysicalDeviceVulkan13Features features13{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     features13.dynamicRendering = true;
     features13.synchronization2 = true;
@@ -446,6 +455,7 @@ int main(int argc, char** argv) {
 
     auto physical_device_selected = vkb::PhysicalDeviceSelector{vkb_inst}
                                         .set_minimum_version(1, 4)
+                                        .set_required_features_14(features14)
                                         .set_required_features_13(features13)
                                         .set_required_features_12(features12)
                                         .set_surface(surface)
@@ -482,6 +492,9 @@ int main(int argc, char** argv) {
 
     VkDevice device = vkb_device.device;
     VkPhysicalDevice chosen_gpu = physical_device.physical_device;
+
+    VkPhysicalDeviceProperties device_properties;
+    vkGetPhysicalDeviceProperties(physical_device, &device_properties);
 
     volkLoadDevice(device);
 
@@ -563,7 +576,7 @@ int main(int argc, char** argv) {
     VkCommandPool transport_pool{};
     vkCreateCommandPool(device, &transport_pool_info, nullptr, &transport_pool);
 
-    transport::init(device, transport_queue, transport_pool, transport_queue_family, allocator);
+    transport::init(device, transport_queue, transport_pool, transport_queue_family, allocator, device_properties.limits.optimalBufferCopyOffsetAlignment);
 
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
