@@ -46,9 +46,9 @@ struct FormatInfo {
 
 FormatInfo get_format_info(VkFormat format) {
     switch (format) {
-        case VK_FORMAT_R8G8B8A8_UNORM: return {1,1,4};
-        case VK_FORMAT_BC1_RGBA_UNORM_BLOCK: return {4,4,8};
-        case VK_FORMAT_R32G32B32_SFLOAT: return {1,1,12};
+        case VK_FORMAT_R8G8B8A8_UNORM: return {1, 1, 4};
+        case VK_FORMAT_BC1_RGBA_UNORM_BLOCK: return {4, 4, 8};
+        case VK_FORMAT_R32G32B32_SFLOAT: return {1, 1, 12};
         default: assert(false && "Unsupported format");
     }
 }
@@ -252,7 +252,7 @@ namespace transport {
     // `barrer` needs dstStageMask, dstAccessMask and dstQueueFamilyIndex set
     // the QueueFamilyIndexes will be swapped so the barrier can be easily applied in the main queue
     void upload(VmaAllocator alloc, VkBufferMemoryBarrier2* barrier, void* src, uint32_t size, VkBuffer dst,
-                    uint32_t dst_start_offset = 0) {
+                uint32_t dst_start_offset = 0) {
         assert(started);
         started = align(*started);
 
@@ -296,10 +296,11 @@ namespace transport {
         started = *started + size;
     }
 
-    // `barrer` needs dstStageMask, dstAccessMask, dstQueueFamilyIndex and oldLayout set and oldLayout to be a layout that allows for transfer to it
-    // the QueueFamilyIndexes will be swapped so the barrier can be easily applied in the main queue
-    void upload(VmaAllocator alloc, VkImageMemoryBarrier2* barrier, void* src, uint32_t size, uint32_t width, uint32_t height, VkFormat format,
-                    VkImage dst, uint32_t dst_start_offset = 0) {
+    // `barrer` needs dstStageMask, dstAccessMask, dstQueueFamilyIndex and oldLayout set and oldLayout to be a layout
+    // that allows for transfer to it the QueueFamilyIndexes will be swapped so the barrier can be easily applied in the
+    // main queue
+    void upload(VmaAllocator alloc, VkImageMemoryBarrier2* barrier, void* src, uint32_t size, uint32_t width,
+                uint32_t height, VkFormat format, VkImage dst, uint32_t dst_start_offset = 0) {
         assert(started);
         started = align(*started);
 
@@ -576,7 +577,8 @@ int main(int argc, char** argv) {
     VkCommandPool transport_pool{};
     vkCreateCommandPool(device, &transport_pool_info, nullptr, &transport_pool);
 
-    transport::init(device, transport_queue, transport_pool, transport_queue_family, allocator, device_properties.limits.optimalBufferCopyOffsetAlignment);
+    transport::init(device, transport_queue, transport_pool, transport_queue_family, allocator,
+                    device_properties.limits.optimalBufferCopyOffsetAlignment);
 
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -609,27 +611,70 @@ int main(int argc, char** argv) {
     };
     ImGui_ImplVulkan_Init(&imgui_info);
 
+    VkDescriptorPool descriptor_pool{};
+    {
+        VkDescriptorPoolSize sampler_size{};
+        sampler_size.descriptorCount = 100;
+        sampler_size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+        VkDescriptorPoolCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        info.poolSizeCount = 1, info.pPoolSizes = &sampler_size;
+        info.maxSets = 100;
+        info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        vkCreateDescriptorPool(device, &info, nullptr, &descriptor_pool);
+    }
+
     auto [vertex_code, vertex_size] = shader::load_shader_code("./vertex.spv");
     auto [fragment_code, fragment_size] = shader::load_shader_code("./fragment.spv");
+
+    VkDescriptorSetLayout fragment_set_layout;
+    {
+        VkDescriptorSetLayoutBinding binding{};
+        binding.binding = 0;
+        binding.descriptorCount = 1;
+        binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        VkDescriptorSetLayoutCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        info.bindingCount = 1;
+        info.pBindings = &binding;
+        vkCreateDescriptorSetLayout(device, &info, nullptr, &fragment_set_layout);
+    }
+
     VkPushConstantRange vertex_push_constant{};
     vertex_push_constant.size = sizeof(uint64_t);
     vertex_push_constant.offset = 0;
     vertex_push_constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     auto vertex_info =
         shader::create_info(VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT, {vertex_code.get(), vertex_size},
-                            {&vertex_push_constant, 1}, {(VkDescriptorSetLayout*)nullptr, 0});
+                            {&vertex_push_constant, 1}, {&fragment_set_layout, 1});
     auto fragment_info = shader::create_info(VK_SHADER_STAGE_FRAGMENT_BIT, 0, {fragment_code.get(), fragment_size},
-                                             {&vertex_push_constant, 1}, {(VkDescriptorSetLayout*)nullptr, 0});
+                                             {&vertex_push_constant, 1}, {&fragment_set_layout, 1});
     auto vertex = shader::create(device, vertex_info);
     auto fragment = shader::create(device, fragment_info);
 
-    VkPipelineLayoutCreateInfo vertex_layout_info{};
-    vertex_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    vertex_layout_info.pushConstantRangeCount = 1;
-    vertex_layout_info.pPushConstantRanges = &vertex_push_constant;
+    VkPipelineLayoutCreateInfo layout_info{};
+    layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layout_info.setLayoutCount = 1;
+    layout_info.pSetLayouts = &fragment_set_layout;
+    layout_info.pushConstantRangeCount = 1;
+    layout_info.pPushConstantRanges = &vertex_push_constant;
 
-    VkPipelineLayout vertex_layout;
-    vkCreatePipelineLayout(device, &vertex_layout_info, nullptr, &vertex_layout);
+    VkPipelineLayout layout;
+    vkCreatePipelineLayout(device, &layout_info, nullptr, &layout);
+
+    VkDescriptorSet descriptor_set;
+    {
+        VkDescriptorSetAllocateInfo alloc_info{};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.descriptorPool = descriptor_pool;
+        alloc_info.descriptorSetCount = 1;
+        alloc_info.pSetLayouts = &fragment_set_layout;
+
+        vkAllocateDescriptorSets(device, &alloc_info, &descriptor_set);
+    };
 
     SDL_ShowWindow(win);
 
@@ -696,10 +741,65 @@ int main(int argc, char** argv) {
     image_barrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
     image_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     image_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    transport::upload(allocator, &image_barrier, image_data, image_width*image_height*4, image_width, image_height, VK_FORMAT_R8G8B8A8_UNORM, image);
+    transport::upload(allocator, &image_barrier, image_data, image_width * image_height * 4, image_width, image_height,
+                      VK_FORMAT_R8G8B8A8_UNORM, image);
     assert(image_barrier.oldLayout != VK_IMAGE_LAYOUT_UNDEFINED);
 
     auto upload_wait_time = transport::end();
+
+    VkImageView image_view;
+    VkSampler image_sampler;
+    {
+
+        VkImageViewCreateInfo view_info{};
+        view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        view_info.image = image;
+        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view_info.components = VkComponentMapping{
+            .r = VK_COMPONENT_SWIZZLE_R,
+            .g = VK_COMPONENT_SWIZZLE_G,
+            .b = VK_COMPONENT_SWIZZLE_B,
+            .a = VK_COMPONENT_SWIZZLE_A,
+        };
+        view_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+        view_info.subresourceRange = VkImageSubresourceRange{
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        };
+        vkCreateImageView(device, &view_info, nullptr, &image_view);
+
+        VkSamplerCreateInfo sampler_info{};
+        sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        sampler_info.anisotropyEnable = false;
+        sampler_info.compareEnable = false;
+        sampler_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+        sampler_info.minFilter = VK_FILTER_LINEAR;
+        sampler_info.magFilter = VK_FILTER_LINEAR;
+        vkCreateSampler(device, &sampler_info, nullptr, &image_sampler);
+
+        VkDescriptorImageInfo descriptor_image_info{};
+        descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        descriptor_image_info.imageView = image_view;
+        descriptor_image_info.sampler = image_sampler;
+
+        VkWriteDescriptorSet write_info{};
+        write_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_info.descriptorCount = 1;
+        write_info.pImageInfo = &descriptor_image_info;
+        write_info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write_info.dstSet = descriptor_set;
+        write_info.dstBinding = 0;
+        write_info.dstArrayElement = 0;
+
+        vkUpdateDescriptorSets(device, 1, &write_info, 0, nullptr);
+    }
 
     {
         auto& frame = frame_data[0];
@@ -883,8 +983,10 @@ int main(int argc, char** argv) {
             vkCmdBindShadersEXT(frame.cmd_buf, 2, stages, shaders);
 
             uint64_t vertices_address = vkGetBufferDeviceAddress(device, &vertices_address_info);
-            vkCmdPushConstants(frame.cmd_buf, vertex_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(uint64_t),
+            vkCmdPushConstants(frame.cmd_buf, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(uint64_t),
                                &vertices_address);
+            vkCmdBindDescriptorSets(frame.cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1,
+            &descriptor_set, 0, nullptr);
 
             vkCmdDraw(frame.cmd_buf, 3, 1, 0, 0);
 
@@ -951,7 +1053,7 @@ int main(int argc, char** argv) {
     transport::deinit(device, allocator);
 
     vmaDestroyBuffer(allocator, vertices, vertices_allocation);
-    vkDestroyPipelineLayout(device, vertex_layout, nullptr);
+    vkDestroyPipelineLayout(device, layout, nullptr);
 
     vmaDestroyImage(allocator, image, image_allocation);
     stbi_image_free(image_data);
