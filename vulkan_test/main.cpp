@@ -452,6 +452,8 @@ int main(int argc, char** argv) {
     VkPhysicalDeviceVulkan12Features features12{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
     features12.bufferDeviceAddress = true;
     features12.descriptorIndexing = true;
+    features12.shaderSampledImageArrayNonUniformIndexing = true;
+    features12.runtimeDescriptorArray = true;
     features12.timelineSemaphore = true;
 
     auto physical_device_selected = vkb::PhysicalDeviceSelector{vkb_inst}
@@ -619,7 +621,8 @@ int main(int argc, char** argv) {
 
         VkDescriptorPoolCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        info.poolSizeCount = 1, info.pPoolSizes = &sampler_size;
+        info.poolSizeCount = 1;
+        info.pPoolSizes = &sampler_size;
         info.maxSets = 100;
         info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
         vkCreateDescriptorPool(device, &info, nullptr, &descriptor_pool);
