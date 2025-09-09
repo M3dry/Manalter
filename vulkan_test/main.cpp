@@ -409,6 +409,70 @@ namespace transport {
     }
 }
 
+class DescriptorPool {
+  public:
+    using id = uint64_t;
+
+    DescriptorPool(VkDevice device) {
+        VkDescriptorPoolSize pool_sizes[5];
+        pool_sizes[0].descriptorCount = MaxSets;
+        pool_sizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        pool_sizes[1].descriptorCount = MaxSets;
+        pool_sizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        pool_sizes[2].descriptorCount = MaxSets;
+        pool_sizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        pool_sizes[3].descriptorCount = MaxSets;
+        pool_sizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+
+        VkDescriptorPoolCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        info.poolSizeCount = 1;
+        info.pPoolSizes = pool_sizes;
+        info.maxSets = MaxSets;
+        info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+
+        VK_CHECK(vkCreateDescriptorPool(device, &info, nullptr, &pool));
+    }
+
+    id new_set(VkDevice device, VkDescriptorSetLayout layout) {
+        assert(set_count != MaxSets);
+
+        VkDescriptorSetAllocateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        info.descriptorPool = pool;
+        info.descriptorSetCount = 1;
+        info.pSetLayouts = &layout;
+
+        VK_CHECK(vkAllocateDescriptorSets(device, &info, &sets[set_count]));
+
+        return set_count++;
+    }
+
+    void update_set(VkDevice device, id id, std::span<VkWriteDescriptorSet> writes) {
+        vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
+    }
+
+    void bind_set(id id, VkCommandBuffer cmd_buf, VkPipelineBindPoint bind_point, VkPipelineLayout layout,
+                  uint32_t set) {
+        vkCmdBindDescriptorSets(cmd_buf, bind_point, layout, set, 1, &sets[id], 0, nullptr);
+    }
+
+    void clear(VkDevice device) {
+        VK_CHECK(vkResetDescriptorPool(device, pool, 0));
+
+        set_count = 0;
+        std::memset(sets.data(), 0, MaxSets * sizeof(VkDescriptorSet));
+    }
+
+  private:
+    static constexpr std::size_t MaxSets = 500;
+
+    VkDescriptorPool pool;
+
+    uint64_t set_count = 0;
+    std::array<VkDescriptorSet, MaxSets> sets;
+};
+
 int main(int argc, char** argv) {
     VK_CHECK(volkInitialize());
 
@@ -579,6 +643,7 @@ int main(int argc, char** argv) {
     VkCommandPool transport_pool{};
     vkCreateCommandPool(device, &transport_pool_info, nullptr, &transport_pool);
 
+    std::println("sampler count: {}", device_properties.limits.maxSamplerAllocationCount);
     transport::init(device, transport_queue, transport_pool, transport_queue_family, allocator,
                     device_properties.limits.optimalBufferCopyOffsetAlignment);
 
@@ -988,8 +1053,8 @@ int main(int argc, char** argv) {
             uint64_t vertices_address = vkGetBufferDeviceAddress(device, &vertices_address_info);
             vkCmdPushConstants(frame.cmd_buf, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(uint64_t),
                                &vertices_address);
-            vkCmdBindDescriptorSets(frame.cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1,
-            &descriptor_set, 0, nullptr);
+            vkCmdBindDescriptorSets(frame.cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &descriptor_set, 0,
+                                    nullptr);
 
             vkCmdDraw(frame.cmd_buf, 3, 1, 0, 0);
 
