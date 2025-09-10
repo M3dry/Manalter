@@ -1,3 +1,4 @@
+#include <SDL3/SDL_video.h>
 #define VK_NO_PROTOTYPES 1
 #include <cstring>
 
@@ -53,6 +54,183 @@ FormatInfo get_format_info(VkFormat format) {
     }
 }
 
+class DescriptorPool {
+  public:
+    using id = uint64_t;
+
+    DescriptorPool(VkDevice device, VmaAllocator alloc) {
+        VkDescriptorPoolSize pool_sizes[5];
+        pool_sizes[0].descriptorCount = MaxSets;
+        pool_sizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        pool_sizes[1].descriptorCount = MaxSets;
+        pool_sizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        pool_sizes[2].descriptorCount = MaxSets;
+        pool_sizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        pool_sizes[3].descriptorCount = MaxSets;
+        pool_sizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+
+        VkDescriptorPoolCreateInfo pool_info{};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.poolSizeCount = 1;
+        pool_info.pPoolSizes = pool_sizes;
+        pool_info.maxSets = MaxSets;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+
+        VK_CHECK(vkCreateDescriptorPool(device, &pool_info, nullptr, &pool));
+
+        VkBufferCreateInfo buf_info{};
+        buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        buf_info.size = UBOSize;
+        buf_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        VmaAllocationCreateInfo alloc_info{};
+        alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+        alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VmaAllocationInfo out_alloc_info;
+        VK_CHECK(vmaCreateBuffer(alloc, &buf_info, &alloc_info, &ubo_buffer, &ubo_alloc, &out_alloc_info));
+
+        VkMemoryPropertyFlags alloc_props;
+        vmaGetMemoryTypeProperties(alloc, out_alloc_info.memoryType, &alloc_props);
+
+        ubo_data = (uint8_t*)out_alloc_info.pMappedData;
+        ubo_coherent = alloc_props & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    }
+
+    void destroy(VkDevice device, VmaAllocator alloc) {
+        vkDestroyDescriptorPool(device, pool, nullptr);
+        vmaDestroyBuffer(alloc, ubo_buffer, ubo_alloc);
+    }
+
+    id new_set(VkDevice device, VkDescriptorSetLayout layout) {
+        assert(set_count < MaxSets);
+
+        VkDescriptorSetAllocateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        info.descriptorPool = pool;
+        info.descriptorSetCount = 1;
+        info.pSetLayouts = &layout;
+
+        VK_CHECK(vkAllocateDescriptorSets(device, &info, &sets[set_count]));
+
+        return set_count++;
+    }
+
+    void bind_set(id id, VkCommandBuffer cmd_buf, VkPipelineBindPoint bind_point, VkPipelineLayout layout,
+                  uint32_t set) {
+        vkCmdBindDescriptorSets(cmd_buf, bind_point, layout, set, 1, &sets[id], 0, nullptr);
+    }
+
+    void update_set(VkDevice device, id id, std::span<VkWriteDescriptorSet> writes) {
+        vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
+    }
+
+    void begin_update(id id) {
+        assert(id < MaxSets);
+        write_id = id;
+
+        write_buffer_infos.clear();
+        write_image_infos.clear();
+        write_queue.clear();
+    }
+
+    void end_update(VkDevice device) {
+        for (auto& write : write_queue) {
+            switch (write.descriptorType) {
+                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                    write.pBufferInfo = &write_buffer_infos[(std::size_t)write.pBufferInfo];
+                    break;
+                case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                    write.pImageInfo = &write_image_infos[(std::size_t)write.pImageInfo];
+                    break;
+                default:
+                    continue;
+            }
+        }
+
+        update_set(device, write_id, write_queue);
+    }
+
+    void update_ubo(VkDevice device, VmaAllocator alloc, uint32_t binding, std::span<uint8_t> ubo) {
+        assert(write_id != -1);
+        assert(ubo_offset + ubo.size() <= UBOSize);
+
+        std::memcpy(ubo_data + ubo_offset, ubo.data(), ubo.size());
+        if (!ubo_coherent) {
+            vmaFlushAllocation(alloc, ubo_alloc, ubo_offset, ubo.size());
+        }
+
+        VkDescriptorBufferInfo buf_info{};
+        buf_info.buffer = ubo_buffer;
+        buf_info.offset = ubo_offset;
+        buf_info.range = ubo.size();
+
+        write_buffer_infos.emplace_back(buf_info);
+
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        write.pBufferInfo = (VkDescriptorBufferInfo*)(write_buffer_infos.size() - 1);
+        write.dstBinding = binding;
+        write.dstSet = sets[write_id];
+
+        write_queue.emplace_back(write);
+
+        ubo_offset += ubo.size();
+    }
+
+    void update_sampled_image(VkDevice device, uint32_t binding, VkImageLayout layout, VkImageView view, VkSampler sampler) {
+        assert(write_id != -1);
+
+        VkDescriptorImageInfo image_info{};
+        image_info.imageLayout = layout;
+        image_info.imageView = view;
+        image_info.sampler = sampler;
+
+        write_image_infos.emplace_back(image_info);
+
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.descriptorCount = 1;
+        write.pImageInfo = (VkDescriptorImageInfo*)(write_image_infos.size() - 1);
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.dstSet = sets[write_id];
+        write.dstBinding = binding;
+
+        write_queue.emplace_back(write);
+    }
+
+    void clear(VkDevice device) {
+        VK_CHECK(vkResetDescriptorPool(device, pool, 0));
+
+        set_count = 0;
+        std::memset(sets.data(), 0, MaxSets * sizeof(VkDescriptorSet));
+
+        ubo_offset = 0;
+    }
+
+  private:
+    static constexpr std::size_t MaxSets = 500;
+    static constexpr VkDeviceSize UBOSize = 16000;
+
+    VkDescriptorPool pool;
+
+    uint64_t set_count = 0;
+    std::array<VkDescriptorSet, MaxSets> sets;
+
+    bool ubo_coherent = false;
+    uint64_t ubo_offset = 0;
+    uint8_t* ubo_data;
+    VkBuffer ubo_buffer;
+    VmaAllocation ubo_alloc;
+
+    uint64_t write_id = -1;
+    std::vector<VkDescriptorBufferInfo> write_buffer_infos;
+    std::vector<VkDescriptorImageInfo> write_image_infos;
+    std::vector<VkWriteDescriptorSet> write_queue;
+};
+
 #define FRAMES_IN_FLIGHT 3
 
 struct FrameData {
@@ -61,6 +239,50 @@ struct FrameData {
     VkSemaphore swapchain_semaphore;
     VkSemaphore render_semaphore;
     VkFence render_fence;
+    DescriptorPool descriptor_pool;
+
+    FrameData(VkDevice device, VmaAllocator alloc, uint32_t graphics_queue_family) : descriptor_pool(device, alloc) {
+        VkCommandPoolCreateInfo cmd_pool_info{};
+        cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        cmd_pool_info.pNext = nullptr;
+        cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        cmd_pool_info.queueFamilyIndex = graphics_queue_family;
+
+        vkCreateCommandPool(device, &cmd_pool_info, nullptr, &cmd_pool);
+
+        VkCommandBufferAllocateInfo cmd_alloc_info{};
+        cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmd_alloc_info.pNext = nullptr;
+        cmd_alloc_info.commandPool = cmd_pool;
+        cmd_alloc_info.commandBufferCount = 1;
+        cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+        vkAllocateCommandBuffers(device, &cmd_alloc_info, &cmd_buf);
+
+        VkFenceCreateInfo fence_info{};
+        fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fence_info.pNext = nullptr;
+        fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        VK_CHECK(vkCreateFence(device, &fence_info, nullptr, &render_fence));
+
+        VkSemaphoreCreateInfo semaphore_info{};
+        semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        semaphore_info.pNext = nullptr;
+
+        VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &swapchain_semaphore));
+        VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &render_semaphore));
+    }
+
+    void destroy(VkDevice device, VmaAllocator alloc) {
+        vkDestroyCommandPool(device, cmd_pool, nullptr);
+
+        vkDestroyFence(device, render_fence, nullptr);
+
+        vkDestroySemaphore(device, swapchain_semaphore, nullptr);
+        vkDestroySemaphore(device, render_semaphore, nullptr);
+        descriptor_pool.destroy(device, alloc);
+    }
 };
 
 void check_vk_result(VkResult err) {
@@ -154,7 +376,7 @@ namespace transport {
     uint64_t current_signal = 0;
     VkSemaphore timeline;
 
-    std::optional<uint32_t> started = false;
+    std::optional<uint32_t> transport_block = false;
 
     inline uint32_t align(uint32_t addr) {
         return (addr + (alignment - 1)) / alignment * alignment;
@@ -180,8 +402,6 @@ namespace transport {
         VkBufferCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        create_info.queueFamilyIndexCount = 1;
-        create_info.pQueueFamilyIndices = &queue_family;
         create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         create_info.size = 64000000;
 
@@ -211,7 +431,7 @@ namespace transport {
     }
 
     void begin() {
-        started = 0;
+        transport_block = 0;
 
         vkResetCommandBuffer(cmd_buf, 0);
 
@@ -222,7 +442,7 @@ namespace transport {
     }
 
     uint64_t end() {
-        started = std::nullopt;
+        transport_block = std::nullopt;
 
         VK_CHECK(vkEndCommandBuffer(cmd_buf));
 
@@ -253,16 +473,16 @@ namespace transport {
     // the QueueFamilyIndexes will be swapped so the barrier can be easily applied in the main queue
     void upload(VmaAllocator alloc, VkBufferMemoryBarrier2* barrier, void* src, uint32_t size, VkBuffer dst,
                 uint32_t dst_start_offset = 0) {
-        assert(started);
-        started = align(*started);
+        assert(transport_block);
+        transport_block = align(*transport_block);
 
-        std::memcpy(ring_buffer_data + *started, src, size);
+        std::memcpy(ring_buffer_data + *transport_block, src, size);
         if (!coherent) {
-            vmaFlushAllocation(alloc, ring_buffer_allocation, *started, size);
+            vmaFlushAllocation(alloc, ring_buffer_allocation, *transport_block, size);
         }
 
         VkBufferCopy region{};
-        region.srcOffset = *started;
+        region.srcOffset = *transport_block;
         region.size = size;
         region.dstOffset = dst_start_offset;
         vkCmdCopyBuffer(cmd_buf, ring_buffer, dst, 1, &region);
@@ -293,7 +513,7 @@ namespace transport {
         barrier->dstQueueFamilyIndex = barrier->srcQueueFamilyIndex;
         barrier->srcQueueFamilyIndex = dst_queue_family;
 
-        started = *started + size;
+        transport_block = *transport_block + size;
     }
 
     // `barrer` needs dstStageMask, dstAccessMask, dstQueueFamilyIndex and oldLayout set and oldLayout to be a layout
@@ -301,18 +521,18 @@ namespace transport {
     // main queue
     void upload(VmaAllocator alloc, VkImageMemoryBarrier2* barrier, void* src, uint32_t size, uint32_t width,
                 uint32_t height, VkFormat format, VkImage dst, uint32_t dst_start_offset = 0) {
-        assert(started);
-        started = align(*started);
+        assert(transport_block);
+        transport_block = align(*transport_block);
 
-        std::memcpy(ring_buffer_data + *started, src, size);
+        std::memcpy(ring_buffer_data + *transport_block, src, size);
         if (!coherent) {
-            vmaFlushAllocation(alloc, ring_buffer_allocation, *started, size);
+            vmaFlushAllocation(alloc, ring_buffer_allocation, *transport_block, size);
         }
 
         FormatInfo fmt_info = get_format_info(format);
 
         VkBufferImageCopy region{};
-        region.bufferOffset = *started;
+        region.bufferOffset = *transport_block;
         if (fmt_info.blockWidth == 1 && fmt_info.blockHeight == 1) {
             region.bufferRowLength = 0;
             region.bufferImageHeight = 0;
@@ -400,7 +620,7 @@ namespace transport {
         barrier->srcQueueFamilyIndex = dst_queue_family;
         barrier->newLayout = newLayout;
 
-        started = *started + size;
+        transport_block = *transport_block + size;
     }
 
     void deinit(VkDevice device, VmaAllocator alloc) {
@@ -408,70 +628,6 @@ namespace transport {
         vkDestroySemaphore(device, timeline, nullptr);
     }
 }
-
-class DescriptorPool {
-  public:
-    using id = uint64_t;
-
-    DescriptorPool(VkDevice device) {
-        VkDescriptorPoolSize pool_sizes[5];
-        pool_sizes[0].descriptorCount = MaxSets;
-        pool_sizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        pool_sizes[1].descriptorCount = MaxSets;
-        pool_sizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        pool_sizes[2].descriptorCount = MaxSets;
-        pool_sizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        pool_sizes[3].descriptorCount = MaxSets;
-        pool_sizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-
-        VkDescriptorPoolCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        info.poolSizeCount = 1;
-        info.pPoolSizes = pool_sizes;
-        info.maxSets = MaxSets;
-        info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
-
-        VK_CHECK(vkCreateDescriptorPool(device, &info, nullptr, &pool));
-    }
-
-    id new_set(VkDevice device, VkDescriptorSetLayout layout) {
-        assert(set_count != MaxSets);
-
-        VkDescriptorSetAllocateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        info.descriptorPool = pool;
-        info.descriptorSetCount = 1;
-        info.pSetLayouts = &layout;
-
-        VK_CHECK(vkAllocateDescriptorSets(device, &info, &sets[set_count]));
-
-        return set_count++;
-    }
-
-    void update_set(VkDevice device, id id, std::span<VkWriteDescriptorSet> writes) {
-        vkUpdateDescriptorSets(device, writes.size(), writes.data(), 0, nullptr);
-    }
-
-    void bind_set(id id, VkCommandBuffer cmd_buf, VkPipelineBindPoint bind_point, VkPipelineLayout layout,
-                  uint32_t set) {
-        vkCmdBindDescriptorSets(cmd_buf, bind_point, layout, set, 1, &sets[id], 0, nullptr);
-    }
-
-    void clear(VkDevice device) {
-        VK_CHECK(vkResetDescriptorPool(device, pool, 0));
-
-        set_count = 0;
-        std::memset(sets.data(), 0, MaxSets * sizeof(VkDescriptorSet));
-    }
-
-  private:
-    static constexpr std::size_t MaxSets = 500;
-
-    VkDescriptorPool pool;
-
-    uint64_t set_count = 0;
-    std::array<VkDescriptorSet, MaxSets> sets;
-};
 
 int main(int argc, char** argv) {
     VK_CHECK(volkInitialize());
@@ -481,7 +637,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    auto* win = SDL_CreateWindow("Vulkan test", 1920, 1200, SDL_WINDOW_VULKAN);
+    auto* win = SDL_CreateWindow("Vulkan test", 1920, 1200, SDL_WINDOW_VULKAN | SDL_WINDOW_SURFACE_VSYNC_DISABLED);
 
     vkb::InstanceBuilder instance_builder;
 
@@ -584,7 +740,7 @@ int main(int argc, char** argv) {
             .set_desired_format(
                 VkSurfaceFormatKHR{.format = swapchain_format, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
             .set_desired_present_mode(latest_ready_extension_flag ? VK_PRESENT_MODE_FIFO_LATEST_READY_EXT
-                                                                  : VK_PRESENT_MODE_IMMEDIATE_KHR)
+                                                                  : VK_PRESENT_MODE_MAILBOX_KHR)
             .set_desired_extent(1920, 1200)
             .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
             .set_desired_min_image_count(2)
@@ -601,39 +757,11 @@ int main(int argc, char** argv) {
     VkQueue transport_queue = vkb_device.get_queue(vkb::QueueType::transfer).value();
     auto transport_queue_family = vkb_device.get_queue_index(vkb::QueueType::transfer).value();
 
-    VkCommandPoolCreateInfo cmd_pool_info{};
-    cmd_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    cmd_pool_info.pNext = nullptr;
-    cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    cmd_pool_info.queueFamilyIndex = graphics_queue_family;
-
-    FrameData frame_data[FRAMES_IN_FLIGHT];
-    for (std::size_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
-        vkCreateCommandPool(device, &cmd_pool_info, nullptr, &frame_data[i].cmd_pool);
-
-        VkCommandBufferAllocateInfo cmd_alloc_info{};
-        cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        cmd_alloc_info.pNext = nullptr;
-        cmd_alloc_info.commandPool = frame_data[i].cmd_pool;
-        cmd_alloc_info.commandBufferCount = 1;
-        cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-
-        vkAllocateCommandBuffers(device, &cmd_alloc_info, &frame_data[i].cmd_buf);
-
-        VkFenceCreateInfo fence_info{};
-        fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fence_info.pNext = nullptr;
-        fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-        VK_CHECK(vkCreateFence(device, &fence_info, nullptr, &frame_data[i].render_fence));
-
-        VkSemaphoreCreateInfo semaphore_info{};
-        semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        semaphore_info.pNext = nullptr;
-
-        VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame_data[i].swapchain_semaphore));
-        VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame_data[i].render_semaphore));
-    }
+    FrameData frame_data[FRAMES_IN_FLIGHT] = {
+        {device, allocator, graphics_queue_family},
+        {device, allocator, graphics_queue_family},
+        {device, allocator, graphics_queue_family},
+    };
 
     VkCommandPoolCreateInfo transport_pool_info{};
     transport_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -643,7 +771,6 @@ int main(int argc, char** argv) {
     VkCommandPool transport_pool{};
     vkCreateCommandPool(device, &transport_pool_info, nullptr, &transport_pool);
 
-    std::println("sampler count: {}", device_properties.limits.maxSamplerAllocationCount);
     transport::init(device, transport_queue, transport_pool, transport_queue_family, allocator,
                     device_properties.limits.optimalBufferCopyOffsetAlignment);
 
@@ -677,21 +804,6 @@ int main(int argc, char** argv) {
         .pColorAttachmentFormats = &swapchain_format,
     };
     ImGui_ImplVulkan_Init(&imgui_info);
-
-    VkDescriptorPool descriptor_pool{};
-    {
-        VkDescriptorPoolSize sampler_size{};
-        sampler_size.descriptorCount = 100;
-        sampler_size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-
-        VkDescriptorPoolCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        info.poolSizeCount = 1;
-        info.pPoolSizes = &sampler_size;
-        info.maxSets = 100;
-        info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        vkCreateDescriptorPool(device, &info, nullptr, &descriptor_pool);
-    }
 
     auto [vertex_code, vertex_size] = shader::load_shader_code("./vertex.spv");
     auto [fragment_code, fragment_size] = shader::load_shader_code("./fragment.spv");
@@ -732,17 +844,6 @@ int main(int argc, char** argv) {
 
     VkPipelineLayout layout;
     vkCreatePipelineLayout(device, &layout_info, nullptr, &layout);
-
-    VkDescriptorSet descriptor_set;
-    {
-        VkDescriptorSetAllocateInfo alloc_info{};
-        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        alloc_info.descriptorPool = descriptor_pool;
-        alloc_info.descriptorSetCount = 1;
-        alloc_info.pSetLayouts = &fragment_set_layout;
-
-        vkAllocateDescriptorSets(device, &alloc_info, &descriptor_set);
-    };
 
     SDL_ShowWindow(win);
 
@@ -851,22 +952,6 @@ int main(int argc, char** argv) {
         sampler_info.minFilter = VK_FILTER_LINEAR;
         sampler_info.magFilter = VK_FILTER_LINEAR;
         vkCreateSampler(device, &sampler_info, nullptr, &image_sampler);
-
-        VkDescriptorImageInfo descriptor_image_info{};
-        descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        descriptor_image_info.imageView = image_view;
-        descriptor_image_info.sampler = image_sampler;
-
-        VkWriteDescriptorSet write_info{};
-        write_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write_info.descriptorCount = 1;
-        write_info.pImageInfo = &descriptor_image_info;
-        write_info.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        write_info.dstSet = descriptor_set;
-        write_info.dstBinding = 0;
-        write_info.dstArrayElement = 0;
-
-        vkUpdateDescriptorSets(device, 1, &write_info, 0, nullptr);
     }
 
     {
@@ -927,6 +1012,8 @@ int main(int argc, char** argv) {
         FrameData& frame = frame_data[frame_count % 2];
         VK_CHECK(vkWaitForFences(device, 1, &frame.render_fence, true, UINT64_MAX));
         VK_CHECK(vkResetFences(device, 1, &frame.render_fence));
+
+        frame.descriptor_pool.clear(device);
 
         uint32_t image_ix;
         auto result =
@@ -1053,8 +1140,13 @@ int main(int argc, char** argv) {
             uint64_t vertices_address = vkGetBufferDeviceAddress(device, &vertices_address_info);
             vkCmdPushConstants(frame.cmd_buf, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(uint64_t),
                                &vertices_address);
-            vkCmdBindDescriptorSets(frame.cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &descriptor_set, 0,
-                                    nullptr);
+            auto fragment_descriptor = frame.descriptor_pool.new_set(device, fragment_set_layout);
+
+            frame.descriptor_pool.begin_update(fragment_descriptor);
+            frame.descriptor_pool.update_sampled_image(device, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, image_view, image_sampler);
+            frame.descriptor_pool.end_update(device);
+
+            frame.descriptor_pool.bind_set(fragment_descriptor, frame.cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0);
 
             vkCmdDraw(frame.cmd_buf, 3, 1, 0, 0);
 
@@ -1118,26 +1210,27 @@ int main(int argc, char** argv) {
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
 
+    vkDestroyDescriptorSetLayout(device, fragment_set_layout, nullptr);
+
     transport::deinit(device, allocator);
 
     vmaDestroyBuffer(allocator, vertices, vertices_allocation);
     vkDestroyPipelineLayout(device, layout, nullptr);
 
+    vkDestroyImageView(device, image_view, nullptr);
+    vkDestroySampler(device, image_sampler, nullptr);
+
     vmaDestroyImage(allocator, image, image_allocation);
+
     stbi_image_free(image_data);
+
+    for (std::size_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
+        frame_data[i].destroy(device, allocator);
+    }
 
     vmaDestroyAllocator(allocator);
 
     vkDestroyCommandPool(device, transport_pool, nullptr);
-
-    for (std::size_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
-        vkDestroyCommandPool(device, frame_data[i].cmd_pool, nullptr);
-
-        vkDestroyFence(device, frame_data[i].render_fence, nullptr);
-
-        vkDestroySemaphore(device, frame_data[i].swapchain_semaphore, nullptr);
-        vkDestroySemaphore(device, frame_data[i].render_semaphore, nullptr);
-    }
 
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     for (std::size_t i = 0; i < swapchain_image_views.size(); i++) {
