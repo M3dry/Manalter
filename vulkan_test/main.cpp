@@ -143,8 +143,7 @@ class DescriptorPool {
                 case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
                     write.pImageInfo = &write_image_infos[(std::size_t)write.pImageInfo];
                     break;
-                default:
-                    continue;
+                default: continue;
             }
         }
 
@@ -180,7 +179,8 @@ class DescriptorPool {
         ubo_offset += ubo.size();
     }
 
-    void update_sampled_image(VkDevice device, uint32_t binding, VkImageLayout layout, VkImageView view, VkSampler sampler) {
+    void update_sampled_image(VkDevice device, uint32_t binding, VkImageLayout layout, VkImageView view,
+                              VkSampler sampler) {
         assert(write_id != -1);
 
         VkDescriptorImageInfo image_info{};
@@ -230,6 +230,92 @@ class DescriptorPool {
     std::vector<VkDescriptorImageInfo> write_image_infos;
     std::vector<VkWriteDescriptorSet> write_queue;
 };
+
+namespace texture_pool {
+    VkDescriptorPool pool;
+    VkDescriptorSetLayout set_layout;
+    VkDescriptorSet set;
+    uint32_t texture_count;
+
+    void init(VkDevice device, uint32_t tex_count) {
+        texture_count = tex_count;
+
+        VkDescriptorPoolSize pool_size{};
+        pool_size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        pool_size.descriptorCount = texture_count;
+
+        VkDescriptorPoolCreateInfo pool_info{};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.poolSizeCount = 1;
+        pool_info.pPoolSizes = &pool_size;
+        pool_info.maxSets = 1;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+
+        vkCreateDescriptorPool(device, &pool_info, nullptr, &pool);
+
+        VkDescriptorSetLayoutBinding binding{};
+        binding.binding = 0;
+        binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        binding.descriptorCount = texture_count;
+        binding.stageFlags = VK_SHADER_STAGE_ALL;
+
+        VkDescriptorBindingFlags binding_flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+                                                 VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flgas_info{};
+        binding_flgas_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+        binding_flgas_info.bindingCount = 1;
+        binding_flgas_info.pBindingFlags = &binding_flags;
+
+        VkDescriptorSetLayoutCreateInfo layout_info{};
+        layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layout_info.pNext = &binding_flgas_info;
+        layout_info.bindingCount = 1;
+        layout_info.pBindings = &binding;
+        layout_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        vkCreateDescriptorSetLayout(device, &layout_info, nullptr, &set_layout);
+
+
+        VkDescriptorSetVariableDescriptorCountAllocateInfo count_info{};
+        count_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
+        count_info.descriptorSetCount = 1;
+        count_info.pDescriptorCounts = &texture_count;
+
+        VkDescriptorSetAllocateInfo set_info{};
+        set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        set_info.pNext = &count_info;
+        set_info.descriptorPool = pool;
+        set_info.descriptorSetCount = 1;
+        set_info.pSetLayouts = &set_layout;
+        vkAllocateDescriptorSets(device, &set_info, &set);
+    }
+
+    void update_at(VkDevice device, uint32_t ix, VkImageView view, VkImageLayout layout, VkSampler sampler) {
+        VkDescriptorImageInfo image_info{};
+        image_info.imageView = view;
+        image_info.sampler = sampler;
+        image_info.imageLayout = layout;
+
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.descriptorCount = 1;
+        write.pImageInfo = &image_info;
+        write.dstBinding = 0;
+        write.dstArrayElement = ix;
+        write.dstSet = set;
+        vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+    }
+
+    void bind(VkCommandBuffer cmd_buf, VkPipelineBindPoint bind_point, VkPipelineLayout layout) {
+        vkCmdBindDescriptorSets(cmd_buf, bind_point, layout, 0, 1, &set, 0, nullptr);
+    }
+
+    void deinit(VkDevice device) {
+        vkDestroyDescriptorSetLayout(device, set_layout, nullptr);
+        vkDestroyDescriptorPool(device, pool, nullptr);
+    }
+}
 
 #define FRAMES_IN_FLIGHT 3
 
@@ -672,7 +758,10 @@ int main(int argc, char** argv) {
     VkPhysicalDeviceVulkan12Features features12{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
     features12.bufferDeviceAddress = true;
     features12.descriptorIndexing = true;
+    features12.descriptorBindingPartiallyBound = true;
+    features12.descriptorBindingVariableDescriptorCount = true;
     features12.shaderSampledImageArrayNonUniformIndexing = true;
+    features12.descriptorBindingSampledImageUpdateAfterBind = true;
     features12.runtimeDescriptorArray = true;
     features12.timelineSemaphore = true;
 
@@ -771,6 +860,7 @@ int main(int argc, char** argv) {
     VkCommandPool transport_pool{};
     vkCreateCommandPool(device, &transport_pool_info, nullptr, &transport_pool);
 
+    texture_pool::init(device, 100);
     transport::init(device, transport_queue, transport_pool, transport_queue_family, allocator,
                     device_properties.limits.optimalBufferCopyOffsetAlignment);
 
@@ -808,20 +898,20 @@ int main(int argc, char** argv) {
     auto [vertex_code, vertex_size] = shader::load_shader_code("./vertex.spv");
     auto [fragment_code, fragment_size] = shader::load_shader_code("./fragment.spv");
 
-    VkDescriptorSetLayout fragment_set_layout;
-    {
-        VkDescriptorSetLayoutBinding binding{};
-        binding.binding = 0;
-        binding.descriptorCount = 1;
-        binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-        VkDescriptorSetLayoutCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        info.bindingCount = 1;
-        info.pBindings = &binding;
-        vkCreateDescriptorSetLayout(device, &info, nullptr, &fragment_set_layout);
-    }
+    // VkDescriptorSetLayout fragment_set_layout;
+    // {
+    //     VkDescriptorSetLayoutBinding binding{};
+    //     binding.binding = 0;
+    //     binding.descriptorCount = 1;
+    //     binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    //     binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    //
+    //     VkDescriptorSetLayoutCreateInfo info{};
+    //     info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    //     info.bindingCount = 1;
+    //     info.pBindings = &binding;
+    //     vkCreateDescriptorSetLayout(device, &info, nullptr, &fragment_set_layout);
+    // }
 
     VkPushConstantRange vertex_push_constant{};
     vertex_push_constant.size = sizeof(uint64_t);
@@ -829,16 +919,16 @@ int main(int argc, char** argv) {
     vertex_push_constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     auto vertex_info =
         shader::create_info(VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT, {vertex_code.get(), vertex_size},
-                            {&vertex_push_constant, 1}, {&fragment_set_layout, 1});
+                            {&vertex_push_constant, 1}, {&texture_pool::set_layout, 1});
     auto fragment_info = shader::create_info(VK_SHADER_STAGE_FRAGMENT_BIT, 0, {fragment_code.get(), fragment_size},
-                                             {&vertex_push_constant, 1}, {&fragment_set_layout, 1});
+                                             {&vertex_push_constant, 1}, {&texture_pool::set_layout, 1});
     auto vertex = shader::create(device, vertex_info);
     auto fragment = shader::create(device, fragment_info);
 
     VkPipelineLayoutCreateInfo layout_info{};
     layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_info.setLayoutCount = 1;
-    layout_info.pSetLayouts = &fragment_set_layout;
+    layout_info.pSetLayouts = &texture_pool::set_layout;
     layout_info.pushConstantRangeCount = 1;
     layout_info.pPushConstantRanges = &vertex_push_constant;
 
@@ -904,7 +994,7 @@ int main(int argc, char** argv) {
     vertices_barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
     transport::upload(allocator, &vertices_barrier, vertices_data, sizeof(glm::vec4) * 3, vertices, 0);
 
-    VkImageMemoryBarrier2 image_barrier;
+    VkImageMemoryBarrier2 image_barrier{};
     image_barrier.dstQueueFamilyIndex = graphics_queue_family;
     image_barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
     image_barrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
@@ -912,7 +1002,6 @@ int main(int argc, char** argv) {
     image_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     transport::upload(allocator, &image_barrier, image_data, image_width * image_height * 4, image_width, image_height,
                       VK_FORMAT_R8G8B8A8_UNORM, image);
-    assert(image_barrier.oldLayout != VK_IMAGE_LAYOUT_UNDEFINED);
 
     auto upload_wait_time = transport::end();
 
@@ -995,6 +1084,8 @@ int main(int argc, char** argv) {
         submit_info.pWaitSemaphoreInfos = &wait_info;
         VK_CHECK(vkQueueSubmit2(graphics_queue, 1, &submit_info, frame.render_fence));
     }
+
+    texture_pool::update_at(device, 1, image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, image_sampler);
 
     uint64_t accum = 0;
     uint64_t last_time = SDL_GetTicks();
@@ -1140,13 +1231,16 @@ int main(int argc, char** argv) {
             uint64_t vertices_address = vkGetBufferDeviceAddress(device, &vertices_address_info);
             vkCmdPushConstants(frame.cmd_buf, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(uint64_t),
                                &vertices_address);
-            auto fragment_descriptor = frame.descriptor_pool.new_set(device, fragment_set_layout);
-
-            frame.descriptor_pool.begin_update(fragment_descriptor);
-            frame.descriptor_pool.update_sampled_image(device, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, image_view, image_sampler);
-            frame.descriptor_pool.end_update(device);
-
-            frame.descriptor_pool.bind_set(fragment_descriptor, frame.cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0);
+            // auto fragment_descriptor = frame.descriptor_pool.new_set(device, fragment_set_layout);
+            //
+            // frame.descriptor_pool.begin_update(fragment_descriptor);
+            // frame.descriptor_pool.update_sampled_image(device, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, image_view,
+            //                                            image_sampler);
+            // frame.descriptor_pool.end_update(device);
+            //
+            // frame.descriptor_pool.bind_set(fragment_descriptor, frame.cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
+            //                                0);
+            texture_pool::bind(frame.cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, layout);
 
             vkCmdDraw(frame.cmd_buf, 3, 1, 0, 0);
 
@@ -1210,8 +1304,9 @@ int main(int argc, char** argv) {
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
 
-    vkDestroyDescriptorSetLayout(device, fragment_set_layout, nullptr);
+    // vkDestroyDescriptorSetLayout(device, fragment_set_layout, nullptr);
 
+    texture_pool::deinit(device);
     transport::deinit(device, allocator);
 
     vmaDestroyBuffer(allocator, vertices, vertices_allocation);
