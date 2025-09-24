@@ -1,63 +1,92 @@
 #include "engine/imgui.hpp"
-#include "imgui_c.hpp"
+#include "imgui_.hpp"
 
-#include "engine/gpu.hpp"
-#include "engine/window.hpp"
+#include "engine/engine.hpp"
 
-#include <imgui.h>
-#include <imgui_impl_sdl3.h>
-#include <imgui_impl_sdlgpu3.h>
+#include "imgui.h"
+#include "imgui_impl_sdl3.h"
+#include "imgui_impl_vulkan.h"
 
-bool imgui_state = true;
-ImDrawData* draw_data = nullptr;
+void check_vk_result(VkResult err) {
+    if (err == 0) return;
+    fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
+    if (err < 0) abort();
+}
 
 namespace engine::imgui {
-    bool enabled() {
-        return imgui_state;
-    }
+    ImDrawData* draw_data = nullptr;
 
-    void enable(bool state) {
-        imgui_state = state;
+    bool state = false;
+
+    bool enabled() {
+        return state;
     }
 
     void init() {
-        IMGUI_CHECKVERSION();
         ImGui::CreateContext();
-
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+        io.ConfigFlags |= ImGuiConfigFlags_IsSRGB;
 
         ImGui::StyleColorsDark();
 
-        ImGui_ImplSDL3_InitForSDLGPU(win);
-        ImGui_ImplSDLGPU3_InitInfo init_info = {};
-        init_info.Device = gpu_device;
-        init_info.ColorTargetFormat = SDL_GetGPUSwapchainTextureFormat(gpu_device, win);
-        init_info.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
-        ImGui_ImplSDLGPU3_Init(&init_info);
+        ImGui_ImplSDL3_InitForVulkan(window);
+        ImGui_ImplVulkan_InitInfo imgui_info{};
+        imgui_info.UseDynamicRendering = true;
+        imgui_info.Instance = instance;
+        imgui_info.PhysicalDevice = physical_device;
+        imgui_info.Device = device;
+        imgui_info.QueueFamily = graphics_queue_family;
+        imgui_info.Queue = graphics_queue;
+        imgui_info.DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE;
+        imgui_info.Subpass = 0;
+        imgui_info.MinImageCount = 2;
+        imgui_info.ImageCount = 2;
+        imgui_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+        imgui_info.Allocator = nullptr;
+        imgui_info.CheckVkResultFn = check_vk_result;
+        imgui_info.PipelineRenderingCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+            .pNext = nullptr,
+            .colorAttachmentCount = 1,
+            .pColorAttachmentFormats = &swapchain_format,
+        };
+        ImGui_ImplVulkan_Init(&imgui_info);
     }
 
-    void deinit() {
-        SDL_WaitForGPUIdle(gpu_device);
+    void destroy() {
+        ImGui_ImplVulkan_Shutdown();
         ImGui_ImplSDL3_Shutdown();
-        ImGui_ImplSDLGPU3_Shutdown();
         ImGui::DestroyContext();
     }
 
+    bool polled_event(SDL_Event* ev) {
+        if (!state) return false;
+
+        ImGuiIO& io = ImGui::GetIO();
+        ImGui_ImplSDL3_ProcessEvent(ev);
+
+        bool is_key_event = ev->type == SDL_EVENT_KEY_DOWN || ev->type == SDL_EVENT_KEY_UP;
+        bool is_mouse_event = ev->type == SDL_EVENT_MOUSE_BUTTON_DOWN || ev->type == SDL_EVENT_MOUSE_BUTTON_UP ||
+                              ev->type == SDL_EVENT_MOUSE_WHEEL || ev->type == SDL_EVENT_MOUSE_MOTION;
+        return (io.WantCaptureKeyboard && is_key_event) || (io.WantCaptureMouse && is_mouse_event);
+    }
+
     void new_frame() {
-        ImGui_ImplSDLGPU3_NewFrame();
+        ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
     }
 
-    void prepare_data(SDL_GPUCommandBuffer* cmd_buf) {
+    void prepare_draw_data() {
         ImGui::Render();
         draw_data = ImGui::GetDrawData();
-        Imgui_ImplSDLGPU3_PrepareDrawData(draw_data, cmd_buf);
     }
 
-    void draw(SDL_GPUCommandBuffer* cmd_buf, SDL_GPURenderPass* render_pass) {
-        if (draw_data != nullptr)
-        ImGui_ImplSDLGPU3_RenderDrawData(draw_data, cmd_buf, render_pass);
+    void render() {
+        if (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f) return;
+
+        ImGui_ImplVulkan_RenderDrawData(draw_data, get_cmd_buf());
     }
 }
